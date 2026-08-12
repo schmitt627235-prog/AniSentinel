@@ -369,8 +369,13 @@ interface AniSentinelDao {
         endEpochSeconds: Long
     ): Flow<List<EpisodeReleaseWithAnime>>
 
+    /** UI history: historical provider releases are real evidence for favorite classification. */
+    @Query("SELECT er.* FROM episode_releases er INNER JOIN favorites f ON f.animeId = er.animeId WHERE f.enabled = 1 AND er.releaseLanguage IN ('GER_SUB', 'GER_DUB') ORDER BY er.expectedAt")
+    fun observeFavoriteReleasesForClassification(): Flow<List<EpisodeReleaseEntity>>
+
+    /** Background safety boundary: historical imports must never become scheduler input. */
     @Query("SELECT er.* FROM episode_releases er INNER JOIN favorites f ON f.animeId = er.animeId WHERE f.enabled = 1 AND er.isHistoricalImport = 0 AND er.releaseLanguage IN ('GER_SUB', 'GER_DUB') ORDER BY er.expectedAt")
-    fun observeActiveFavoriteReleases(): Flow<List<EpisodeReleaseEntity>>
+    fun observeSchedulableFavoriteReleases(): Flow<List<EpisodeReleaseEntity>>
 
     @Query("SELECT * FROM episode_releases ORDER BY expectedAt")
     fun observeAllEpisodeReleases(): Flow<List<EpisodeReleaseEntity>>

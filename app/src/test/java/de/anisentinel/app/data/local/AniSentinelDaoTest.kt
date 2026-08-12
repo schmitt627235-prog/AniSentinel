@@ -434,6 +434,50 @@ class AniSentinelDaoTest {
     }
 
     @Test
+    fun `historical favorite release is classification-only and never schedulable`() = runBlocking {
+        val title = anime("crunchyroll:history-favorite", "Historischer Favorit")
+        val historical = EpisodeReleaseEntity(
+            "crunchyroll:history-favorite:12", title.id, 12, null, 1_000, "Crunchyroll",
+            "CRUNCHYROLL_PUBLIC", "https://www.crunchyroll.com/de/series/TEST/title",
+            "https://www.crunchyroll.com/de/watch/TEST/episode", 2_000,
+            seasonNumber = 1, releaseLanguage = "GER_SUB", isHistoricalImport = true,
+            historicalReleasedAt = 1_000
+        )
+        dao.upsertAnime(listOf(title))
+        dao.upsertEpisodeReleases(listOf(historical))
+        dao.upsertFavorite(favorite(title.id, true).copy(languagePreference = "SUB"))
+
+        assertEquals(listOf(historical.sourceReleaseId),
+            dao.observeFavoriteReleasesForClassification().first().map { it.sourceReleaseId })
+        assertTrue(dao.observeSchedulableFavoriteReleases().first().isEmpty())
+        assertTrue(dao.futureFavoriteReleases(title.id, "SUB", 0).isEmpty())
+        assertTrue(dao.dueFavoriteReleases(2_000, 0).isEmpty())
+    }
+
+    @Test
+    fun `future release remains schedulable beside historical favorite history`() = runBlocking {
+        val title = anime("favorite:next-season", "Neue Staffel")
+        val historical = EpisodeReleaseEntity(
+            "favorite:history", title.id, 12, null, 1_000, "ADN", "ADN_PUBLIC_METADATA",
+            null, null, 2_000, seasonNumber = 1, releaseLanguage = "GER_SUB",
+            isHistoricalImport = true, historicalReleasedAt = 1_000
+        )
+        val future = EpisodeReleaseEntity(
+            "favorite:future", title.id, 1, null, 9_000, "Crunchyroll", "ANIWORLD_CALENDAR",
+            null, null, 2_000, seasonNumber = 2, releaseLanguage = "GER_SUB"
+        )
+        dao.upsertAnime(listOf(title))
+        dao.upsertEpisodeReleases(listOf(historical, future))
+        dao.upsertFavorite(favorite(title.id, true).copy(languagePreference = "SUB"))
+
+        assertEquals(2, dao.observeFavoriteReleasesForClassification().first().size)
+        assertEquals(listOf(future.sourceReleaseId),
+            dao.observeSchedulableFavoriteReleases().first().map { it.sourceReleaseId })
+        assertEquals(listOf(future.sourceReleaseId),
+            dao.futureFavoriteReleases(title.id, "SUB", 2_001).map { it.sourceReleaseId })
+    }
+
+    @Test
     fun `aniworld sync preserves ordinary releases that are already historical`() = runBlocking {
         val title = anime("aniworld:history", "Historie")
         val historical = EpisodeReleaseEntity(

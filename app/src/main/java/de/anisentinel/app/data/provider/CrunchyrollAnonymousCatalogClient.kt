@@ -99,7 +99,7 @@ class CrunchyrollAnonymousCatalogTransport(
     }
 
     private companion object {
-        const val USER_AGENT = "AniSentinel/0.24.7 anonymous-public-catalog (Android; no login; metadata only)"
+        const val USER_AGENT = "AniSentinel/0.24.8 anonymous-public-catalog (Android; no login; metadata only)"
     }
 }
 

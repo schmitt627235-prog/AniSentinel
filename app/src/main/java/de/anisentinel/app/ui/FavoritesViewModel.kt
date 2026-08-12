@@ -36,7 +36,7 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
     private val dao = (application as AniSentinelApplication).container.database.aniSentinelDao()
     private val filter = MutableStateFlow(FavoritesFilter.ALL)
 
-    val state = combine(repository.observeFavorites(), dao.observeActiveFavoriteReleases(), dao.observeJustWatchProviderReferences(), filter, settings.favoritesSort) {
+    val state = combine(repository.observeFavorites(), dao.observeFavoriteReleasesForClassification(), dao.observeJustWatchProviderReferences(), filter, settings.favoritesSort) {
             entities, releases, references, selected, storedSort ->
         val providers = references.groupBy { it.animeId }
         val all = entities.map { entity -> entity.toDomain().copy(

@@ -19,6 +19,14 @@ AniSentinel ist eine native Android-App für deutsche Anime-Releasetermine. Sie 
 - sichere HTTPS-Deep-Links zu real ermittelten Providerseiten
 - Room als alleinige lokale UI-Datenbasis; DataStore für Einstellungen
 
+### Favoriten-Kategorien
+
+- **Aktuell:** mindestens ein konkreter Release liegt heute
+- **Demnächst:** kein heutiger, aber ein konkreter zukünftiger Release ist bekannt
+- **Abgeschlossen:** mindestens ein vergangener Release ist bekannt und es gibt weder heute noch zukünftig einen konkreten Termin
+
+Historische Crunchyroll-/ADN-Releases zählen für diese UI-Kategorisierung als reale Historie. Sie bleiben gleichzeitig strikt von Alarmen, Benachrichtigungen, AUTO-Watcher, WorkManager-Prüfungen und T+10-Fallback ausgeschlossen. Wird später ein neuer konkreter Termin importiert, wechselt der Titel automatisch von „Abgeschlossen“ zu „Demnächst“.
+
 ## Datenschutzfreundlich – kein Login erforderlich
 
 AniSentinel benötigt keinen Crunchyroll-, ADN-, AniWorld-, Anime2You- oder JustWatch-Login. Die App speichert keine Streaming-Passwörter, Account-Cookies oder persönlichen Sitzungstokens. Sie ruft öffentlich beziehungsweise anonym erreichbare Metadaten ab und speichert Favoriten, Termine und Einstellungen lokal auf dem Gerät.
@@ -118,7 +126,7 @@ Die Debug-APK liegt anschließend unter `app/build/outputs/apk/debug/app-debug.a
 
 ## Diagnose- und Teststatus
 
-Version `0.24.7` behebt den vollständigen Provider-/Fallback-Lebenszyklus. Der generische Crunchyroll-Datenweg wurde auf einem realen Gerät zusätzlich mit einem zuvor nicht vorgegebenen Titel validiert. Die App bleibt ausdrücklich eine Diagnoseversion; eine dauerhafte öffentliche Verwendung inoffizieller Datenwege muss vor einer Produktveröffentlichung gesondert bewertet werden.
+Version `0.24.8` trennt historische Favoritenklassifizierung und schedulbare Releases. Version `0.24.7` behob zuvor den vollständigen Provider-/Fallback-Lebenszyklus. Der generische Crunchyroll-Datenweg wurde auf einem realen Gerät zusätzlich mit einem zuvor nicht vorgegebenen Titel validiert. Die App bleibt ausdrücklich eine Diagnoseversion; eine dauerhafte öffentliche Verwendung inoffizieller Datenwege muss vor einer Produktveröffentlichung gesondert bewertet werden.
 
 ## Bekannte Einschränkungen
 

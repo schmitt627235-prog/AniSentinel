@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.24.8 – Favoritenklassifizierung und Historie – 2026-08-12
+
+- Historische Crunchyroll-/ADN-Releases werden wieder für `Aktuell`, `Demnächst` und `Abgeschlossen` ausgewertet.
+- UI-Klassifizierung und schedulbare Favoriten-Releases besitzen getrennte DAO-Abfragen.
+- Historische Releases bleiben von Alarmen, Notifications, AUTO-Watcher, WorkManager und T+10-Fallback ausgeschlossen.
+- Ein neuer konkreter Zukunftstermin verschiebt einen historischen Favoriten automatisch von „Abgeschlossen“ nach „Demnächst“.
+- Room- und Classifier-Regressionstests sichern beide Datenwege ab.
+
 ## v0.24.7 – direkter Provider beendet Fallback – 2026-08-12
 
 - Direkter Crunchyroll-/ADN-Erfolg beendet AUTO-Prüfung, WorkManager-Auftrag, Due-Alarm und T+10-AniWorld-Fallback terminal.

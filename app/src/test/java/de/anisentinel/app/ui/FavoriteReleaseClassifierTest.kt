@@ -57,6 +57,21 @@ class FavoriteReleaseClassifierTest {
         assertTrue(FavoriteReleaseClassifier.matches(anime, releases, FavoritesFilter.UPCOMING, today, zone))
     }
 
+    @Test fun historicalReleaseWithoutFutureIsCompleted() {
+        val historical = release("cr-history", today.minusMonths(3), episode = 12)
+            .copy(isHistoricalImport = true, metadataSource = "CRUNCHYROLL_PUBLIC")
+        assertTrue(FavoriteReleaseClassifier.matches(anime, listOf(historical), FavoritesFilter.COMPLETED, today, zone))
+        assertFalse(FavoriteReleaseClassifier.matches(anime, listOf(historical), FavoritesFilter.UPCOMING, today, zone))
+    }
+
+    @Test fun concreteFutureReleaseMovesHistoricalFavoriteToUpcoming() {
+        val historical = release("adn-history", today.minusMonths(2), episode = 12)
+            .copy(isHistoricalImport = true, metadataSource = "ADN_PUBLIC_METADATA")
+        val future = release("new-season", today.plusMonths(1), episode = 1)
+        assertFalse(FavoriteReleaseClassifier.matches(anime, listOf(historical, future), FavoritesFilter.COMPLETED, today, zone))
+        assertTrue(FavoriteReleaseClassifier.matches(anime, listOf(historical, future), FavoritesFilter.UPCOMING, today, zone))
+    }
+
     private fun release(id: String, date: LocalDate, hour: Int = 12, minute: Int = 0, episode: Int = 1) =
         EpisodeReleaseEntity(
             id, "a", episode, null, date.atTime(hour, minute).atZone(zone).toEpochSecond(),
