@@ -162,6 +162,23 @@ class AniSentinelMigrationTest {
         }
     }
 
+    @Test
+    fun migration20To21QueuesEnabledFavoritesForHistoricalBackfill() {
+        val databaseName = "migration-20-21"
+        helper.createDatabase(databaseName, 20).apply {
+            execSQL("INSERT INTO anime (id, titleGerman, description, updatedAt) VALUES ('fav', 'Favorit', '', 1)")
+            execSQL("INSERT INTO favorites (animeId, enabled, languagePreference, monitoringProfileId, notifyAvailable, notifyDelayed, notifyPostponed, createdAt) VALUES ('fav', 1, 'BOTH', NULL, 1, 1, 1, 42)")
+            close()
+        }
+        helper.runMigrationsAndValidate(databaseName, 21, true, AniSentinelDatabase.MIGRATION_20_21).use { database ->
+            database.query("SELECT status, requestedAt FROM favorite_history_backfills WHERE animeId='fav'").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals("PENDING", it.getString(0))
+                assertEquals(42L, it.getLong(1))
+            }
+        }
+    }
+
     private fun assertMigration7To8(batchCount: Int) {
         val databaseName = "migration-7-8-$batchCount"
         helper.createDatabase(databaseName, 7).apply {

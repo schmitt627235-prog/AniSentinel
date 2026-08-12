@@ -416,6 +416,28 @@ data class FavoriteEntity(
 )
 
 @Entity(
+    tableName = "favorite_history_backfills",
+    foreignKeys = [ForeignKey(
+        entity = FavoriteEntity::class,
+        parentColumns = ["animeId"],
+        childColumns = ["animeId"],
+        onDelete = ForeignKey.CASCADE
+    )],
+    indices = [Index("status"), Index("nextAttemptAt")]
+)
+data class FavoriteHistoryBackfillEntity(
+    @PrimaryKey val animeId: String,
+    val status: String,
+    val requestedAt: Long,
+    val lastAttemptAt: Long?,
+    val completedAt: Long?,
+    val nextAttemptAt: Long?,
+    val provider: String?,
+    val importedReleaseCount: Int,
+    val resultCode: String?
+)
+
+@Entity(
     tableName = "scheduled_release_notifications",
     foreignKeys = [ForeignKey(
         entity = EpisodeReleaseEntity::class,

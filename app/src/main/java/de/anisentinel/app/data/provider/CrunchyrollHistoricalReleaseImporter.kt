@@ -85,6 +85,16 @@ class CrunchyrollHistoricalReleaseImporter(
     private val clock: Clock = Clock.systemUTC(),
     private val zoneId: ZoneId = ZoneId.systemDefault()
 ) {
+    /** Resolve a public Crunchyroll series generically; no user supplied or title-specific URL required. */
+    suspend fun importByTitle(
+        animeId: String, title: String,
+        fromEpochSeconds: Long? = null, toEpochSecondsExclusive: Long? = null
+    ): HistoricalImportResult {
+        val seriesUrl = resolveSeriesByExactPublicSearch(title)
+            ?: return HistoricalImportResult.Failed("CRUNCHYROLL_PUBLIC_EXACT_TITLE_NOT_IDENTIFIED")
+        return import(animeId, seriesUrl, fromEpochSeconds, toEpochSecondsExclusive)
+    }
+
     suspend fun importFromProviderUrl(
         animeId: String, title: String, providerUrl: String,
         fromEpochSeconds: Long? = null, toEpochSecondsExclusive: Long? = null

@@ -56,6 +56,21 @@ class AniSentinelDaoTest {
     }
 
     @Test
+    fun `enabled favorite remains backfill candidate until completed`() = runBlocking {
+        val anime = anime("history-backfill", "History Backfill")
+        dao.upsertAnime(listOf(anime))
+        dao.upsertFavorite(favorite(anime.id, true))
+
+        assertEquals(listOf(anime.id), dao.favoritesNeedingHistoryBackfill(100))
+
+        dao.upsertFavoriteHistoryBackfill(FavoriteHistoryBackfillEntity(
+            anime.id, "COMPLETED", 10, 20, 30, null, "Crunchyroll", 4, null
+        ))
+
+        assertTrue(dao.favoritesNeedingHistoryBackfill(100).isEmpty())
+    }
+
+    @Test
     fun `episode persists honest availability window`() = runBlocking {
         dao.upsertAnime(listOf(anime("atlas", "Atlas of Ash")))
         dao.upsertEpisodes(

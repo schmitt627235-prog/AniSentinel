@@ -21,6 +21,8 @@ AniSentinel ist eine native Android-App für deutsche Anime-Releasetermine. Sie 
 
 ### Favoriten-Kategorien
 
+Beim Hinzufügen oder Wiederherstellen eines Favoriten startet AniSentinel automatisch einen persistenten historischen Backfill. Der Zustand wird pro Favorit in Room gespeichert und nach App- oder Geräteneustarts fortgesetzt. Erst ein real importierter oder sicher angereicherter Crunchyroll-/ADN-Termin schließt den Backfill ab. Fehlende Providerzuordnungen und technische Fehler bleiben wiederholbar, sodass `Abgeschlossen` ohne alte Screenshots oder gespeicherte Kategoriezuordnungen aus echten Release-Daten neu entstehen kann.
+
 - **Aktuell:** mindestens ein konkreter Release liegt heute
 - **Demnächst:** kein heutiger, aber ein konkreter zukünftiger Release ist bekannt
 - **Abgeschlossen:** mindestens ein vergangener Release ist bekannt und es gibt weder heute noch zukünftig einen konkreten Termin

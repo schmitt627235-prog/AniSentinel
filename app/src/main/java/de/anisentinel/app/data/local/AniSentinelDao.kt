@@ -130,6 +130,27 @@ interface AniSentinelDao {
     @Query("SELECT * FROM favorites WHERE enabled = 1")
     suspend fun activeFavorites(): List<FavoriteEntity>
 
+    @Query("SELECT * FROM favorite_history_backfills WHERE animeId = :animeId LIMIT 1")
+    suspend fun favoriteHistoryBackfill(animeId: String): FavoriteHistoryBackfillEntity?
+
+    @Query("""
+        SELECT f.animeId FROM favorites f
+        LEFT JOIN favorite_history_backfills b ON b.animeId = f.animeId
+        WHERE f.enabled = 1 AND (
+            b.animeId IS NULL OR b.status != 'COMPLETED' OR b.completedAt IS NULL
+        ) AND (b.nextAttemptAt IS NULL OR b.nextAttemptAt <= :nowEpochSeconds)
+    """)
+    suspend fun favoritesNeedingHistoryBackfill(nowEpochSeconds: Long): List<String>
+
+    @Upsert
+    suspend fun upsertFavoriteHistoryBackfill(backfill: FavoriteHistoryBackfillEntity)
+
+    @Query("DELETE FROM favorite_history_backfills WHERE animeId = :animeId")
+    suspend fun deleteFavoriteHistoryBackfill(animeId: String)
+
+    @Query("SELECT * FROM provider_metadata_identities WHERE animeId = :animeId ORDER BY lastCheckedAt DESC")
+    suspend fun providerMetadataIdentities(animeId: String): List<ProviderMetadataIdentityEntity>
+
     @Query("SELECT * FROM episode_releases WHERE sourceReleaseId = :releaseId LIMIT 1")
     suspend fun release(releaseId: String): EpisodeReleaseEntity?
 

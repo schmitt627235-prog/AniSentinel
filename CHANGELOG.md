@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.24.9 – automatischer Favoriten-Historienbackfill – 2026-08-12
+
+- Neu hinzugefügte und wiederhergestellte Favoriten erhalten automatisch einen persistenten historischen Backfill.
+- Room speichert pro Favorit `PENDING`, `RUNNING`, `COMPLETED` oder `RETRY_REQUIRED`; der Vorgang wird nach App- und Geräteneustarts fortgesetzt.
+- Crunchyroll verwendet bekannte Series-IDs/URLs oder eine generische exakte Titelsuche; ADN-Show-IDs werden auch aus realen Anbieterlinks aufgelöst.
+- `COMPLETED` wird nur nach einem echten historischen Import oder einer sicheren Anreicherung gesetzt.
+- Der Backfill erzeugt keine Alarme, Notifications, AUTO-Prüfungen oder AniWorld-T+10-Fallbacks.
+- Room 21 migriert alle bereits aktiven Favoriten automatisch nach `PENDING`.
+
 ## v0.24.8 – Favoritenklassifizierung und Historie – 2026-08-12
 
 - Historische Crunchyroll-/ADN-Releases werden wieder für `Aktuell`, `Demnächst` und `Abgeschlossen` ausgewertet.

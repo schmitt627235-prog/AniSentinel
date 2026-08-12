@@ -33,6 +33,7 @@ import de.anisentinel.app.data.release.AniWorldHttpTransport
 import de.anisentinel.app.data.release.AniWorldReleaseRepository
 import de.anisentinel.app.data.release.AniWorldEpisodeFallbackChecker
 import de.anisentinel.app.background.FavoriteReleaseScheduler
+import de.anisentinel.app.background.FavoriteHistoryBackfillCoordinator
 import de.anisentinel.app.data.news.Anime2YouNewsRepository
 import de.anisentinel.app.data.provider.CrunchyrollHistoricalReleaseImporter
 import de.anisentinel.app.data.provider.AdnHistoricalReleaseImporter
@@ -63,6 +64,7 @@ class AppContainer(context: Context) {
         ,AniSentinelDatabase.MIGRATION_17_18
         ,AniSentinelDatabase.MIGRATION_18_19
         ,AniSentinelDatabase.MIGRATION_19_20
+        ,AniSentinelDatabase.MIGRATION_20_21
     ).build()
 
     val newsRepository = Anime2YouNewsRepository(database.aniSentinelDao())
@@ -70,7 +72,13 @@ class AppContainer(context: Context) {
     val favoriteReleaseScheduler = FavoriteReleaseScheduler(context.applicationContext, database.aniSentinelDao())
     val favoritesRepository: LocalFavoritesRepository =
         LocalFavoritesRepository(database.aniSentinelDao()) { animeId, enabled ->
-            if (enabled) favoriteReleaseScheduler.reconcileAll() else favoriteReleaseScheduler.cancelAnime(animeId)
+            if (enabled) {
+                FavoriteHistoryBackfillCoordinator.request(context.applicationContext, animeId)
+                favoriteReleaseScheduler.reconcileAll()
+            } else {
+                FavoriteHistoryBackfillCoordinator.cancel(context.applicationContext, animeId)
+                favoriteReleaseScheduler.cancelAnime(animeId)
+            }
         }
 
     val settingsRepository = DataStoreSettingsRepository(context.applicationContext)

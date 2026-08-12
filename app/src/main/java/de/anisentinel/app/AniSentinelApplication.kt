@@ -3,6 +3,7 @@ package de.anisentinel.app
 import android.app.Application
 import de.anisentinel.app.data.local.AppContainer
 import de.anisentinel.app.background.BackgroundWorkCoordinator
+import de.anisentinel.app.background.FavoriteHistoryBackfillCoordinator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -19,6 +20,7 @@ class AniSentinelApplication : Application() {
         applicationScope.launch {
             container.database.aniSentinelDao().repairMalformedAniWorldEpisodeIdentities()
             container.database.aniSentinelDao().repairConfirmedAvailabilityDowngrades()
+            FavoriteHistoryBackfillCoordinator.reconcile(this@AniSentinelApplication)
             container.favoriteReleaseScheduler.reconcileAll()
         }
         applicationScope.launch {

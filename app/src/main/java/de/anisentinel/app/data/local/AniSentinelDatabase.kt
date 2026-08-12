@@ -9,6 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
     entities = [
         AnimeEntity::class,
         FavoriteEntity::class,
+        FavoriteHistoryBackfillEntity::class,
         EpisodeEntity::class,
         WatchProfileEntity::class,
         WatchPhaseEntity::class,
@@ -30,7 +31,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ,AnnouncementEntity::class
         ,ProviderMetadataIdentityEntity::class
     ],
-    version = 20,
+    version = 21,
     exportSchema = true
 )
 abstract class AniSentinelDatabase : RoomDatabase() {
@@ -332,6 +333,36 @@ abstract class AniSentinelDatabase : RoomDatabase() {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("ALTER TABLE episode_releases ADD COLUMN historicalSourcePriority INTEGER NOT NULL DEFAULT 0")
                 database.execSQL("ALTER TABLE episode_releases ADD COLUMN historicalConflict INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+        val MIGRATION_20_21 = object : Migration(20, 21) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS favorite_history_backfills (
+                        animeId TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        requestedAt INTEGER NOT NULL,
+                        lastAttemptAt INTEGER,
+                        completedAt INTEGER,
+                        nextAttemptAt INTEGER,
+                        provider TEXT,
+                        importedReleaseCount INTEGER NOT NULL,
+                        resultCode TEXT,
+                        PRIMARY KEY(animeId),
+                        FOREIGN KEY(animeId) REFERENCES favorites(animeId)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                """.trimIndent())
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_favorite_history_backfills_status ON favorite_history_backfills(status)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_favorite_history_backfills_nextAttemptAt ON favorite_history_backfills(nextAttemptAt)")
+                database.execSQL("""
+                    INSERT OR IGNORE INTO favorite_history_backfills (
+                        animeId, status, requestedAt, lastAttemptAt, completedAt,
+                        nextAttemptAt, provider, importedReleaseCount, resultCode
+                    )
+                    SELECT animeId, 'PENDING', createdAt, NULL, NULL, NULL, NULL, 0, NULL
+                    FROM favorites WHERE enabled = 1
+                """.trimIndent())
             }
         }
     }
