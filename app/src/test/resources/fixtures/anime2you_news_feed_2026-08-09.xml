@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+  <channel>
+    <title>Anime2You – Anime-News</title>
+    <link>https://www.anime2you.de/</link>
+    <item>
+      <title>Starttermin von »The World’s Strongest Witch« + Trailer</title>
+      <link>https://www.anime2you.de/news/</link>
+      <guid isPermaLink="false">anime2you-real-feed-reference-new-date</guid>
+      <pubDate>Fri, 24 Jul 2026 13:34:00 +0200</pubDate>
+      <description><![CDATA[Der Starttermin des neuen Anime steht fest.]]></description>
+      <media:content url="https://cdn.anime2you.de/wp-content/uploads/2026/07/example.jpg" medium="image" />
+    </item>
+    <item>
+      <title>Crunchyroll zeigt zehn Anime-Neustarts im Sommer 2026 auf Deutsch</title>
+      <link>https://www.anime2you.de/news/1022385/crunchyroll-sommer-2026-synchros/</link>
+      <guid isPermaLink="false">https://www.anime2you.de/?p=1022385</guid>
+      <pubDate>Wed, 24 Jun 2026 12:00:00 +0200</pubDate>
+      <description><![CDATA[Crunchyroll gab deutsche Synchronfassungen bekannt.]]></description>
+    </item>
+  </channel>
+</rss>

@@ -1,0 +1,51 @@
+version: 1
+last_reviewed: 2026-07-30
+sources:
+  - id: anilist
+    type: official_api
+    purpose: metadata
+    base_url: https://graphql.anilist.co
+    docs: https://docs.anilist.co/
+    stability: high
+    default_enabled: true
+    cache_ttl_hours: 168
+
+  - id: anisearch
+    type: public_web_parser
+    purpose: german_schedule_and_licensing
+    base_url: https://www.anisearch.de/
+    stability: low
+    default_enabled: false
+    requirements:
+      - verify_terms_and_robots
+      - conservative_rate_limit
+      - caching
+      - feature_flag
+
+  - id: crunchyroll_calendar
+    type: official_public_web
+    purpose: expected_and_released_episodes
+    docs: https://help.crunchyroll.com/hc/de/articles/22745725145364-Gibt-es-einen-Ver%C3%B6ffentlichungskalender
+    stability: medium
+    default_enabled: true
+
+  - id: crunchyroll_news
+    type: official_news_rss_or_web
+    purpose: delays_and_announcements
+    base_url: https://www.crunchyroll.com/de/news/
+    stability: medium
+    default_enabled: true
+
+  - id: anime2you
+    type: editorial_news
+    purpose: german_anime_news_and_delay_hints
+    base_url: https://www.anime2you.de/
+    stability: medium
+    default_enabled: true
+
+  - id: x_official_accounts
+    type: social_optional
+    purpose: official_delay_hints
+    base_url: https://x.com/
+    stability: low
+    default_enabled: false

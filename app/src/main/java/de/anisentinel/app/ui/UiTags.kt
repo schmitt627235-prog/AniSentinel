@@ -1,0 +1,25 @@
+package de.anisentinel.app.ui
+
+object UiTags {
+    const val MENU = "menu_button"
+    const val DRAWER = "navigation_drawer"
+    const val HERO = "release_hero"
+    const val ANIME_CARD_PREFIX = "anime_card_"
+    const val DETAIL = "anime_detail"
+    const val SETTINGS = "settings_screen"
+    const val FAVORITE_BUTTON = "favorite_button"
+    const val FAVORITES_LIST = "favorites_list"
+    const val HOME_LIST = "home_list"
+    const val NAV_PREFIX = "main_nav_"
+    const val SETTINGS_LANGUAGE = "settings_language"
+    const val SETTINGS_LIST = "settings_list"
+    const val ABOUT = "about_screen"
+    const val ABOUT_LIST = "about_list"
+    const val ABOUT_ENTRY = "about_entry"
+    const val DISCOVER_LIST = "discover_list"
+    const val NOTIFICATION_DEMO = "notification_demo"
+    const val NOTIFICATION_TOGGLE = "notification_toggle"
+    const val NOTIFICATION_PERMISSION_HELP = "notification_permission_help"
+    const val LIVE_DATA_TOGGLE = "live_data_toggle"
+    const val CATALOG_STATUS = "catalog_status"
+}

@@ -1,0 +1,47 @@
+{
+  "data": {
+    "Page": {
+      "pageInfo": {"currentPage": 1, "hasNextPage": false, "lastPage": 1, "total": 2, "perPage": 20},
+      "airingSchedules": [
+        {
+          "id": 414210,
+          "episode": 152,
+          "airingAt": 1785722400,
+          "media": {
+            "id": 137653,
+            "siteUrl": "https://anilist.co/anime/137653",
+            "format": "ONA",
+            "status": "RELEASING",
+            "episodes": 180,
+            "season": null,
+            "seasonYear": null,
+            "countryOfOrigin": "CN",
+            "title": {"romaji": "Xian Ni", "english": "Renegade Immortal", "native": "仙逆"},
+            "coverImage": {"extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx137653-1wHbCVvABGOr.png", "large": null},
+            "genres": ["Action", "Adventure", "Drama", "Fantasy"],
+            "studios": {"nodes": [{"name": "Tencent Penguin Pictures"}, {"name": "Build Dream"}]}
+          }
+        },
+        {
+          "id": 415478,
+          "episode": 5,
+          "airingAt": 1785758220,
+          "media": {
+            "id": 169582,
+            "siteUrl": "https://anilist.co/anime/169582",
+            "format": "TV",
+            "status": "RELEASING",
+            "episodes": 12,
+            "season": "SUMMER",
+            "seasonYear": 2026,
+            "countryOfOrigin": "JP",
+            "title": {"romaji": "Saikyou Degarashi Ouji no Anyaku Teii Arasoi", "english": "The Insipid Prince's Furtive Grab for the Throne", "native": "最強出涸らし皇子の暗躍帝位争い"},
+            "coverImage": {"extraLarge": "https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx169582-quL8VMg45fcu.png", "large": null},
+            "genres": ["Action", "Comedy", "Drama", "Fantasy", "Romance"],
+            "studios": {"nodes": [{"name": "Maho Film"}]}
+          }
+        }
+      ]
+    }
+  }
+}

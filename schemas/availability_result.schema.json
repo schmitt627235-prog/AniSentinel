@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AvailabilityResult",
+  "type": "object",
+  "required": ["provider", "episodeFound", "available", "checkedAt", "confidence"],
+  "properties": {
+    "provider": {"type": "string"},
+    "seriesMatched": {"type": "boolean"},
+    "episodeFound": {"type": "boolean"},
+    "available": {"type": "boolean"},
+    "regionMatched": {"type": ["boolean", "null"]},
+    "audioLanguages": {"type": "array", "items": {"type": "string"}},
+    "subtitleLanguages": {"type": "array", "items": {"type": "string"}},
+    "releaseAt": {"type": ["string", "null"], "format": "date-time"},
+    "episodeUrl": {"type": ["string", "null"], "format": "uri"},
+    "checkedAt": {"type": "string", "format": "date-time"},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "evidence": {"type": "array", "items": {"type": "string"}},
+    "errorCode": {"type": ["string", "null"]}
+  }
+}
