@@ -74,7 +74,9 @@ data class JustWatchCatalogTitle(
     val germanSubAvailable: Boolean?,
     val germanDubAvailable: Boolean?,
     val fetchedAt: Instant,
-    val popularityRank: Int? = null
+    val popularityRank: Int? = null,
+    val description: String? = null,
+    val studios: Set<String> = emptySet()
 )
 
 sealed interface JustWatchCatalogResult {
@@ -85,6 +87,8 @@ sealed interface JustWatchCatalogResult {
 
 interface JustWatchCatalogSource {
     suspend fun genres(): JustWatchCatalogResult
+    suspend fun title(justWatchId: String): JustWatchCatalogResult =
+        JustWatchCatalogResult.SourceNotConfigured
     suspend fun search(
         query: String? = null,
         genreIds: Set<String> = emptySet(),
