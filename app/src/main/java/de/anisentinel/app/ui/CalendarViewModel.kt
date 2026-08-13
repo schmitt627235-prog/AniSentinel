@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.stateIn
+import de.anisentinel.app.data.local.ReleasePostponementEntity
 import kotlinx.coroutines.launch
 
 data class CalendarReleaseItem(
@@ -56,6 +57,7 @@ data class CalendarReleaseItem(
     ,val fallbackStatus: String? = null
     ,val isHistoricalImport: Boolean = false
     ,val releaseTimePrecision: String = "EXACT"
+    ,val postponements: List<ReleasePostponementEntity> = emptyList()
 )
 
 data class ScheduleChangeUiItem(
@@ -154,8 +156,10 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
     )
 
     private val selectedReleases = selectedDate.flatMapLatest { date ->
-        dao.observeEpisodeReleasesWithAnimeForWindow(date.startEpoch(), date.plusDays(1).startEpoch())
-            .map { rows -> rows.mapNotNull { row ->
+        combine(
+            dao.observeEpisodeReleasesWithAnimeForWindow(date.startEpoch(), date.plusDays(1).startEpoch()),
+            dao.observeReleasePostponements()
+        ) { rows, postponements -> rows.mapNotNull { row ->
                 row.release.expectedAt?.let { at ->
                     val relevantChecks = row.episodeAvailability.filter {
                         it.source == "DIRECT_PROVIDER_CHECK" || it.source == "ANIWORLD_CALENDAR_FALLBACK_V15"
@@ -200,7 +204,8 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
                         fallback?.let { it.status + (it.errorCode?.let { code -> " · $code" } ?: "") }
                     ).copy(
                         isHistoricalImport = row.release.isHistoricalImport,
-                        releaseTimePrecision = row.release.releaseTimePrecision
+                        releaseTimePrecision = row.release.releaseTimePrecision,
+                        postponements = postponements.filter { it.isActive && it.animeId == row.release.animeId }
                     )
                 }
             } }
@@ -506,6 +511,11 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
                     "$inserted neu · $enriched ergänzt · $failed ohne importierbare Historie"
             )
         }
+    }
+
+    fun refreshDisplayedMonth() {
+        val value = month.value
+        syncRange(value.atDay(1), value.plusMonths(1).atDay(1))
     }
     fun runDiagnosticRetryProof() {
         val debuggable = getApplication<Application>().applicationInfo.flags and

@@ -73,10 +73,13 @@ class UnofficialJustWatchDiagnosticSource : JustWatchPartnerSource, JustWatchCat
                 if (decision !is TitleMatchDecision.Unique) {
                     Log.i(TAG, "rejections ${JustWatchTitleMatcher.rejectionReasons(title, year, contentType, candidates)}")
                 }
-                val catalogTitles = nodes.mapIndexedNotNull { index, node -> node.toCatalogTitle(index) }
+                var catalogTitles = nodes.mapIndexedNotNull { index, node -> node.toCatalogTitle(index) }
                 if (candidates.isEmpty()) return@withContext JustWatchSourceResult.Success(emptyList(), emptyList(), catalogTitles = catalogTitles)
                 if (decision !is TitleMatchDecision.Unique) return@withContext JustWatchSourceResult.Success(candidates, emptyList(), catalogTitles = catalogTitles)
                 val selected = decision.match
+                catalogTitles = catalogTitles.map { row ->
+                    if (row.justWatchId == selected.justWatchId) enrichFromPublicPage(row) else row
+                }
                 delay(1_200)
                 val selectedNode = nodes.single { it.optString("id") == selected.justWatchId }
                 val selectedMatches = listOf(selected)
@@ -117,6 +120,21 @@ class UnofficialJustWatchDiagnosticSource : JustWatchPartnerSource, JustWatchCat
                 JustWatchSourceResult.Failed("${e::class.simpleName}:${e.message.orEmpty().take(80)}", true)
             }
         }
+
+    override suspend fun title(justWatchId: String): JustWatchCatalogResult = withContext(Dispatchers.IO) {
+        try {
+            val node = post(body("GetTitleNode", TITLE_QUERY, nodeVariables(justWatchId)))
+                .optJSONObject("data")?.optJSONObject("node")
+                ?: return@withContext JustWatchCatalogResult.Success()
+            val title = node.toCatalogTitle()?.let(::enrichFromPublicPage)
+                ?: return@withContext JustWatchCatalogResult.Success()
+            JustWatchCatalogResult.Success(titles = listOf(title))
+        } catch (e: HttpStatusException) {
+            JustWatchCatalogResult.Failed("HTTP_${e.status}", e.status == 429 || e.status >= 500)
+        } catch (e: Exception) {
+            JustWatchCatalogResult.Failed("${e::class.simpleName}:${e.message.orEmpty().take(80)}", true)
+        }
+    }
 
     override suspend fun genres(): JustWatchCatalogResult = withContext(Dispatchers.IO) {
         try {
@@ -246,6 +264,38 @@ class UnofficialJustWatchDiagnosticSource : JustWatchPartnerSource, JustWatchCat
         )
     }
 
+    private fun enrichFromPublicPage(title: JustWatchCatalogTitle): JustWatchCatalogTitle {
+        val url = title.justWatchUrl ?: return title
+        return runCatching {
+            val metadata = JustWatchPublicMetadataParser.parse(get(url))
+            title.copy(
+                description = metadata.description,
+                genres = (title.genres + metadata.genres).filter(String::isNotBlank).toSet(),
+                studios = metadata.studios.filter(String::isNotBlank).toSet()
+            )
+        }.onFailure { Log.w(TAG, "public metadata failed id=${title.justWatchId}", it) }
+            .getOrDefault(title)
+    }
+
+    @Synchronized
+    private fun get(url: String): String {
+        val waitMillis = (lastRequestAtMillis + MIN_REQUEST_INTERVAL_MS - System.currentTimeMillis()).coerceAtLeast(0)
+        if (waitMillis > 0) Thread.sleep(waitMillis)
+        val connection = URL(url).openConnection() as HttpURLConnection
+        connection.requestMethod = "GET"
+        connection.connectTimeout = 15_000
+        connection.readTimeout = 25_000
+        connection.setRequestProperty("Accept", "text/html,application/xhtml+xml")
+        connection.setRequestProperty("Accept-Language", "de-DE,de;q=0.9")
+        connection.setRequestProperty("User-Agent", "AniSentinel/0.25.1 JustWatch metadata diagnostic")
+        val status = connection.responseCode
+        val text = (if (status in 200..299) connection.inputStream else connection.errorStream)
+            ?.bufferedReader()?.use { it.readText() }.orEmpty()
+        lastRequestAtMillis = System.currentTimeMillis()
+        if (status !in 200..299) throw HttpStatusException(status, text.take(160))
+        return text
+    }
+
     private fun posterUrl(path: String) = "https://images.justwatch.com" + path
         .replace("{profile}", "s166")
         .replace("{format}", "jpg")
@@ -283,6 +333,7 @@ class UnofficialJustWatchDiagnosticSource : JustWatchPartnerSource, JustWatchCat
         private val SEARCH_QUERY = """query GetSearchTitles(${'$'}searchTitlesFilter: TitleFilter!, ${'$'}country: Country!, ${'$'}language: Language!, ${'$'}first: Int!) { popularTitles(country: ${'$'}country, filter: ${'$'}searchTitlesFilter, first: ${'$'}first, sortBy: POPULAR, offset: 0) { edges { node { ...AniSentinelTitle } } } } $DETAILS"""
         private val SEASONS_QUERY = """query GetTitleNode(${'$'}nodeId: ID!, ${'$'}country: Country!, ${'$'}language: Language!) { node(id: ${'$'}nodeId) { ... on Show { seasons(sortDirection: ASC) { ...AniSentinelTitle } } } } $DETAILS"""
         private val EPISODES_QUERY = """query GetTitleNode(${'$'}nodeId: ID!, ${'$'}country: Country!, ${'$'}language: Language!) { node(id: ${'$'}nodeId) { ... on Season { episodes(sortDirection: ASC) { ...AniSentinelTitle } } } } $DETAILS"""
+        private val TITLE_QUERY = """query GetTitleNode(${'$'}nodeId: ID!, ${'$'}country: Country!, ${'$'}language: Language!) { node(id: ${'$'}nodeId) { ...AniSentinelTitle } } $DETAILS"""
         private val GENRES_QUERY = """query GetGenres(${'$'}language: Language!) { genres { shortName translation(language: ${'$'}language) } }"""
         private val CATALOG_QUERY = """query GetCatalogTitles(${'$'}country: Country!, ${'$'}language: Language!, ${'$'}first: Int!, ${'$'}offset: Int!, ${'$'}filter: TitleFilter!) { popularTitles(country: ${'$'}country, filter: ${'$'}filter, first: ${'$'}first, sortBy: POPULAR, offset: ${'$'}offset) { edges { node { id objectType content(country: ${'$'}country, language: ${'$'}language) { title originalReleaseYear fullPath posterUrl genres { shortName } } offers(country: ${'$'}country, platform: WEB, filter: {bestOnly: true}) { standardWebURL subtitleLanguages audioLanguages package { packageId clearName } } } } } }"""
     }

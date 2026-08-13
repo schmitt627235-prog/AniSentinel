@@ -71,6 +71,25 @@ class AniSentinelDaoTest {
     }
 
     @Test
+    fun `unchanged postponement upsert stays single and notification revision is durable`() = runBlocking {
+        val row = ReleasePostponementEntity(
+            "shift", "release", null, "Anime", 1, 7, "GER_DUB", 100, 200,
+            "Quelle nennt einen Grund", "DELAYED", "ANIWORLD_SCHEDULE_CHANGE",
+            "https://aniworld.to/support/frage/anime-verschiebungen", null,
+            10, 20, true, 1, 0
+        )
+        dao.upsertReleasePostponements(listOf(row))
+        dao.upsertReleasePostponements(listOf(row.copy(lastCheckedAt = 30)))
+
+        assertEquals(1, dao.observeReleasePostponements().first().size)
+        dao.markPostponementNotified("shift")
+        assertTrue(dao.postponementsNeedingNotification().isEmpty())
+
+        dao.upsertReleasePostponements(listOf(row.copy(newExpectedAt = 300, revision = 2, notifiedRevision = 1)))
+        assertEquals(2, dao.postponementsNeedingNotification().single().revision)
+    }
+
+    @Test
     fun `episode persists honest availability window`() = runBlocking {
         dao.upsertAnime(listOf(anime("atlas", "Atlas of Ash")))
         dao.upsertEpisodes(

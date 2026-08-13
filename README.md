@@ -18,6 +18,18 @@ AniSentinel ist eine native Android-App für deutsche Anime-Releasetermine. Sie 
 - News- und Verschiebungssignale über Anime2You
 - sichere HTTPS-Deep-Links zu real ermittelten Providerseiten
 - Room als alleinige lokale UI-Datenbasis; DataStore für Einstellungen
+- reale JustWatch-DE-Titelmetadaten für Handlung und Genres sowie Studioangaben, sofern die öffentliche Quelle sie eindeutig liefert
+- Pull-to-Refresh in den datenabhängigen Hauptansichten; bestehende Room-Daten bleiben bei Netzwerkfehlern sichtbar
+
+### JustWatch-Metadaten
+
+Bei einem eindeutig zugeordneten deutschen JustWatch-Katalogtitel speichert AniSentinel Handlung, Genres und vorhandene Produktionsangaben lokal in Room. Bereits gespeicherte stabile JustWatch-IDs werden bevorzugt; ohne ID gilt ein konservativer Abgleich aus Titel, Jahr und Inhaltstyp. Mehrdeutige Kandidaten bleiben leer, damit beispielsweise `One Piece` und `One Piece (2023)` nicht vermischt werden.
+
+Dieser Metadatenweg ist strikt von der Episodenprüfung getrennt: JustWatch ordnet Titel und Streaminganbieter zu, bestätigt aber weder eine konkrete Episode noch deren deutsche Sprachfassung.
+
+### Manuelles Aktualisieren
+
+Pull-to-Refresh synchronisiert die für die sichtbare Ansicht relevanten Daten aus den aktivierten Quellen. Fällige, noch nicht bestätigte Favoriten können dabei direkt beim Anbieter geprüft werden. Bereits bestätigte Episoden werden nicht unnötig erneut geprüft; der manuelle Refresh startet keine historischen Watcher und erzeugt keine künstlichen Due- oder T+10-Ereignisse.
 
 ### Favoriten-Kategorien
 
@@ -34,6 +46,16 @@ Historische Crunchyroll-/ADN-Releases zählen für diese UI-Kategorisierung als 
 AniSentinel benötigt keinen Crunchyroll-, ADN-, AniWorld-, Anime2You- oder JustWatch-Login. Die App speichert keine Streaming-Passwörter, Account-Cookies oder persönlichen Sitzungstokens. Sie ruft öffentlich beziehungsweise anonym erreichbare Metadaten ab und speichert Favoriten, Termine und Einstellungen lokal auf dem Gerät.
 
 Das ist kein Versprechen, dass keinerlei Netzwerkdaten übertragen werden: Bei einer Synchronisation verbindet sich die App mit den unten dokumentierten Quellen. Es gibt keine Wiedergabe-, Download-, DRM- oder Streamingfunktion.
+
+## Verschiebungen
+
+Kurze Einzelverschiebungen gelten nur für die konkret betroffene Folge. Bei einer Pause von mindestens zwei Wochen oder unbekannter Wiederaufnahme wird der alte Wochenrhythmus nicht fortgeschrieben. Ein neuer Sendetag beziehungsweise eine neue Uhrzeit wird erst aus einem realen Quelltermin nach der Pause übernommen.
+
+AniSentinel überwacht die veröffentlichte AniWorld-Seite [Animeverschiebungen](https://aniworld.to/support/frage/anime-verschiebungen). Aktuelle Meldungen erscheinen dauerhaft aus Room unter „Entdecken & Mehr → Verschiebungen“ mit interner Detailansicht und einem getrennten Link zur Originalmeldung.
+
+Wenn Titel, Staffel, Episode und deutsche Sprachfassung eindeutig zu einem vorhandenen Release passen, erscheint der Zustand zusätzlich direkt im Kalender, bei Favoriten, auf der Startseite und in der Detailansicht. Der ursprüngliche Termin bleibt nachvollziehbar. Ein belastbarer Ersatztermin wird gespeichert und neu geplant; ohne Ersatztermin werden Due-Alarm, AUTO-Prüfung und AniWorld-T+10-Fallback gestoppt.
+
+GER SUB und GER DUB werden getrennt behandelt. Gründe und Ersatztermine erscheinen nur, wenn AniWorld sie tatsächlich nennt. Eine unveränderte Meldung erzeugt weder einen zweiten Room-Eintrag noch eine weitere Benachrichtigung. Bereits direkt bestätigte Verfügbarkeit wird nicht überschrieben.
 
 ## Release- und Verfügbarkeitsüberwachung
 

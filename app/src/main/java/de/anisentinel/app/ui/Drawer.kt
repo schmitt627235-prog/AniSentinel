@@ -24,6 +24,7 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.ShowChart
 import androidx.compose.material.icons.outlined.SmartDisplay
 import androidx.compose.material.icons.outlined.Today
+import androidx.compose.material.icons.outlined.EventBusy
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -70,6 +71,7 @@ fun AppDrawer(
         DrawerItem(R.string.drawer_dubs, Icons.Outlined.NewReleases, "dubs"),
         DrawerItem(R.string.anticipated_titles, Icons.Outlined.LocalFireDepartment),
         DrawerItem(R.string.drawer_news, Icons.Outlined.MenuBook, "news"),
+        DrawerItem(R.string.postponements_title, Icons.Outlined.EventBusy, "postponements"),
         DrawerItem(R.string.drawer_stats, Icons.Outlined.ShowChart, "statistics"),
         DrawerItem(R.string.drawer_changelog, Icons.Outlined.NewReleases, "changelog")
     )

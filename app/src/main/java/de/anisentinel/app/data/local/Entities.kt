@@ -167,7 +167,9 @@ data class JustWatchCatalogTitleEntity(
     val germanDubAvailable: Boolean?,
     val fetchedAt: Long,
     val source: String,
-    val popularityRank: Int?
+    val popularityRank: Int?,
+    val description: String? = null,
+    val studios: String = ""
 )
 
 @Entity(tableName = "justwatch_genres")
@@ -352,6 +354,35 @@ data class ReleaseScheduleHistoryNewsRow(
     val reason: String?,
     val detectedAt: Long,
     val sourceUrl: String
+)
+
+@Entity(
+    tableName = "release_postponements",
+    indices = [Index("releaseId"), Index("animeId"), Index("detectedAt"), Index("isActive")]
+)
+data class ReleasePostponementEntity(
+    @PrimaryKey val postponementId: String,
+    val releaseId: String?,
+    val animeId: String?,
+    val title: String,
+    val seasonNumber: Int?,
+    val episodeNumber: Int?,
+    val releaseLanguage: String?,
+    val originalExpectedAt: Long?,
+    val newExpectedAt: Long?,
+    val reason: String?,
+    val direction: String,
+    val source: String,
+    val sourceUrl: String,
+    val evidenceUrl: String?,
+    val detectedAt: Long,
+    val lastCheckedAt: Long,
+    val isActive: Boolean,
+    val revision: Int,
+    val notifiedRevision: Int,
+    val confirmationStatus: String = "SINGLE_SOURCE",
+    val secondarySource: String? = null,
+    val secondarySourceUrl: String? = null
 )
 
 @Entity(

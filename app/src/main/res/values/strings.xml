@@ -397,6 +397,8 @@
     <string name="notification_release_target">Release aus Benachrichtigung</string>
     <string name="source_available_at">Quelle meldet verfügbar: %1$s Uhr</string>
     <string name="last_release">Letzter Release</string>
+    <string name="previous_expected_release">Vorheriger erwarteter Termin</string>
+    <string name="previous_release_time_inferred">Terminannahme aus dem aktuellen wöchentlichen Sendeplatz; noch nicht als Veröffentlichung bestätigt.</string>
     <string name="next_release">Nächster Release</string>
     <string name="news_explanation">Reale redaktionelle Anime-Meldungen von Anime2You. Eine Meldung ohne konkreten Termin erzeugt keinen Kalendereintrag.</string>
     <string name="news_error">Anime2You momentan nicht erreichbar (%1$s). Gespeicherte Meldungen bleiben erhalten.</string>
@@ -450,4 +452,22 @@
     <string name="historical_calendar_explanation">Importiert exakt datierte Crunchyroll- und ADN-Episoden für bereits sicher zugeordnete deutsche Serien. Historische Einträge starten keine Benachrichtigungen oder Wächter.</string>
     <string name="historical_calendar_sync">Crunchyroll- und ADN-Historie laden</string>
     <string name="historical_calendar_sync_month">Historie für %1$s %2$d laden</string>
+    <string name="postponements_title">Verschiebungen</string>
+    <string name="postponements_explanation">Aktuelle veröffentlichte Anime-Verschiebungen von AniWorld. Gründe und Ersatztermine erscheinen nur, wenn die Quelle sie tatsächlich nennt.</string>
+    <string name="postponements_empty">Noch keine strukturierten Verschiebungsmeldungen gespeichert.</string>
+    <string name="postponement_detail_title">Verschiebungsdetails</string>
+    <string name="postponed_badge">VERSCHOBEN</string>
+    <string name="postponement_original">Ursprünglicher Termin: %1$s</string>
+    <string name="postponement_new">Neuer Termin: %1$s</string>
+    <string name="postponement_new_unknown">Neuer Termin noch nicht bekannt</string>
+    <string name="postponement_reason">Grund: %1$s</string>
+    <string name="postponement_source">Quelle: AniWorld – Animeverschiebungen</string>
+    <string name="postponement_multi_source">Zweifach bestätigt: AniWorld · Anime2You</string>
+    <string name="postponement_single_source">AniWorld bestätigt · Anime2You-Gegenbestätigung nicht gefunden</string>
+    <string name="hiatus_badge">PAUSE</string>
+    <string name="hiatus_return_known">Wiederaufnahme: %1$s</string>
+    <string name="hiatus_return_unknown">Wiederaufnahme: noch nicht bekannt</string>
+    <string name="postponement_checked_at">Zuletzt geprüft: %1$s</string>
+    <string name="postponement_open_original">Originalmeldung öffnen</string>
+    <string name="postponement_not_found">Verschiebungsmeldung nicht mehr verfügbar.</string>
 </resources>

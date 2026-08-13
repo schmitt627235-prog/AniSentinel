@@ -9,6 +9,7 @@ import de.anisentinel.app.data.local.AnimeEntity
 import de.anisentinel.app.data.local.EpisodeReleaseEntity
 import de.anisentinel.app.data.local.JustWatchCatalogTitleEntity
 import de.anisentinel.app.data.local.JustWatchGenreEntity
+import de.anisentinel.app.data.local.ReleasePostponementEntity
 import de.anisentinel.app.domain.model.Anime
 import de.anisentinel.app.domain.model.MetadataSource
 import de.anisentinel.app.domain.model.ReleaseStatus
@@ -54,7 +55,8 @@ data class DiscoverUiState(
     val providerFilter: String? = null,
     val providers: List<String> = emptyList(),
     val titles: List<CatalogAnimeItem> = emptyList(),
-    val error: String? = null
+    val error: String? = null,
+    val postponementsByAnime: Map<String, List<ReleasePostponementEntity>> = emptyMap()
 )
 
 class DiscoverViewModel(application: Application) : AndroidViewModel(application) {
@@ -69,7 +71,7 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
     private var refreshJob: Job? = null
 
     private data class Filters(val genre: String?, val type: DiscoverTypeFilter, val sort: DiscoverSort, val provider: String?)
-    private data class Data(val genres: List<JustWatchGenreEntity>, val catalog: List<JustWatchCatalogTitleEntity>, val releases: List<EpisodeReleaseEntity>)
+    private data class Data(val genres: List<JustWatchGenreEntity>, val catalog: List<JustWatchCatalogTitleEntity>, val releases: List<EpisodeReleaseEntity>, val postponements: List<ReleasePostponementEntity>)
     private data class Operation(val loading: Boolean = true, val error: String? = null)
 
     private val filters = combine(selectedGenre, typeFilter, sort, providerFilter, ::Filters)
@@ -77,6 +79,7 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
         repository.observeGenres(),
         repository.observeKnownAnimeTitles(),
         dao.observeActiveAniWorldReleases(Instant.now().epochSecond),
+        dao.observeReleasePostponements(),
         ::Data
     )
 
@@ -114,7 +117,9 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
             providers = StreamingProviderPolicy.visible(data.catalog.flatMap { it.csvProviders() }),
             titles = sorted.mapNotNull { row -> row.internalAnimeId?.let { row.toCatalogItem(it) } }
                 .distinctBy { it.stableKey },
-            error = op.error
+            error = op.error,
+            postponementsByAnime = data.postponements.filter { it.isActive && it.animeId != null }
+                .groupBy { requireNotNull(it.animeId) }
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DiscoverUiState())
 
@@ -125,6 +130,8 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
         operation.value = Operation(loading = true)
         val genres = repository.refreshGenres()
         val catalog = repository.search(query = null, genreIds = setOf("ani"))
+        container.providerPipelineRepository.syncTitleProviders()
+        container.providerPipelineRepository.checkDueEpisodes()
         operation.value = Operation(
             false,
             (genres as? JustWatchCatalogResult.Failed)?.code
@@ -143,7 +150,8 @@ data class GlobalSearchUiState(
     val loading: Boolean = false,
     val results: List<CatalogAnimeItem> = emptyList(),
     val error: String? = null,
-    val searched: Boolean = false
+    val searched: Boolean = false,
+    val postponementsByAnime: Map<String, List<ReleasePostponementEntity>> = emptyMap()
 )
 
 class GlobalSearchViewModel(application: Application) : AndroidViewModel(application) {
@@ -160,11 +168,16 @@ class GlobalSearchViewModel(application: Application) : AndroidViewModel(applica
         val resultIds: Set<String> = emptySet()
     )
 
-    val state = combine(query, repository.observeAllCachedTitles(), operation) { text, catalog, op ->
+    val state = combine(query, repository.observeAllCachedTitles(), operation, dao.observeReleasePostponements()) { text, catalog, op, postponements ->
         val matches = if (!op.searched) emptyList() else catalog
             .filter { it.justWatchId in op.resultIds }
             .sortedWith(compareBy(nullsLast()) { it.popularityRank })
-        GlobalSearchUiState(text, op.loading, matches.mapNotNull { row -> row.internalAnimeId?.let { row.toCatalogItem(it) } }, op.error, op.searched)
+        GlobalSearchUiState(
+            text, op.loading,
+            matches.mapNotNull { row -> row.internalAnimeId?.let { row.toCatalogItem(it) } },
+            op.error, op.searched,
+            postponements.filter { it.isActive && it.animeId != null }.groupBy { requireNotNull(it.animeId) }
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), GlobalSearchUiState())
 
     fun setQuery(value: String) { query.value = value }
