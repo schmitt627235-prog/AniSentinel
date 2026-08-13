@@ -30,28 +30,27 @@ class AniWorldScheduleChangesSyncWorker(context: Context, params: WorkerParamete
     override suspend fun doWork(): Result {
         val app = applicationContext as AniSentinelApplication
         if (!app.resources.getBoolean(de.anisentinel.app.R.bool.aniworld_enabled)) return Result.success()
-        val startedAt = Instant.now().epochSecond
         return when (app.container.aniWorldReleaseRepository.syncScheduleChanges()) {
             is AniWorldSyncResult.Success -> {
                 val dao = app.container.database.aniSentinelDao()
-                dao.releaseScheduleHistorySince(startedAt).forEach { change ->
-                    val release = dao.release(change.releaseId) ?: return@forEach
+                dao.postponementsNeedingNotification().forEach { change ->
+                    val release = change.releaseId?.let { dao.release(it) } ?: return@forEach
+                    app.container.favoriteReleaseScheduler.cancelAllReleaseWatchScheduling(release.sourceReleaseId)
                     val favorite = dao.favorite(release.animeId)
                     if (favorite?.enabled == true && favorite.notifyPostponed) {
-                        dao.updateReleaseStatus(release.sourceReleaseId, "POSTPONED")
-                        app.container.favoriteReleaseScheduler.cancelAvailabilityCheck(release.sourceReleaseId)
                         deliverOnce(
-                            app, release, "POSTPONED",
+                            app, release, "POSTPONED:${change.revision}",
                             de.anisentinel.app.domain.watcher.NotificationEvent.OfficiallyPostponed(
                                 release.animeId,
                                 release.episodeNumber ?: 0,
                                 dao.anime(release.animeId)?.titleGerman,
                                 release.seasonNumber,
                                 change.reason,
-                                change.revisedAt?.let(java.time.Instant::ofEpochSecond)
+                                change.newExpectedAt?.let(java.time.Instant::ofEpochSecond)
                             )
                         )
                     }
+                    dao.markPostponementNotified(change.postponementId)
                 }
                 app.container.favoriteReleaseScheduler.reconcileAll()
                 Result.success()
