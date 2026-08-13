@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.25.1 – JustWatch-Metadaten und mobile Episodenaktionen – 2026-08-13
+
+- Handlung, Genres und – soweit öffentlich tatsächlich vorhanden – Produktionsstudio werden über ein eindeutiges JustWatch-DE-Match nachgeladen und in Room gespeichert.
+- Gespeicherte stabile JustWatch-IDs haben Vorrang; mehrdeutige Treffer übernehmen keine fremden Metadaten.
+- JustWatch-Metadaten verändern keinen Episoden-Verfügbarkeitsstatus.
+- Bestehende Titel können beim Öffnen beziehungsweise manuellen Aktualisieren nachträglich angereichert werden.
+- Room 24 ergänzt `description` und `studios` am JustWatch-Katalogcache; Migration 23→24 erhält Favoriten und vorhandene Daten.
+- Episodenkarten zeigen Aktionen untereinander über die Kartenbreite.
+- „Verfügbarkeit jetzt prüfen“ erscheint nur bei den neuesten relevanten, noch nicht bestätigten Episoden und verschwindet nach `AVAILABLE`.
+- Pull-to-Refresh wurde auf Detailseite und Entdecken ergänzt; Start, Kalender, Favoriten, News und Verschiebungen verwenden dieselbe bestehende Material-3-Mechanik.
+- 244 JVM-Tests erfolgreich; Update auf dem Testgerät behielt 38 Favoriten.
+
+- v0.25.0: Mehrwöchige und offene Pausen setzen den bisherigen Release-Rhythmus außer Kraft; ein neuer Sendetag oder eine neue Uhrzeit wird erst durch einen realen Quelltermin nach der Wiederaufnahme übernommen.
+
+- v0.25.0: Verschiebungen erscheinen titelweit und prominent rot auf Start, Suche, Entdecken, Kalender, Favoriten und Details; die eigentliche Terminänderung bleibt streng nach Staffel, Episode und Sprache getrennt.
+- v0.25.0: Der Crunchyroll-Historienimport lädt vollständige, begrenzte Episodenlisten statt der kleinen CMS-Standardseite; bestätigte historische Provider-Releases erscheinen global als verfügbar.
+
+## v0.25.0 – Verschiebungen – 2026-08-13
+
+- Neue Kategorie „Entdecken & Mehr → Verschiebungen“ mit Room-basierter Liste und interner Detailseite.
+- Reale AniWorld-Verschiebungsseite als regelmäßig synchronisierte, gespeicherte Quelle integriert.
+- Ursprünglicher Termin, optionaler Ersatztermin, Grund, Sprache, Quelle und Prüfzeitpunkt werden ohne erfundene Werte gespeichert.
+- Eindeutig zugeordnete Releases stoppen den alten Due-/AUTO-/Fallback-Plan; bekannte Ersatztermine werden neu geplant.
+- GER SUB und GER DUB bleiben strikt getrennt; kombinierte Quellmeldungen erzeugen zwei semantische Zuordnungen.
+- Revisionen deduplizieren unveränderte Meldungen und erlauben Benachrichtigungen nur bei erstmaliger oder relevanter Änderung.
+- Bereits bestätigte Verfügbarkeit wird nicht durch eine Verschiebungsmeldung überschrieben.
+- Room-Schema 22 und reale HTML-Parser-Fixture vom 13.08.2026 ergänzt.
+
 ## v0.24.9 – automatischer Favoriten-Historienbackfill – 2026-08-12
 
 - Neu hinzugefügte und wiederhergestellte Favoriten erhalten automatisch einen persistenten historischen Backfill.
