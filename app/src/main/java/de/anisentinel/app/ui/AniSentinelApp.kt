@@ -196,6 +196,15 @@ fun AniSentinelApp(notificationTarget: android.net.Uri? = null, onNotificationTa
                         composable("news/{announcementId}") {
                             NewsDetailScreen(padding, navController::navigateUp)
                         }
+                        composable("postponements") {
+                            PostponementsScreen(
+                                padding, navController::navigateUp,
+                                onItemClick = { id -> navController.navigate("postponements/${android.net.Uri.encode(id)}") }
+                            )
+                        }
+                        composable("postponements/{postponementId}") {
+                            PostponementDetailScreen(padding, navController::navigateUp)
+                        }
                         composable("statistics") {
                             ReleaseStatisticsScreen(padding, navController::navigateUp)
                         }

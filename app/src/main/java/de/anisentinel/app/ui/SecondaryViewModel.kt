@@ -139,7 +139,7 @@ class SecondaryViewModel(application: Application) : AndroidViewModel(applicatio
                 germanDub = releases.count { it.releaseLanguage == "GER_DUB" },
                 confirmedAvailable = releases.count { it.sourceReleaseId in availableReleaseIds },
                 delayed = releases.count { it.releaseStatus.contains("DELAYED") },
-                postponed = releases.count { it.releaseStatus == "POSTPONED" }
+                postponed = releases.count { it.releaseStatus in listOf("POSTPONED", "RESCHEDULED") }
             )
         )
     }

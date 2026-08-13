@@ -12,6 +12,7 @@ import de.anisentinel.app.data.local.ProviderReferenceEntity
 import de.anisentinel.app.data.local.EpisodeProviderAvailabilityEntity
 import de.anisentinel.app.data.local.ScheduledReleaseNotificationEntity
 import de.anisentinel.app.data.local.JustWatchOfferEntity
+import de.anisentinel.app.data.local.ReleasePostponementEntity
 import de.anisentinel.app.domain.provider.ProviderCheckRequest
 import de.anisentinel.app.data.anilist.toDomain
 import de.anisentinel.app.domain.model.Anime
@@ -41,6 +42,11 @@ data class DetailUiState(
     ,val historyImportRunning: Boolean = false
     ,val historyImportResult: String? = null
     ,val adnHistoryDiagnostics: de.anisentinel.app.data.provider.AdnHistoryDiagnostics? = null
+    ,val postponements: List<ReleasePostponementEntity> = emptyList()
+    ,val justWatchMetadata: de.anisentinel.app.data.local.JustWatchCatalogTitleEntity? = null
+    ,val justWatchGenreLabels: Map<String, String> = emptyMap()
+    ,val metadataRefreshing: Boolean = false
+    ,val metadataRefreshError: String? = null
 )
 
 class DetailViewModel(
@@ -62,6 +68,7 @@ class DetailViewModel(
             if (cached != null) {
                 anime = cached.toDomain()
                 _state.value = _state.value.copy(anime = anime, loading = false)
+                refreshJustWatchMetadata()
             } else {
                 _state.value = _state.value.copy(loading = false, notFound = true)
                 return@launch
@@ -75,6 +82,21 @@ class DetailViewModel(
                     watchProfileId = favorite?.monitoringProfileId
                         ?: _state.value.watchProfileId
                 )
+            }
+        }
+        viewModelScope.launch {
+            container.database.aniSentinelDao().observeJustWatchCatalogTitleForAnime(animeId).collect { row ->
+                _state.value = _state.value.copy(justWatchMetadata = row)
+            }
+        }
+        viewModelScope.launch {
+            container.database.aniSentinelDao().observeJustWatchGenres().collect { rows ->
+                _state.value = _state.value.copy(justWatchGenreLabels = rows.associate { it.genreId to it.label })
+            }
+        }
+        viewModelScope.launch {
+            container.database.aniSentinelDao().observeActivePostponementsForAnime(animeId).collect { rows ->
+                _state.value = _state.value.copy(postponements = rows)
             }
         }
         viewModelScope.launch {
@@ -162,12 +184,57 @@ class DetailViewModel(
         }
     }
 
+    fun refreshJustWatchMetadata() {
+        if (_state.value.metadataRefreshing) return
+        viewModelScope.launch {
+            _state.value = _state.value.copy(metadataRefreshing = true, metadataRefreshError = null)
+            val result = container.justWatchCatalogRepository.backfillMetadata(animeId)
+            _state.value = _state.value.copy(
+                metadataRefreshing = false,
+                metadataRefreshError = (result as? de.anisentinel.app.domain.provider.JustWatchCatalogResult.Failed)?.code
+            )
+        }
+    }
+
     fun diagnoseHistoricalEpisode(releaseId: String) {
         if (_state.value.providerChecking) return
         viewModelScope.launch {
             _state.value = _state.value.copy(providerChecking = true)
             try { container.providerPipelineRepository.diagnoseHistoricalEpisode(releaseId) }
             finally { _state.value = _state.value.copy(providerChecking = false) }
+        }
+    }
+
+    fun refreshVisibleData() {
+        if (_state.value.providerChecking || _state.value.metadataRefreshing) return
+        viewModelScope.launch {
+            _state.value = _state.value.copy(
+                providerChecking = true,
+                metadataRefreshing = true,
+                metadataRefreshError = null
+            )
+            try {
+                val metadata = container.justWatchCatalogRepository.backfillMetadata(animeId)
+                val availableIds = _state.value.episodeChecks
+                    .filter { it.status.startsWith("AVAILABLE") }
+                    .mapTo(mutableSetOf()) { it.releaseId }
+                val now = java.time.Instant.now().epochSecond
+                _state.value.releases
+                    .filter { release ->
+                        release.sourceReleaseId !in availableIds &&
+                            (release.expectedAt ?: Long.MAX_VALUE) <= now
+                    }
+                    .sortedByDescending { it.expectedAt ?: Long.MIN_VALUE }
+                    .take(2)
+                    .forEach { release ->
+                        container.providerPipelineRepository.diagnoseHistoricalEpisode(release.sourceReleaseId)
+                    }
+                _state.value = _state.value.copy(
+                    metadataRefreshError = (metadata as? de.anisentinel.app.domain.provider.JustWatchCatalogResult.Failed)?.code
+                )
+            } finally {
+                _state.value = _state.value.copy(providerChecking = false, metadataRefreshing = false)
+            }
         }
     }
 
