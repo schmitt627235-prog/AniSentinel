@@ -112,18 +112,20 @@ class CrunchyrollMetadataAdapter(
             val seriesId = identity?.seriesId ?: catalogClient.resolveSeries(identity?.sourceUrl ?: request.providerUrl, request.title)
                 ?: return ProviderMetadataProbeResult.CheckFailed("CRUNCHYROLL_SERIES_NOT_IDENTIFIED", now, false)
             val catalog = catalogClient.loadSeries(seriesId)
-            val candidates = catalog.episodes.filter {
-                it.episodeNumber == request.episodeNumber && (request.seasonNumber == null || it.seasonNumber == request.seasonNumber)
-            }
-            if (candidates.isEmpty()) return ProviderMetadataProbeResult.NotAvailableYet(
-                ProviderMetadataIdentity("CRUNCHYROLL", "DE", seriesId, sourceUrl = catalog.seriesUrl), now,
-                "CRUNCHYROLL_EPISODE_NOT_LISTED"
+            val normalized = CrunchyrollEpisodeNormalizer.resolve(
+                catalog.episodes, request.seasonNumber, request.episodeNumber, request.expectedLanguage,
+                identity?.seasonId, identity?.episodeId
             )
-            val matching = candidates.firstOrNull { request.expectedLanguage in it.releaseLanguages }
-                ?: return ProviderMetadataProbeResult.NotAvailableYet(
-                    ProviderMetadataIdentity("CRUNCHYROLL", "DE", seriesId, sourceUrl = catalog.seriesUrl), now,
-                    "CRUNCHYROLL_EXPECTED_LANGUAGE_NOT_LISTED"
+            if (normalized.status == CrunchyrollNormalizationStatus.AMBIGUOUS || normalized.status == CrunchyrollNormalizationStatus.PARSER_FAILED) {
+                return ProviderMetadataProbeResult.CheckFailed(
+                    "CRUNCHYROLL_EPISODE_${normalized.status.name}:${normalized.diagnostic}", now, false
                 )
+            }
+            if (normalized.status == CrunchyrollNormalizationStatus.NOT_FOUND) return ProviderMetadataProbeResult.NotAvailableYet(
+                ProviderMetadataIdentity("CRUNCHYROLL", "DE", seriesId, sourceUrl = catalog.seriesUrl), now,
+                "CRUNCHYROLL_EPISODE_NOT_LISTED:${normalized.diagnostic}"
+            )
+            val matching = requireNotNull(normalized.episode)
             val stable = ProviderMetadataIdentity(
                 provider = "CRUNCHYROLL", market = "DE", seriesId = seriesId,
                 seasonId = matching.seasonId, episodeId = matching.episodeId,

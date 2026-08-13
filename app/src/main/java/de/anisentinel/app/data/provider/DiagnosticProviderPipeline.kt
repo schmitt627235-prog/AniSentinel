@@ -451,7 +451,8 @@ class ProviderPipelineRepository(
             providers.sorted().joinToString(","),
             providerUrls.entries.sortedBy { it.key }.joinToString("\n") { "${it.key}\t${it.value}" },
             germanSubAvailable, germanDubAvailable, fetchedAt.epochSecond,
-            "UNOFFICIAL_JUSTWATCH_DIAGNOSTIC", popularityRank
+            "UNOFFICIAL_JUSTWATCH_DIAGNOSTIC", popularityRank,
+            description, studios.sorted().joinToString("\n")
         )
 
     private suspend fun persistCheck(
