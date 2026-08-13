@@ -30,8 +30,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ,JustWatchGenreEntity::class
         ,AnnouncementEntity::class
         ,ProviderMetadataIdentityEntity::class
+        ,ReleasePostponementEntity::class
     ],
-    version = 21,
+    version = 24,
     exportSchema = true
 )
 abstract class AniSentinelDatabase : RoomDatabase() {
@@ -363,6 +364,39 @@ abstract class AniSentinelDatabase : RoomDatabase() {
                     SELECT animeId, 'PENDING', createdAt, NULL, NULL, NULL, NULL, 0, NULL
                     FROM favorites WHERE enabled = 1
                 """.trimIndent())
+            }
+        }
+        val MIGRATION_21_22 = object : Migration(21, 22) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS release_postponements (
+                        postponementId TEXT NOT NULL, releaseId TEXT, animeId TEXT,
+                        title TEXT NOT NULL, seasonNumber INTEGER, episodeNumber INTEGER,
+                        releaseLanguage TEXT, originalExpectedAt INTEGER, newExpectedAt INTEGER,
+                        reason TEXT, direction TEXT NOT NULL, source TEXT NOT NULL,
+                        sourceUrl TEXT NOT NULL, evidenceUrl TEXT, detectedAt INTEGER NOT NULL,
+                        lastCheckedAt INTEGER NOT NULL, isActive INTEGER NOT NULL,
+                        revision INTEGER NOT NULL, notifiedRevision INTEGER NOT NULL,
+                        PRIMARY KEY(postponementId)
+                    )
+                """.trimIndent())
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_release_postponements_releaseId ON release_postponements(releaseId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_release_postponements_animeId ON release_postponements(animeId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_release_postponements_detectedAt ON release_postponements(detectedAt)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_release_postponements_isActive ON release_postponements(isActive)")
+            }
+        }
+        val MIGRATION_22_23 = object : Migration(22, 23) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE release_postponements ADD COLUMN confirmationStatus TEXT NOT NULL DEFAULT 'SINGLE_SOURCE'")
+                database.execSQL("ALTER TABLE release_postponements ADD COLUMN secondarySource TEXT")
+                database.execSQL("ALTER TABLE release_postponements ADD COLUMN secondarySourceUrl TEXT")
+            }
+        }
+        val MIGRATION_23_24 = object : Migration(23, 24) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE justwatch_catalog_titles ADD COLUMN description TEXT")
+                database.execSQL("ALTER TABLE justwatch_catalog_titles ADD COLUMN studios TEXT NOT NULL DEFAULT ''")
             }
         }
     }
