@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
 import java.time.DayOfWeek
 import java.time.temporal.TemporalAdjusters
@@ -65,18 +66,23 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             operation.value = OperationState(loading = true)
             val today = LocalDate.now()
             val weekStart = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
-            if (getApplication<android.app.Application>().resources.getBoolean(de.anisentinel.app.R.bool.aniworld_enabled)) {
-                operation.value = when (container.aniWorldReleaseRepository.syncCalendar(weekStart, weekStart.plusWeeks(2))) {
-                    is de.anisentinel.app.data.release.AniWorldSyncResult.Success -> {
+            val completed = try {
+                withTimeoutOrNull(30_000) {
+                    if (getApplication<android.app.Application>().resources.getBoolean(de.anisentinel.app.R.bool.aniworld_enabled)) {
+                        when (container.aniWorldReleaseRepository.syncCalendar(weekStart, weekStart.plusWeeks(2))) {
+                            is de.anisentinel.app.data.release.AniWorldSyncResult.Success -> Unit
+                            is de.anisentinel.app.data.release.AniWorldSyncResult.Failure -> return@withTimeoutOrNull false
+                        }
                         container.aniWorldReleaseRepository.syncScheduleChanges()
-                        container.favoriteReleaseScheduler.reconcileAll()
-                        container.providerPipelineRepository.syncTitleProviders()
+                        runCatching {
+                            container.providerPipelineRepository.syncTitleProviders(limit = 8)
+                        }
                         container.database.aniSentinelDao().repairMalformedAniWorldEpisodeIdentities()
-                        OperationState()
                     }
-                    is de.anisentinel.app.data.release.AniWorldSyncResult.Failure -> OperationState(error = "ANIWORLD_TEMPORARILY_UNAVAILABLE")
+                    true
                 }
-            }
+            } catch (_: Exception) { false }
+            operation.value = OperationState(error = if (completed == true) null else "REFRESH_FAILED")
         }
     }
 
@@ -86,16 +92,26 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             operation.value = OperationState(loading = true)
             val today = LocalDate.now()
             val start = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
-            operation.value = when (container.aniWorldReleaseRepository.syncCalendar(start, start.plusWeeks(2))) {
-                is de.anisentinel.app.data.release.AniWorldSyncResult.Success -> {
-                    container.providerPipelineRepository.syncTitleProviders()
-                    container.providerPipelineRepository.checkDueEpisodes()
-                    container.favoriteReleaseScheduler.reconcileAll()
+            val completed = try {
+                withTimeoutOrNull(30_000) {
+                    when (container.aniWorldReleaseRepository.syncCalendar(start, start.plusWeeks(2))) {
+                        is de.anisentinel.app.data.release.AniWorldSyncResult.Success -> Unit
+                        is de.anisentinel.app.data.release.AniWorldSyncResult.Failure -> return@withTimeoutOrNull false
+                    }
+                    val visibleIds = state.value.anime.take(8).mapTo(mutableSetOf()) { it.id }
+                    if (visibleIds.isNotEmpty()) {
+                        runCatching {
+                            container.providerPipelineRepository.syncTitleProviders(
+                                animeIds = visibleIds,
+                                limit = visibleIds.size
+                            )
+                        }
+                    }
                     container.database.aniSentinelDao().repairMalformedAniWorldEpisodeIdentities()
-                    OperationState()
+                    true
                 }
-                is de.anisentinel.app.data.release.AniWorldSyncResult.Failure -> OperationState(error = "ANIWORLD_TEMPORARILY_UNAVAILABLE")
-            }
+            } catch (_: Exception) { false }
+            operation.value = OperationState(error = if (completed == true) null else "REFRESH_FAILED")
         }
     }
 

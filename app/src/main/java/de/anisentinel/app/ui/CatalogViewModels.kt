@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.withTimeoutOrNull
 import java.text.Normalizer
 import java.time.Instant
 
@@ -127,16 +128,29 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
     fun refresh() {
         if (refreshJob?.isActive == true) return
         refreshJob = viewModelScope.launch {
-        operation.value = Operation(loading = true)
-        val genres = repository.refreshGenres()
-        val catalog = repository.search(query = null, genreIds = setOf("ani"))
-        container.providerPipelineRepository.syncTitleProviders()
-        container.providerPipelineRepository.checkDueEpisodes()
-        operation.value = Operation(
-            false,
-            (genres as? JustWatchCatalogResult.Failed)?.code
-                ?: (catalog as? JustWatchCatalogResult.Failed)?.code
-        )
+            operation.value = Operation(loading = true)
+            val completed = try {
+                withTimeoutOrNull(30_000) {
+                    val genres = repository.refreshGenres()
+                    val catalog = repository.search(query = null, genreIds = setOf("ani"))
+                    val visibleIds = state.value.titles.take(8).mapTo(mutableSetOf()) { it.id }
+                    if (visibleIds.isNotEmpty()) {
+                        runCatching {
+                            container.providerPipelineRepository.syncTitleProviders(
+                                animeIds = visibleIds,
+                                limit = visibleIds.size
+                            )
+                        }
+                    }
+                    (genres as? JustWatchCatalogResult.Failed)?.code
+                        ?: (catalog as? JustWatchCatalogResult.Failed)?.code
+                        ?: "OK"
+                }
+            } catch (_: Exception) { null }
+            operation.value = Operation(
+                loading = false,
+                error = completed?.takeUnless { it == "OK" } ?: "REFRESH_FAILED"
+            )
         }
     }
     fun selectGenre(id: String?) { selectedGenre.value = id }

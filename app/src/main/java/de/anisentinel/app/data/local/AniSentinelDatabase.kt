@@ -32,7 +32,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ,ProviderMetadataIdentityEntity::class
         ,ReleasePostponementEntity::class
     ],
-    version = 24,
+    version = 25,
     exportSchema = true
 )
 abstract class AniSentinelDatabase : RoomDatabase() {
@@ -397,6 +397,13 @@ abstract class AniSentinelDatabase : RoomDatabase() {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("ALTER TABLE justwatch_catalog_titles ADD COLUMN description TEXT")
                 database.execSQL("ALTER TABLE justwatch_catalog_titles ADD COLUMN studios TEXT NOT NULL DEFAULT ''")
+            }
+        }
+        val MIGRATION_24_25 = object : Migration(24, 25) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE justwatch_catalog_titles ADD COLUMN descriptionOriginal TEXT")
+                database.execSQL("ALTER TABLE justwatch_catalog_titles ADD COLUMN descriptionOriginalLanguage TEXT")
+                database.execSQL("ALTER TABLE justwatch_catalog_titles ADD COLUMN descriptionGermanSource TEXT")
             }
         }
     }

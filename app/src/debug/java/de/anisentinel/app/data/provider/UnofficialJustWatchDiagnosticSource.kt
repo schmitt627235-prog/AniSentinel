@@ -14,6 +14,7 @@ import de.anisentinel.app.domain.provider.MonetizationType
 import de.anisentinel.app.domain.provider.ProviderMarketPolicy
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -268,14 +269,28 @@ class UnofficialJustWatchDiagnosticSource : JustWatchPartnerSource, JustWatchCat
         val url = title.justWatchUrl ?: return title
         return runCatching {
             val metadata = JustWatchPublicMetadataParser.parse(get(url))
+            val synopsis = GermanSynopsisResolver.resolve(metadata.description, ::translateToGerman)
             title.copy(
-                description = metadata.description,
-                genres = (title.genres + metadata.genres).filter(String::isNotBlank).toSet(),
-                studios = metadata.studios.filter(String::isNotBlank).toSet()
+                description = synopsis?.german,
+                genres = MetadataTextNormalizer.normalizeGenres(title.genres + metadata.genres).toSet(),
+                studios = metadata.studios.mapNotNull(MetadataTextNormalizer::decode).toSet(),
+                descriptionOriginal = synopsis?.original ?: MetadataTextNormalizer.decode(metadata.description),
+                descriptionOriginalLanguage = synopsis?.originalLanguage ?: MetadataTextNormalizer.detectedLanguage(metadata.description),
+                descriptionGermanSource = synopsis?.source
             )
         }.onFailure { Log.w(TAG, "public metadata failed id=${title.justWatchId}", it) }
             .getOrDefault(title)
     }
+
+    /** Translates a real source synopsis; failures return no text instead of exposing English in the German UI. */
+    private fun translateToGerman(value: String): String? = runCatching {
+        val encoded = URLEncoder.encode(value, Charsets.UTF_8.name())
+        val response = get("https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=de&dt=t&q=$encoded")
+        val rows = JSONArray(response).optJSONArray(0) ?: return@runCatching null
+        MetadataTextNormalizer.decode((0 until rows.length()).joinToString("") { index ->
+            rows.optJSONArray(index)?.optString(0).orEmpty()
+        })
+    }.onFailure { Log.w(TAG, "German synopsis translation failed", it) }.getOrNull()
 
     @Synchronized
     private fun get(url: String): String {
