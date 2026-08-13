@@ -179,6 +179,61 @@ class AniSentinelMigrationTest {
         }
     }
 
+    @Test
+    fun migration21To22AddsPersistentPostponements() {
+        val databaseName = "migration-21-22"
+        helper.createDatabase(databaseName, 21).close()
+        helper.runMigrationsAndValidate(databaseName, 22, true, AniSentinelDatabase.MIGRATION_21_22).use { database ->
+            database.query("PRAGMA table_info(release_postponements)").use { cursor ->
+                val names = buildSet { while (cursor.moveToNext()) add(cursor.getString(1)) }
+                assertEquals(true, "postponementId" in names)
+                assertEquals(true, "newExpectedAt" in names)
+                assertEquals(true, "notifiedRevision" in names)
+            }
+        }
+    }
+
+    @Test
+    fun migration22To23KeepsPostponementsAndAddsSourceConfirmation() {
+        val databaseName = "migration-22-23"
+        helper.createDatabase(databaseName, 22).apply {
+            execSQL("INSERT INTO release_postponements VALUES ('p',NULL,NULL,'Title',1,1,'GER_SUB',1,2,NULL,'DELAYED','ANIWORLD','https://example',NULL,1,1,1,1,0)")
+            close()
+        }
+        helper.runMigrationsAndValidate(databaseName, 23, true, AniSentinelDatabase.MIGRATION_22_23).use { database ->
+            database.query("SELECT confirmationStatus, secondarySource FROM release_postponements WHERE postponementId='p'").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals("SINGLE_SOURCE", it.getString(0))
+                assertEquals(true, it.isNull(1))
+            }
+        }
+    }
+
+    @Test
+    fun migration23To24KeepsCatalogMetadataAndAddsDescriptionAndStudios() {
+        val databaseName = "migration-23-24"
+        helper.createDatabase(databaseName, 23).apply {
+            execSQL(
+                """INSERT INTO justwatch_catalog_titles (
+                    justWatchId,internalAnimeId,title,releaseYear,contentType,genres,coverUrl,
+                    justWatchUrl,providers,providerUrls,germanSubAvailable,germanDubAvailable,
+                    fetchedAt,source,popularityRank
+                ) VALUES ('jw:1',NULL,'Titel',2026,'SHOW','ani,fan',NULL,
+                    'https://www.justwatch.com/de/Serie/Titel','Crunchyroll','',1,0,1,
+                    'UNOFFICIAL_JUSTWATCH_DIAGNOSTIC',1)""".trimIndent()
+            )
+            close()
+        }
+        helper.runMigrationsAndValidate(databaseName, 24, true, AniSentinelDatabase.MIGRATION_23_24).use { database ->
+            database.query("SELECT genres, description, studios FROM justwatch_catalog_titles WHERE justWatchId='jw:1'").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals("ani,fan", it.getString(0))
+                assertEquals(true, it.isNull(1))
+                assertEquals("", it.getString(2))
+            }
+        }
+    }
+
     private fun assertMigration7To8(batchCount: Int) {
         val databaseName = "migration-7-8-$batchCount"
         helper.createDatabase(databaseName, 7).apply {
