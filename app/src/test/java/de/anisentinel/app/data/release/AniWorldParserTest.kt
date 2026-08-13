@@ -39,7 +39,7 @@ class AniWorldParserTest {
     }
 
     @Test
-    fun realChangeFixtureParsesKnownDatesButNotUnknownReplacement() {
+    fun realChangeFixtureParsesKnownAndUnknownReplacementHonestly() {
         val html = javaClass.classLoader!!.getResource("fixtures/aniworld_schedule_changes_2026-08-03.html")!!.readText()
         val changes = AniWorldScheduleChangeParser().parse(html, Instant.parse("2026-08-03T00:00:00Z"), zone)
         val slime = changes.first { it.title == "That Time I Got Reincarnated as a Slime" && it.releaseType == "Sub" }
@@ -47,8 +47,28 @@ class AniWorldParserTest {
         assertEquals("2026-07-31", slime.previousDate.toString())
         assertEquals("2026-08-07", slime.revisedDate.toString())
         assertEquals("DELAYED", slime.direction)
-        assertFalse(changes.any { it.title == "Snowball Earth" || it.title == "Kill Blue" })
+        assertTrue(changes.filter { it.revisedDate == null }.all { it.direction == "DELAYED" })
         assertTrue(changes.any { it.title.contains("RE:Zero") })
+    }
+
+    @Test
+    fun currentRealChangeFixtureKeepsSubAndDubSeparate() {
+        val html = javaClass.classLoader!!.getResource("fixtures/aniworld_schedule_changes_live_2026-08-13.html")!!.readText()
+        val changes = AniWorldScheduleChangeParser().parse(html, Instant.parse("2026-08-13T00:00:00Z"), zone)
+        val iruma = changes.single { it.title == "Welcome to Demon School! Iruma-Kun" }
+        assertEquals("Sub+Dub", iruma.releaseType)
+        assertEquals("2026-08-08", iruma.previousDate.toString())
+        assertEquals("2026-08-15", iruma.revisedDate.toString())
+        assertTrue(changes.any { it.title == "That Time I Got Reincarnated as a Slime" && it.releaseType == "Dub" })
+        val slimeSub = changes.single {
+            it.title == "That Time I Got Reincarnated as a Slime" && it.episodeNumber == 18
+        }
+        assertEquals("Sub", slimeSub.releaseType)
+        assertEquals(30, slimeSub.relativeDelayMinutes)
+        assertEquals("2026-08-14", slimeSub.previousDate.toString())
+        val snowball = changes.single { it.title == "Snowball Earth" }
+        assertEquals("Dub", snowball.releaseType)
+        assertEquals(null, snowball.revisedDate)
     }
 
     @Test
@@ -82,6 +102,8 @@ class AniWorldParserTest {
         assertFalse(aniWorldLanguageMatches("Dub", "GER_SUB"))
         assertFalse(aniWorldLanguageMatches("Sub", "GER_DUB"))
         assertFalse(aniWorldLanguageMatches(null, "GER_SUB"))
+        assertTrue(aniWorldLanguageMatches("Sub+Dub", "GER_SUB"))
+        assertTrue(aniWorldLanguageMatches("Sub+Dub", "GER_DUB"))
     }
 
     @Test

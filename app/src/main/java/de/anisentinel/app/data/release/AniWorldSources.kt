@@ -5,6 +5,7 @@ import de.anisentinel.app.data.local.AnimeEntity
 import de.anisentinel.app.data.local.AniSentinelDao
 import de.anisentinel.app.data.local.EpisodeReleaseEntity
 import de.anisentinel.app.data.local.ReleaseScheduleHistoryEntity
+import de.anisentinel.app.data.local.ReleasePostponementEntity
 import de.anisentinel.app.data.local.ReleaseSourceReferenceEntity
 import java.io.File
 import java.net.HttpURLConnection
@@ -47,13 +48,14 @@ data class AniWorldScheduleChange(
     val seasonNumber: Int?,
     val episodeNumber: Int?,
     val previousDate: LocalDate?,
-    val revisedDate: LocalDate,
+    val revisedDate: LocalDate?,
     val releaseType: String?,
     val reason: String?,
     val direction: String,
     val sourceUrl: String,
     val evidenceUrl: String?,
-    val detectedAt: Instant
+    val detectedAt: Instant,
+    val relativeDelayMinutes: Int? = null
 )
 
 fun normalizeAnimeTitle(value: String): String = value.lowercase(Locale.GERMAN)
@@ -66,6 +68,7 @@ internal fun aniWorldLanguageMatches(changeType: String?, releaseLanguage: Strin
     when (changeType?.uppercase()) {
         "SUB" -> releaseLanguage == "GER_SUB"
         "DUB" -> releaseLanguage == "GER_DUB"
+        "SUB+DUB", "DUB+SUB" -> releaseLanguage in setOf("GER_SUB", "GER_DUB")
         else -> false
     }
 
@@ -138,37 +141,46 @@ class AniWorldScheduleChangeParser {
             .map { Jsoup.parseBodyFragment(it).text().trim() }
         val evidenceLinks = paragraph.select("a[href]").associateBy({ it.text() }, { it.absUrl("href") })
         var title: String? = null
+        var titleReleaseType: String? = null
         var season: Int? = null
         var episode: Int? = null
         val result = mutableListOf<AniWorldScheduleChange>()
         lines.forEachIndexed { index, line ->
             when {
                 line.startsWith("⚠") || line.startsWith("🚨") -> {
+                    titleReleaseType = Regex("\\[(Sub\\+Dub|Dub\\+Sub|Sub|Dub)]\\s*$", RegexOption.IGNORE_CASE)
+                        .find(line)?.groupValues?.get(1)?.replaceFirstChar(Char::uppercase)
                     title = line.replace(Regex("^[⚠️🚨ℹ\\s]+"), "")
-                        .replace(Regex("\\s*\\[(Sub|Dub)]\\s*$", RegexOption.IGNORE_CASE), "").trim()
+                        .replace(Regex("\\s*\\[(Sub\\+Dub|Dub\\+Sub|Sub|Dub)]\\s*$", RegexOption.IGNORE_CASE), "").trim()
                     season = null; episode = null
                 }
                 SEASON.find(line) != null -> {
                     val match = SEASON.find(line)!!
                     season = match.groupValues[1].toIntOrNull()
                     episode = match.groupValues.getOrNull(2)?.toIntOrNull()
+                    titleReleaseType = Regex("\\((Sub\\+Dub|Dub\\+Sub|Sub|Dub)\\)", RegexOption.IGNORE_CASE)
+                        .find(line)?.groupValues?.get(1)?.replaceFirstChar(Char::uppercase)
+                        ?: titleReleaseType
                 }
                 CHANGE.find(line) != null && title != null -> {
                     val match = CHANGE.find(line)!!
                     val revisedToken = match.groupValues[3]
-                    if (revisedToken != "?") {
+                    run {
                         val directionToken = match.groupValues[2]
                         val previous = resolveDate(match.groupValues[1], now, zoneId)
-                        val revised = resolveDate(revisedToken, now, zoneId) ?: return@forEachIndexed
-                        val type = Regex("\\((Sub|Dub)\\)", RegexOption.IGNORE_CASE).find(line)
-                            ?.groupValues?.get(1)?.replaceFirstChar(Char::uppercase)
+                        val relativeDelayMinutes = Regex("(\\d+)\\s*min", RegexOption.IGNORE_CASE)
+                            .find(revisedToken)?.groupValues?.get(1)?.toIntOrNull()
+                        val revised = revisedToken.takeUnless { it == "?" || relativeDelayMinutes != null }
+                            ?.let { resolveDate(it, now, zoneId) }
+                        val type = Regex("\\((Sub\\+Dub|Dub\\+Sub|Sub|Dub)\\)", RegexOption.IGNORE_CASE).find(line)
+                            ?.groupValues?.get(1)?.replaceFirstChar(Char::uppercase) ?: titleReleaseType
                         val following = lines.drop(index + 1).takeWhile { it.isNotBlank() && !it.startsWith("-") && !it.startsWith("⚠") && !it.startsWith("🚨") && !it.startsWith("📅") }
                         val reason = following.firstOrNull { !it.startsWith("http") }
                         val evidence = following.firstNotNullOfOrNull { evidenceLinks[it] ?: it.takeIf { v -> v.startsWith("https://") } }
                         result += AniWorldScheduleChange(
                             title!!, normalizeAnimeTitle(title!!), season, episode, previous, revised,
                             type, reason, if (directionToken == "▲") "EARLIER" else "DELAYED",
-                            CHANGES_URL, evidence, now
+                            CHANGES_URL, evidence, now, relativeDelayMinutes
                         )
                     }
                 }
@@ -189,7 +201,10 @@ class AniWorldScheduleChangeParser {
     companion object {
         const val CHANGES_URL = "https://aniworld.to/support/frage/anime-verschiebungen"
         private val SEASON = Regex("S(\\d{1,3})(?:\\s*E(\\d{1,4}))?", RegexOption.IGNORE_CASE)
-        private val CHANGE = Regex("(\\d{2}\\.\\d{2}\\.?)\\s*([▼▲►])\\s*(\\d{2}\\.\\d{2}\\.?|\\?)")
+        private val CHANGE = Regex(
+            "(\\d{2}\\.\\d{2}\\.?)\\s*([▼▲►])\\s*(\\d{2}\\.\\d{2}\\.?|\\?|vsl\\s+ca\\.?\\s+\\d+\\s*min(?:uten)?\\s+später)",
+            RegexOption.IGNORE_CASE
+        )
     }
 }
 
@@ -302,30 +317,94 @@ class AniWorldReleaseRepository(
         val rows = dao.releaseRowsForSource("ANIWORLD_CALENDAR")
         var applied = 0
         changes.forEach { change ->
-            val matches = rows.filter { row ->
-                normalizeAnimeTitle(row.anime.titleGerman.ifBlank { row.anime.titleEnglish ?: row.anime.titleRomaji.orEmpty() }) == change.normalizedTitle &&
-                    row.release.seasonNumber == change.seasonNumber &&
-                    (change.episodeNumber == null || row.release.episodeNumber == change.episodeNumber) &&
-                    aniWorldLanguageMatches(change.releaseType, row.release.releaseLanguage)
+            val matchingTitleAnimeIds = rows.asSequence()
+                .filter { row ->
+                    normalizeAnimeTitle(row.anime.titleGerman.ifBlank {
+                        row.anime.titleEnglish ?: row.anime.titleRomaji.orEmpty()
+                    }) == change.normalizedTitle
+                }
+                .map { it.release.animeId }
+                .distinct()
+                .toList()
+            // A shift is title-wide UI information even when no exact episode row exists yet.
+            // Associate it only for an unambiguous title match; exact release linking below
+            // remains strict about season, episode and language.
+            val titleAnimeId = matchingTitleAnimeIds.singleOrNull()
+            val languageVariants = when (change.releaseType?.uppercase()) {
+                "SUB" -> listOf("GER_SUB")
+                "DUB" -> listOf("GER_DUB")
+                "SUB+DUB", "DUB+SUB" -> listOf("GER_SUB", "GER_DUB")
+                else -> listOf(null)
             }
-            if (matches.size == 1) {
-                val row = matches.single()
-                val current = row.release.expectedAt?.let(Instant::ofEpochSecond)?.atZone(zoneId)
-                val localTime = current?.toLocalTime() ?: LocalTime.MIDNIGHT
-                val revisedAt = change.revisedDate.atTime(localTime).atZone(zoneId).toEpochSecond()
-                val previousAt = change.previousDate?.atTime(localTime)?.atZone(zoneId)?.toEpochSecond()
-                dao.upsertReleaseScheduleHistory(listOf(ReleaseScheduleHistoryEntity(
-                    "${row.release.sourceReleaseId}:${change.previousDate}:${change.revisedDate}:${change.releaseType}",
-                    row.release.sourceReleaseId, previousAt, revisedAt, "ANIWORLD_SCHEDULE_CHANGE",
-                    change.reason, change.releaseType, change.detectedAt.epochSecond, change.sourceUrl, change.evidenceUrl
+            languageVariants.forEach { language ->
+                val originalDateEpoch = change.previousDate?.atStartOfDay(zoneId)?.toEpochSecond()
+                val postponementId = listOf(
+                    change.normalizedTitle, change.seasonNumber, change.episodeNumber,
+                    language, originalDateEpoch
+                ).joinToString(":") { it?.toString() ?: "unknown" }
+                val existing = dao.releasePostponement(postponementId)
+                val candidates = rows.filter { row ->
+                    normalizeAnimeTitle(row.anime.titleGerman.ifBlank { row.anime.titleEnglish ?: row.anime.titleRomaji.orEmpty() }) == change.normalizedTitle &&
+                        row.release.seasonNumber == change.seasonNumber &&
+                        (change.episodeNumber == null || row.release.episodeNumber == change.episodeNumber) &&
+                        (language == null || row.release.releaseLanguage == language) &&
+                        (change.previousDate == null ||
+                            row.release.expectedAt?.let(Instant::ofEpochSecond)?.atZone(zoneId)?.toLocalDate() == change.previousDate ||
+                            existing?.releaseId == row.release.sourceReleaseId)
+                }
+                val row = existing?.releaseId?.let { id -> rows.firstOrNull { it.release.sourceReleaseId == id } }
+                    ?: candidates.singleOrNull()
+                val current = row?.release?.expectedAt?.let(Instant::ofEpochSecond)?.atZone(zoneId)
+                val siblingTime = rows.asSequence().filter { sibling ->
+                    normalizeAnimeTitle(sibling.anime.titleGerman.ifBlank {
+                        sibling.anime.titleEnglish ?: sibling.anime.titleRomaji.orEmpty()
+                    }) == change.normalizedTitle &&
+                        sibling.release.seasonNumber == change.seasonNumber &&
+                        (language == null || sibling.release.releaseLanguage == language)
+                }.mapNotNull { it.release.expectedAt?.let(Instant::ofEpochSecond)?.atZone(zoneId)?.toLocalTime() }
+                    .firstOrNull()
+                val localTime = current?.toLocalTime() ?: siblingTime ?: LocalTime.MIDNIGHT
+                val previousAt = if (change.relativeDelayMinutes != null && row?.release?.expectedAt != null) {
+                    row.release.expectedAt
+                } else change.previousDate?.atTime(localTime)?.atZone(zoneId)?.toEpochSecond()
+                val revisedAt = when {
+                    change.relativeDelayMinutes != null && previousAt != null -> previousAt + change.relativeDelayMinutes * 60L
+                    else -> change.revisedDate?.atTime(localTime)?.atZone(zoneId)?.toEpochSecond()
+                }
+                val changed = existing != null &&
+                    (existing.newExpectedAt != revisedAt || existing.reason != change.reason)
+                val revision = when {
+                    existing == null -> 1
+                    changed -> existing.revision + 1
+                    else -> existing.revision
+                }
+                dao.upsertReleasePostponements(listOf(ReleasePostponementEntity(
+                    postponementId, row?.release?.sourceReleaseId, row?.release?.animeId ?: titleAnimeId,
+                    change.title, change.seasonNumber, change.episodeNumber, language,
+                    previousAt, revisedAt, change.reason, change.direction,
+                    "ANIWORLD_SCHEDULE_CHANGE", change.sourceUrl, change.evidenceUrl,
+                    existing?.detectedAt ?: change.detectedAt.epochSecond,
+                    change.detectedAt.epochSecond, true, revision, existing?.notifiedRevision ?: 0
                 )))
-                dao.upsertEpisodeReleases(listOf(row.release.copy(
-                    expectedAt = revisedAt,
-                    releaseStatus = if (change.direction == "DELAYED") "POSTPONED" else "SCHEDULED"
-                )))
-                applied++
+                if (row != null && !row.release.releaseStatus.startsWith("AVAILABLE")) {
+                    if (revisedAt != null) dao.upsertReleaseScheduleHistory(listOf(ReleaseScheduleHistoryEntity(
+                        "${row.release.sourceReleaseId}:${change.previousDate}:${change.revisedDate}:${language}",
+                        row.release.sourceReleaseId, previousAt, revisedAt, "ANIWORLD_SCHEDULE_CHANGE",
+                        change.reason, language, change.detectedAt.epochSecond, change.sourceUrl, change.evidenceUrl
+                    )))
+                    dao.upsertEpisodeReleases(listOf(row.release.copy(
+                        expectedAt = revisedAt ?: row.release.expectedAt,
+                        releaseStatus = when {
+                            change.direction != "DELAYED" -> "SCHEDULED"
+                            revisedAt != null -> "RESCHEDULED"
+                            else -> "POSTPONED"
+                        }
+                    )))
+                    applied++
+                }
             }
         }
+        dao.deleteSupersededUntypedPostponements()
         dao.refreshNextAiring(clock.instant().epochSecond)
         return AniWorldSyncResult.Success(changes.size, applied, applied)
     }

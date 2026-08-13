@@ -7,6 +7,7 @@ import de.anisentinel.app.AniSentinelApplication
 import de.anisentinel.app.data.anilist.toDomain
 import de.anisentinel.app.domain.model.Anime
 import de.anisentinel.app.data.local.EpisodeReleaseEntity
+import de.anisentinel.app.data.local.ReleasePostponementEntity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -26,7 +27,9 @@ data class FavoritesUiState(
     val filter: FavoritesFilter = FavoritesFilter.ALL,
     val sort: FavoritesSort = FavoritesSort.NEXT_RELEASE,
     val favorites: List<Anime> = emptyList(),
-    val hasAnyFavorites: Boolean = false
+    val hasAnyFavorites: Boolean = false,
+    val refreshing: Boolean = false,
+    val postponementsByAnime: Map<String, List<ReleasePostponementEntity>> = emptyMap()
 )
 
 class FavoritesViewModel(application: Application) : AndroidViewModel(application) {
@@ -35,15 +38,38 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
     private val settings = (application as AniSentinelApplication).container.settingsRepository
     private val dao = (application as AniSentinelApplication).container.database.aniSentinelDao()
     private val filter = MutableStateFlow(FavoritesFilter.ALL)
+    private val refreshing = MutableStateFlow(false)
 
-    val state = combine(repository.observeFavorites(), dao.observeFavoriteReleasesForClassification(), dao.observeJustWatchProviderReferences(), filter, settings.favoritesSort) {
-            entities, releases, references, selected, storedSort ->
+    private val favoriteData = combine(
+        repository.observeFavorites(),
+        dao.observeFavoriteReleasesForClassification(),
+        dao.observeJustWatchProviderReferences(),
+        dao.observeReleasePostponements()
+    ) { entities, releases, references, postponements ->
+        arrayOf(entities, releases, references, postponements)
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    val state = combine(favoriteData, filter, settings.favoritesSort, refreshing) { data, selected, storedSort, busy ->
+        val entities = data[0] as List<de.anisentinel.app.data.local.AnimeEntity>
+        val releases = data[1] as List<EpisodeReleaseEntity>
+        val references = data[2] as List<de.anisentinel.app.data.local.ProviderReferenceEntity>
+        val postponements = data[3] as List<ReleasePostponementEntity>
         val providers = references.groupBy { it.animeId }
-        val all = entities.map { entity -> entity.toDomain().copy(
-            provider = StreamingProviderPolicy.visible(providers[entity.id].orEmpty().map { it.provider }).joinToString(" · ")
-        ) }
-        val sort = storedSort.toFavoritesSort()
         val releasesByAnime = releases.groupBy { it.animeId }
+        val now = Instant.now().epochSecond
+        val all = entities.map { entity ->
+            val base = entity.toDomain()
+            val relevant = releasesByAnime[entity.id].orEmpty().filter { it.expectedAt != null }
+                .minByOrNull { kotlin.math.abs(requireNotNull(it.expectedAt) - now) }
+            base.copy(
+                provider = StreamingProviderPolicy.visible(providers[entity.id].orEmpty().map { it.provider }).joinToString(" · "),
+                status = if (relevant?.releaseStatus in listOf("POSTPONED", "RESCHEDULED")) {
+                    de.anisentinel.app.domain.model.ReleaseStatus.OFFICIALLY_POSTPONED
+                } else base.status
+            )
+        }
+        val sort = storedSort.toFavoritesSort()
         val today = LocalDate.now(ZoneId.systemDefault())
         FavoritesUiState(
             loading = false,
@@ -52,7 +78,10 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
             favorites = all.filter { anime ->
                 FavoriteReleaseClassifier.matches(anime, releasesByAnime[anime.id].orEmpty(), selected, today, ZoneId.systemDefault())
             }.sortedWith(FavoritesSorter.comparator(sort)),
-            hasAnyFavorites = all.isNotEmpty()
+            hasAnyFavorites = all.isNotEmpty(),
+            refreshing = busy,
+            postponementsByAnime = postponements.filter { it.isActive && it.animeId != null }
+                .groupBy { requireNotNull(it.animeId) }
         )
     }.stateIn(
         viewModelScope,
@@ -66,6 +95,18 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun selectSort(selected: FavoritesSort) {
         viewModelScope.launch { settings.setFavoritesSort(selected.name) }
+    }
+
+    fun refresh() {
+        if (refreshing.value) return
+        viewModelScope.launch {
+            refreshing.value = true
+            try {
+                val container = (getApplication<Application>() as AniSentinelApplication).container
+                container.providerPipelineRepository.syncTitleProviders()
+                container.favoriteReleaseScheduler.reconcileAll()
+            } finally { refreshing.value = false }
+        }
     }
 
 }

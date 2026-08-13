@@ -90,7 +90,38 @@ class Anime2YouNewsRepository(
             dao.upsertAnnouncements(listOf(merged))
             stored++
         }
+        val editorial = rssCandidates.filter(Anime2YouPostponementMatcher::isStreamingScheduleReport)
+        dao.activeReleasePostponements().forEach { postponement ->
+            val confirmations = editorial.filter { Anime2YouPostponementMatcher.matches(postponement, it) }
+            if (confirmations.size == 1) {
+                dao.upsertReleasePostponements(listOf(postponement.copy(
+                    confirmationStatus = "MULTI_SOURCE_CONFIRMED",
+                    secondarySource = "ANIME2YOU",
+                    secondarySourceUrl = confirmations.single().sourceUrl
+                )))
+            }
+        }
         NewsSyncResult.Success(candidates.size, stored, now)
+    }
+}
+
+internal object Anime2YouPostponementMatcher {
+    private val shiftSignals = Regex("verschob|verzöger|verspät|später|neuer termin|pause|wiederaufnahme", RegexOption.IGNORE_CASE)
+    private val physicalSignals = Regex("dvd|blu[ -]?ray|disc|volume|komplettbox|heimvideo", RegexOption.IGNORE_CASE)
+    private val episodeSignals = Regex("stream|simulcast|tv|episode|folge|staffel|ausstrahlung|wiederaufnahme", RegexOption.IGNORE_CASE)
+
+    fun isStreamingScheduleReport(candidate: AnnouncementCandidate): Boolean {
+        val text = "${candidate.title} ${candidate.summary.orEmpty()}"
+        return shiftSignals.containsMatchIn(text) && episodeSignals.containsMatchIn(text) && !physicalSignals.containsMatchIn(text)
+    }
+
+    fun matches(postponement: de.anisentinel.app.data.local.ReleasePostponementEntity, candidate: AnnouncementCandidate): Boolean {
+        if (!isStreamingScheduleReport(candidate)) return false
+        val sourceSubject = normalizedSubject(candidate.title)
+        val wanted = normalizedSubject(postponement.title)
+        val titleMatches = sourceSubject.contains(wanted) || wanted.contains(sourceSubject)
+        val seasonMatches = candidate.seasonNumber == null || postponement.seasonNumber == null || candidate.seasonNumber == postponement.seasonNumber
+        return titleMatches && seasonMatches
     }
 }
 

@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import de.anisentinel.app.AniSentinelApplication
 import de.anisentinel.app.domain.model.Anime
+import de.anisentinel.app.data.local.ReleasePostponementEntity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -22,7 +23,8 @@ data class CatalogUiState(
     val loading: Boolean = false,
     val refreshing: Boolean = false,
     val error: String? = null,
-    val showingCachedData: Boolean = false
+    val showingCachedData: Boolean = false,
+    val postponementsByAnime: Map<String, List<ReleasePostponementEntity>> = emptyMap()
 )
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
@@ -34,15 +36,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         container.aniListRepository.observeActiveAniWorldAnime(
             LocalDate.now().minusWeeks(4).atStartOfDay(ZoneId.systemDefault()).toEpochSecond()
         ),
+        container.database.aniSentinelDao().observeReleasePostponements(),
         operation
-    ) { settings, cached, current ->
+    ) { settings, cached, postponements, current ->
         CatalogUiState(
             anime = cached,
             liveMode = true,
             loading = current.loading && cached.isEmpty(),
             refreshing = current.loading && cached.isNotEmpty(),
             error = current.error,
-            showingCachedData = cached.isNotEmpty() && current.error != null
+            showingCachedData = cached.isNotEmpty() && current.error != null,
+            postponementsByAnime = postponements.filter { it.isActive && it.animeId != null }
+                .groupBy { requireNotNull(it.animeId) }
         )
     }.stateIn(
         viewModelScope,
@@ -83,6 +88,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             val start = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
             operation.value = when (container.aniWorldReleaseRepository.syncCalendar(start, start.plusWeeks(2))) {
                 is de.anisentinel.app.data.release.AniWorldSyncResult.Success -> {
+                    container.providerPipelineRepository.syncTitleProviders()
+                    container.providerPipelineRepository.checkDueEpisodes()
                     container.favoriteReleaseScheduler.reconcileAll()
                     container.database.aniSentinelDao().repairMalformedAniWorldEpisodeIdentities()
                     OperationState()

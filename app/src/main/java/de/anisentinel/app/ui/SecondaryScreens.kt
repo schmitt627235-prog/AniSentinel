@@ -115,12 +115,12 @@ fun DubReleasesScreen(padding: PaddingValues, onBack: () -> Unit, onAnimeClick: 
 fun NewsScreen(padding: PaddingValues, onBack: () -> Unit, onNewsClick: (String) -> Unit, vm: NewsViewModel = viewModel()) {
     val state by vm.state.collectAsState()
     val formatter = remember { DateTimeFormatter.ofPattern("dd.MM.yyyy · HH:mm") }
-    LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    AniSentinelPullToRefresh(state.loading, { vm.refresh(true) }, Modifier.fillMaxSize().padding(padding)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { SecondaryHeader(stringResource(R.string.drawer_news), onBack) }
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(stringResource(R.string.news_explanation), Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Button(onClick = { vm.refresh(true) }) { Text(stringResource(R.string.refresh)) }
             }
         }
         if (state.loading && state.items.isEmpty()) item { CircularProgressIndicator() }
@@ -147,6 +147,7 @@ fun NewsScreen(padding: PaddingValues, onBack: () -> Unit, onNewsClick: (String)
                 }
             }
         }
+    }
     }
 }
 

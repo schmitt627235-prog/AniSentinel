@@ -17,6 +17,7 @@ data class CrunchyrollCatalogEpisode(
     val seasonNumber: Int,
     val episodeId: String,
     val episodeNumber: Int,
+    val sequenceNumber: Int?,
     val title: String?,
     val audioLocale: String?,
     val subtitleLocales: Set<String>,
@@ -136,23 +137,37 @@ class CrunchyrollAnonymousCatalogClient(
     }
 
     suspend fun loadSeries(seriesId: String): CrunchyrollCatalogSeries {
+        // The CMS defaults to a small page. Historical availability must load the
+        // complete series in one bounded request, otherwise later episodes are
+        // incorrectly shown as unconfirmed across the whole app.
         val seasonsUrl = "https://www.crunchyroll.com/content/v2/cms/series/$seriesId/seasons?locale=de-DE"
-        val seasonsResponse = transport.get(seasonsUrl)
-        check(seasonsResponse.status in 200..299) { "CRUNCHYROLL_CATALOG_SEASONS_HTTP_${seasonsResponse.status}" }
-        val seasons = dataArray(seasonsResponse.body)
+        val seasons = loadAllPages(seasonsUrl)
         val episodes = mutableListOf<CrunchyrollCatalogEpisode>()
         for (index in 0 until seasons.length()) {
             val season = seasons.optJSONObject(index) ?: continue
             val seasonId = season.optString("id").takeIf(String::isNotBlank) ?: continue
             val seasonNumber = season.optInt("season_number", season.optInt("season_sequence_number", 0))
-            val response = transport.get("https://www.crunchyroll.com/content/v2/cms/seasons/$seasonId/episodes?locale=de-DE")
-            check(response.status in 200..299) { "CRUNCHYROLL_CATALOG_EPISODES_HTTP_${response.status}" }
-            val rows = dataArray(response.body)
+            val rows = loadAllPages("https://www.crunchyroll.com/content/v2/cms/seasons/$seasonId/episodes?locale=de-DE")
             for (rowIndex in 0 until rows.length()) parseEpisode(rows.optJSONObject(rowIndex), seriesId, seasonId, seasonNumber)?.let(episodes::add)
         }
         return CrunchyrollCatalogSeries(seriesId, CrunchyrollPublicWebAdapter.canonicalSeriesUrl(seriesId), episodes.distinctBy {
             listOf(it.seasonId, it.episodeId, it.audioLocale)
         })
+    }
+
+    /** Loads every anonymous CMS page with a hard safety bound (no unbounded crawl). */
+    private suspend fun loadAllPages(baseUrl: String): org.json.JSONArray {
+        val result = org.json.JSONArray()
+        var offset = 0
+        repeat(20) {
+            val response = transport.get("$baseUrl&n=100&start=$offset")
+            check(response.status in 200..299) { "CRUNCHYROLL_CATALOG_HTTP_${response.status}" }
+            val page = dataArray(response.body)
+            for (index in 0 until page.length()) result.put(page.opt(index))
+            if (page.length() == 0) return result
+            offset += page.length()
+        }
+        return result
     }
 
     private fun parseEpisode(obj: JSONObject?, seriesId: String, seasonId: String, fallbackSeason: Int): CrunchyrollCatalogEpisode? {
@@ -163,6 +178,7 @@ class CrunchyrollAnonymousCatalogClient(
         val subtitles = obj.optJSONArray("subtitle_locales").toStringSet()
         return CrunchyrollCatalogEpisode(
             seriesId, seasonId, seasonNumber, episodeId, episodeNumber,
+            number(obj.opt("sequence_number")) ?: number(obj.opt("episode_sequence_number")),
             obj.optString("title").takeIf(String::isNotBlank),
             obj.optString("audio_locale").takeIf(String::isNotBlank), subtitles,
             providerAvailableAt(obj), obj.optString("availability_status").takeIf(String::isNotBlank),

@@ -164,6 +164,7 @@ fun HomeScreen(
 ) {
     val showingSearch = searchState.query.trim().length >= 2 && searchState.searched
     ScreenContainer(scaffoldPadding, onMenu) { contentPadding ->
+        AniSentinelPullToRefresh(catalogState.refreshing, onRefresh) {
         LazyColumn(
             modifier = Modifier.testTag(UiTags.HOME_LIST),
             contentPadding = contentPadding,
@@ -201,10 +202,17 @@ fun HomeScreen(
                 item { Text(stringResource(R.string.live_empty)) }
             }
             if (showingSearch) items(searchState.results, key = { "search:${it.stableKey}" }) { item ->
-                CatalogAnimeCard(item, Modifier.fillMaxWidth()) { onAnimeClick(item.id) }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    searchState.postponementsByAnime[item.id].orEmpty().forEach { PostponementCard(it, Modifier.fillMaxWidth()) }
+                    CatalogAnimeCard(item, Modifier.fillMaxWidth()) { onAnimeClick(item.id) }
+                }
             } else items(catalogState.anime, key = { it.id }) { anime ->
-                AnimeCard(anime, Modifier.fillMaxWidth()) { onAnimeClick(anime.id) }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    catalogState.postponementsByAnime[anime.id].orEmpty().forEach { PostponementCard(it, Modifier.fillMaxWidth()) }
+                    AnimeCard(anime, Modifier.fillMaxWidth()) { onAnimeClick(anime.id) }
+                }
             }
+        }
         }
     }
 }
@@ -451,6 +459,7 @@ fun CalendarScreen(
     var aniSearchUrl by rememberSaveable { mutableStateOf("") }
     var showManualImport by rememberSaveable { mutableStateOf(false) }
     ScreenContainer(scaffoldPadding, onMenu) { contentPadding ->
+        AniSentinelPullToRefresh(state.syncLoading, calendarViewModel::refreshDisplayedMonth) {
         LazyColumn(
             contentPadding = contentPadding,
             verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -617,7 +626,9 @@ fun CalendarScreen(
                 )
             }
             items(state.releasesForSelectedDate, key = { it.sourceReleaseId }) { release ->
-                AnimeCard(
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    release.postponements.forEach { PostponementCard(it, Modifier.fillMaxWidth()) }
+                    AnimeCard(
                     anime = de.anisentinel.app.domain.model.Anime(
                         id = release.sourceReleaseId,
                         title = release.displayTitle,
@@ -633,7 +644,7 @@ fun CalendarScreen(
                             release.releaseStatus == "AVAILABLE" -> de.anisentinel.app.domain.model.ReleaseStatus.AVAILABLE
                             release.releaseStatus in listOf("DELAYED", "DELAYED_CONFIRMED") -> de.anisentinel.app.domain.model.ReleaseStatus.DELAYED_UNCONFIRMED
                             release.releaseStatus == "OVERDUE_UNCONFIRMED" -> de.anisentinel.app.domain.model.ReleaseStatus.PENDING_CONFIRMATION
-                            release.releaseStatus == "POSTPONED" -> de.anisentinel.app.domain.model.ReleaseStatus.OFFICIALLY_POSTPONED
+                            release.releaseStatus in listOf("POSTPONED", "RESCHEDULED") -> de.anisentinel.app.domain.model.ReleaseStatus.OFFICIALLY_POSTPONED
                             release.releaseStatus == "DUE" -> de.anisentinel.app.domain.model.ReleaseStatus.RELEASE_TIME_REACHED
                             else -> de.anisentinel.app.domain.model.ReleaseStatus.SCHEDULED
                         },
@@ -686,8 +697,10 @@ fun CalendarScreen(
                             release.fallbackStatus?.let { append("\n").append(stringResource(R.string.calendar_fallback_status, it)) }
                         }
                     }.takeIf(String::isNotBlank)
-                )
+                    )
+                }
             }
+        }
         }
     }
 }
@@ -764,6 +777,7 @@ fun FavoritesScreen(
     val favoritesViewModel: FavoritesViewModel = viewModel()
     val favoritesState by favoritesViewModel.state.collectAsState()
     ScreenContainer(scaffoldPadding, onMenu) { contentPadding ->
+        AniSentinelPullToRefresh(favoritesState.refreshing, favoritesViewModel::refresh) {
         val tabs = listOf(R.string.tab_all, R.string.tab_current, R.string.tab_upcoming, R.string.tab_completed)
         val filters = FavoritesFilter.entries
         LazyColumn(
@@ -861,8 +875,14 @@ fun FavoritesScreen(
                 }
             }
             items(favoritesState.favorites) {
-                AnimeCard(it, Modifier.fillMaxWidth(), onClick = { onAnimeClick(it.id) })
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    favoritesState.postponementsByAnime[it.id].orEmpty().forEach { shift ->
+                        PostponementCard(shift, Modifier.fillMaxWidth())
+                    }
+                    AnimeCard(it, Modifier.fillMaxWidth(), onClick = { onAnimeClick(it.id) })
+                }
             }
+        }
         }
     }
 }
@@ -876,6 +896,7 @@ fun DiscoverScreen(
     val discoverViewModel: DiscoverViewModel = viewModel()
     val state by discoverViewModel.state.collectAsState()
     ScreenContainer(scaffoldPadding, onMenu) { contentPadding ->
+        AniSentinelPullToRefresh(state.loading, discoverViewModel::refresh) {
         LazyColumn(
             modifier = Modifier.testTag(UiTags.DISCOVER_LIST),
             contentPadding = contentPadding,
@@ -948,10 +969,15 @@ fun DiscoverScreen(
                 item { Text(stringResource(R.string.discover_no_real_genre_titles), color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
             items(state.titles, key = { "discover:${it.stableKey}" }) {
-                CatalogAnimeCard(it, Modifier.fillMaxWidth()) {
-                    onAnimeClick(it.id)
+                title ->
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    state.postponementsByAnime[title.id].orEmpty().forEach { PostponementCard(it, Modifier.fillMaxWidth()) }
+                    CatalogAnimeCard(title, Modifier.fillMaxWidth()) {
+                        onAnimeClick(title.id)
+                    }
                 }
             }
+        }
         }
     }
 }

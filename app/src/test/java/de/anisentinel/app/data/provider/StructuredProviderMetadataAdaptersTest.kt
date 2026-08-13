@@ -60,7 +60,7 @@ class StructuredProviderMetadataAdaptersTest {
             catalog
         )
         val result = adapter.probe(request, ProviderMetadataIdentity("CRUNCHYROLL", "DE", "series", "season"))
-        assertEquals("CRUNCHYROLL_CATALOG_SEASONS_HTTP_401", (result as ProviderMetadataProbeResult.CheckFailed).code)
+        assertEquals("CRUNCHYROLL_CATALOG_HTTP_401", (result as ProviderMetadataProbeResult.CheckFailed).code)
     }
 
     @Test fun crunchyrollFixtureSeparatesEpisodeAndLanguageAbsence() {

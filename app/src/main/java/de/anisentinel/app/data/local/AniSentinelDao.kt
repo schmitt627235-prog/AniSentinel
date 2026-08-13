@@ -333,6 +333,18 @@ interface AniSentinelDao {
     @Query("SELECT * FROM justwatch_catalog_titles WHERE internalAnimeId IS NOT NULL ORDER BY title COLLATE NOCASE")
     fun observeKnownAnimeJustWatchCatalogTitles(): Flow<List<JustWatchCatalogTitleEntity>>
 
+    @Query("SELECT * FROM justwatch_catalog_titles WHERE internalAnimeId = :animeId ORDER BY fetchedAt DESC LIMIT 1")
+    fun observeJustWatchCatalogTitleForAnime(animeId: String): Flow<JustWatchCatalogTitleEntity?>
+
+    @Query("SELECT * FROM justwatch_catalog_titles WHERE internalAnimeId = :animeId ORDER BY fetchedAt DESC LIMIT 1")
+    suspend fun justWatchCatalogTitleForAnime(animeId: String): JustWatchCatalogTitleEntity?
+
+    @Query("SELECT * FROM justwatch_catalog_titles WHERE justWatchId = :justWatchId LIMIT 1")
+    suspend fun justWatchCatalogTitle(justWatchId: String): JustWatchCatalogTitleEntity?
+
+    @Query("UPDATE anime SET description = :description, updatedAt = :updatedAt WHERE id = :animeId AND trim(:description) != ''")
+    suspend fun updateAnimeDescription(animeId: String, description: String, updatedAt: Long)
+
     @Upsert
     suspend fun upsertJustWatchGenres(rows: List<JustWatchGenreEntity>)
 
@@ -442,6 +454,47 @@ interface AniSentinelDao {
 
     @Query("SELECT * FROM release_schedule_history WHERE detectedAt >= :sinceEpochSeconds ORDER BY detectedAt")
     suspend fun releaseScheduleHistorySince(sinceEpochSeconds: Long): List<ReleaseScheduleHistoryEntity>
+
+    @Query("SELECT * FROM release_postponements ORDER BY isActive DESC, CASE WHEN newExpectedAt IS NULL THEN 0 ELSE 1 END, detectedAt DESC")
+    fun observeReleasePostponements(): Flow<List<ReleasePostponementEntity>>
+
+    @Query("SELECT * FROM release_postponements WHERE isActive = 1")
+    suspend fun activeReleasePostponements(): List<ReleasePostponementEntity>
+
+    @Query("SELECT * FROM release_postponements WHERE animeId = :animeId AND isActive = 1 ORDER BY detectedAt DESC")
+    fun observeActivePostponementsForAnime(animeId: String): Flow<List<ReleasePostponementEntity>>
+
+    @Query("SELECT * FROM release_postponements WHERE postponementId = :id LIMIT 1")
+    fun observeReleasePostponement(id: String): Flow<ReleasePostponementEntity?>
+
+    @Query("SELECT * FROM release_postponements WHERE postponementId = :id LIMIT 1")
+    suspend fun releasePostponement(id: String): ReleasePostponementEntity?
+
+    @Query("SELECT * FROM release_postponements WHERE releaseId = :releaseId AND isActive = 1 ORDER BY detectedAt DESC LIMIT 1")
+    suspend fun activePostponementForRelease(releaseId: String): ReleasePostponementEntity?
+
+    @Query("SELECT * FROM release_postponements WHERE revision > notifiedRevision AND releaseId IS NOT NULL")
+    suspend fun postponementsNeedingNotification(): List<ReleasePostponementEntity>
+
+    @Upsert
+    suspend fun upsertReleasePostponements(rows: List<ReleasePostponementEntity>)
+
+    @Query("UPDATE release_postponements SET notifiedRevision = revision WHERE postponementId = :id")
+    suspend fun markPostponementNotified(id: String)
+
+    @Query("""
+        DELETE FROM release_postponements
+        WHERE releaseLanguage IS NULL AND EXISTS (
+            SELECT 1 FROM release_postponements typed
+            WHERE typed.postponementId != release_postponements.postponementId
+              AND typed.title = release_postponements.title
+              AND typed.seasonNumber IS release_postponements.seasonNumber
+              AND typed.episodeNumber IS release_postponements.episodeNumber
+              AND typed.originalExpectedAt IS release_postponements.originalExpectedAt
+              AND typed.releaseLanguage IS NOT NULL
+        )
+    """)
+    suspend fun deleteSupersededUntypedPostponements(): Int
 
     @Query(
         """
