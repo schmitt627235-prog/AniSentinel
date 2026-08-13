@@ -184,6 +184,7 @@ fun AnimeCard(
     modifier: Modifier = Modifier,
     compact: Boolean = false,
     auxiliaryLabel: String? = null,
+    postponements: List<de.anisentinel.app.data.local.ReleasePostponementEntity> = emptyList(),
     onClick: (() -> Unit)? = null
 ) {
     Card(
@@ -209,6 +210,7 @@ fun AnimeCard(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
+                CompactPostponementNotice(postponements)
                 Text(
                     stringResource(R.string.episode_number, anime.episode),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -274,6 +276,7 @@ fun AnimeCard(
 fun CatalogAnimeCard(
     item: CatalogAnimeItem,
     modifier: Modifier = Modifier,
+    postponements: List<de.anisentinel.app.data.local.ReleasePostponementEntity> = emptyList(),
     onClick: (() -> Unit)? = null
 ) {
     Card(
@@ -286,6 +289,7 @@ fun CatalogAnimeCard(
             CatalogCover(item, Modifier.size(width = 72.dp, height = 96.dp))
             Column(Modifier.weight(1f).padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 Text(item.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                CompactPostponementNotice(postponements)
                 Text(item.subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(
                     if (item.providers.isEmpty()) stringResource(R.string.catalog_no_streaming_provider)
@@ -298,6 +302,37 @@ fun CatalogAnimeCard(
         }
     }
 }
+
+@Composable
+internal fun CompactPostponementNotice(
+    postponements: List<de.anisentinel.app.data.local.ReleasePostponementEntity>
+) {
+    val row = postponements.filter { it.isActive }.maxByOrNull { it.detectedAt } ?: return
+    Surface(
+        color = MaterialTheme.colorScheme.errorContainer,
+        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp)) {
+            Text(
+                stringResource(R.string.postponed_badge),
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                row.newExpectedAt?.let {
+                    stringResource(R.string.postponement_new, formatCompactPostponementTime(it))
+                } ?: stringResource(R.string.postponement_new_unknown),
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+    }
+}
+
+private fun formatCompactPostponementTime(epoch: Long): String = Instant.ofEpochSecond(epoch)
+    .atZone(ZoneId.systemDefault())
+    .format(DateTimeFormatter.ofPattern("dd.MM.yyyy · HH:mm"))
 
 @Composable
 private fun CatalogCover(item: CatalogAnimeItem, modifier: Modifier) {

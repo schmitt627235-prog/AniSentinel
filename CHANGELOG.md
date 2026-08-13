@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.25.2 – deutsche Metadaten und vollständige dynamische Aktualisierung – 2026-08-14
+
+- JustWatch-Handlungen werden unabhängig vom `Accept-Language`-Header sprachlich geprüft; englische reale Quelltexte werden im Diagnosebuild deutsch übersetzt und als `TRANSLATED_FROM_JUSTWATCH` gekennzeichnet.
+- Room 25 speichert Originaltext, erkannte Originalsprache und Herkunft der deutschen Fassung; Migration 24→25 erhält Favoriten und vorhandene Daten.
+- HTML-Entities werden für Handlung, Genres und Studios dekodiert.
+- Genres werden deutsch kanonisiert und semantisch dedupliziert.
+- Ein leerer Studioabschnitt wird ausgeblendet; Studios werden niemals erfunden.
+- Episodenkarten werden unabhängig von mehreren Provider-/Historienzeilen auf genau eine Karte je Episodennummer reduziert.
+- Release-Sprache und Status werden in der normalen Detailansicht deutsch dargestellt.
+- Der historische Providerimport ist als sekundäre Aktion „Historische Termine aktualisieren“ benannt.
+- Anbieter, Aktuelle Season, Dub-Releases und Statistik besitzen nun ebenfalls Pull-to-Refresh mit relevanter Providerprüfung ohne Scheduler-/Notification-Erzeugung.
+- 251 Unit-Tests prüfen zusätzlich Übersetzungspolitik, Entity-Decoding, Genre-Normalisierung, Episodendubletten und Sichtbarkeit der Verfügbarkeitsaktion.
+
 ## v0.25.1 – JustWatch-Metadaten und mobile Episodenaktionen – 2026-08-13
 
 - Handlung, Genres und – soweit öffentlich tatsächlich vorhanden – Produktionsstudio werden über ein eindeutiges JustWatch-DE-Match nachgeladen und in Room gespeichert.

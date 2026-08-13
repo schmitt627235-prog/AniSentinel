@@ -234,6 +234,24 @@ class AniSentinelMigrationTest {
         }
     }
 
+    @Test
+    fun migration24To25KeepsMetadataAndAddsGermanSynopsisProvenance() {
+        val databaseName = "migration-24-25"
+        helper.createDatabase(databaseName, 24).apply {
+            execSQL("""INSERT INTO justwatch_catalog_titles (justWatchId,internalAnimeId,title,releaseYear,contentType,genres,coverUrl,justWatchUrl,providers,providerUrls,germanSubAvailable,germanDubAvailable,fetchedAt,source,popularityRank,description,studios) VALUES ('jw:1',NULL,'Titel',2026,'SHOW','ani',NULL,NULL,'','','0','0',1,'TEST',NULL,'Beschreibung','')""")
+            close()
+        }
+        helper.runMigrationsAndValidate(databaseName, 25, true, AniSentinelDatabase.MIGRATION_24_25).use { database ->
+            database.query("SELECT description,descriptionOriginal,descriptionOriginalLanguage,descriptionGermanSource FROM justwatch_catalog_titles WHERE justWatchId='jw:1'").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals("Beschreibung", it.getString(0))
+                assertEquals(true, it.isNull(1))
+                assertEquals(true, it.isNull(2))
+                assertEquals(true, it.isNull(3))
+            }
+        }
+    }
+
     private fun assertMigration7To8(batchCount: Int) {
         val databaseName = "migration-7-8-$batchCount"
         helper.createDatabase(databaseName, 7).apply {

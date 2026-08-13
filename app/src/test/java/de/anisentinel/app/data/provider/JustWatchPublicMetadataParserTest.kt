@@ -7,6 +7,11 @@ import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class JustWatchPublicMetadataParserTest {
+    @Test fun decodesDescriptionAndGenres() {
+        val result = JustWatchPublicMetadataParser.parse("""<script type="application/ld+json">{"@type":"TVSeries","description":"It&#x27;s real &amp; verified","genre":["Action &amp; Abenteuer","Action & Abenteuer"]}</script>""")
+        assertEquals("It's real & verified", result.description)
+        assertEquals(setOf("Action & Abenteuer"), result.genres)
+    }
     @Test
     fun parsesDescriptionGenresAndStudiosFromPublicJsonLd() {
         val html = """

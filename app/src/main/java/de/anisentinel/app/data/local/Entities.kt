@@ -169,7 +169,10 @@ data class JustWatchCatalogTitleEntity(
     val source: String,
     val popularityRank: Int?,
     val description: String? = null,
-    val studios: String = ""
+    val studios: String = "",
+    val descriptionOriginal: String? = null,
+    val descriptionOriginalLanguage: String? = null,
+    val descriptionGermanSource: String? = null
 )
 
 @Entity(tableName = "justwatch_genres")

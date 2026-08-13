@@ -98,12 +98,13 @@ class JustWatchCatalogRepository(
 
     private fun JustWatchCatalogTitle.toEntity(internalAnimeId: String?) = JustWatchCatalogTitleEntity(
         justWatchId, internalAnimeId, title, releaseYear, contentType,
-        genres.sorted().joinToString(","), coverUrl, justWatchUrl,
+        MetadataTextNormalizer.normalizeGenres(genres).joinToString(","), coverUrl, justWatchUrl,
         providers.sorted().joinToString(","),
         providerUrls.entries.sortedBy { it.key }.joinToString("\n") { "${it.key}\t${it.value}" },
         germanSubAvailable, germanDubAvailable, fetchedAt.epochSecond,
         "UNOFFICIAL_JUSTWATCH_DIAGNOSTIC", popularityRank,
-        description, studios.sorted().joinToString("\n")
+        MetadataTextNormalizer.decode(description), studios.mapNotNull(MetadataTextNormalizer::decode).sorted().joinToString("\n"),
+        MetadataTextNormalizer.decode(descriptionOriginal), descriptionOriginalLanguage, descriptionGermanSource
     )
 
     private fun normalize(value: String) = Normalizer.normalize(value.lowercase(), Normalizer.Form.NFD)

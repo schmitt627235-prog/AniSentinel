@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -103,8 +104,15 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
             refreshing.value = true
             try {
                 val container = (getApplication<Application>() as AniSentinelApplication).container
-                container.providerPipelineRepository.syncTitleProviders()
-                container.favoriteReleaseScheduler.reconcileAll()
+                val visibleIds = state.value.favorites.take(8).mapTo(mutableSetOf()) { it.id }
+                withTimeoutOrNull(30_000) {
+                    if (visibleIds.isNotEmpty()) {
+                        container.providerPipelineRepository.syncTitleProviders(
+                            animeIds = visibleIds,
+                            limit = visibleIds.size
+                        )
+                    }
+                }
             } finally { refreshing.value = false }
         }
     }

@@ -76,7 +76,10 @@ data class JustWatchCatalogTitle(
     val fetchedAt: Instant,
     val popularityRank: Int? = null,
     val description: String? = null,
-    val studios: Set<String> = emptySet()
+    val studios: Set<String> = emptySet(),
+    val descriptionOriginal: String? = null,
+    val descriptionOriginalLanguage: String? = null,
+    val descriptionGermanSource: String? = null
 )
 
 sealed interface JustWatchCatalogResult {
