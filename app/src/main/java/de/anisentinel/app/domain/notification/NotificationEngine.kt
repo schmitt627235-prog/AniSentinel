@@ -19,7 +19,7 @@ data class NotificationPreferences(
     val reminders: Boolean = true,
     val available: Boolean = true,
     val delayed: Boolean = true,
-    val providerErrors: Boolean = false
+    val providerErrors: Boolean = true
 )
 
 interface NotificationCopy {
@@ -83,17 +83,7 @@ class NotificationEngine(
         event: NotificationEvent,
         preferences: NotificationPreferences
     ): LocalNotification? = when (event) {
-        is NotificationEvent.ReleaseDue -> if (preferences.reminders) {
-            LocalNotification(
-                stableId = "due:${event.animeId}:${event.episode}",
-                channel = NotificationChannel.REMINDERS,
-                title = "Neue Folge fällig",
-                message = episodeLabel(event.animeTitle, event.season, event.episode) +
-                    " sollte jetzt erscheinen. Die Anbieterprüfung wurde gestartet.",
-                targetAnimeId = event.animeId, targetSeason = event.season,
-                targetEpisode = event.episode, targetLanguage = event.language
-            )
-        } else null
+        is NotificationEvent.ReleaseDue -> null
         is NotificationEvent.ReleaseReminder -> if (preferences.reminders) {
             LocalNotification(
                 stableId = "reminder:${event.animeId}:${event.episode}",
@@ -159,10 +149,10 @@ class NotificationEngine(
         } else null
         is NotificationEvent.ProviderError -> if (preferences.providerErrors) {
             LocalNotification(
-                stableId = "provider-error:${event.providerId}",
+                stableId = "provider-error:${event.animeId}:${event.providerId}",
                 channel = NotificationChannel.SYSTEM,
-                title = copy.providerErrorTitle,
-                message = copy.providerErrorMessage
+                title = event.animeTitle?.takeIf(String::isNotBlank) ?: copy.providerErrorTitle,
+                message = "Anbieterprüfung fehlgeschlagen."
             )
         } else null
         is NotificationEvent.ProviderMaintenance -> if (preferences.providerErrors) {

@@ -111,7 +111,7 @@ fun DubReleasesScreen(padding: PaddingValues, onBack: () -> Unit, onAnimeClick: 
                     Text(item.title, style = MaterialTheme.typography.titleMedium)
                     Text(stringResource(R.string.season_episode, item.release.seasonNumber ?: 1, item.release.episodeNumber ?: 0))
                     Text("GER DUB", color = MaterialTheme.colorScheme.secondary)
-                    item.release.expectedAt?.let { Text(Instant.ofEpochSecond(it).atZone(ZoneId.systemDefault()).format(formatter)) }
+                    item.release.expectedAt?.let { Text(formatReleaseDateTime(it, item.release.releaseTimePrecision)) }
                     item.release.provider?.let { Text(stringResource(R.string.release_provider, it)) }
                 }
             }
@@ -245,40 +245,62 @@ private fun newsTypeLabel(type: String): String = stringResource(when (type) {
 fun ReleaseStatisticsScreen(padding: PaddingValues, onBack: () -> Unit, vm: SecondaryViewModel = viewModel()) {
     val stats by vm.state.collectAsState()
     val refreshing by vm.refreshing.collectAsState()
-    var showPostponed by remember { mutableStateOf(false) }
-    val formatter = remember { DateTimeFormatter.ofPattern("dd.MM.yyyy · HH:mm") }
+    var selectedCategory by remember { mutableStateOf<ReleaseStatisticCategory?>(null) }
     val rows = listOf(
-        R.string.stats_today to stats.statistics.today, R.string.stats_week to stats.statistics.thisWeek,
-        R.string.stats_sub to stats.statistics.germanSub, R.string.stats_dub to stats.statistics.germanDub,
-        R.string.stats_available to stats.statistics.confirmedAvailable, R.string.stats_delayed to stats.statistics.delayed,
-        R.string.stats_postponed to stats.statistics.postponed
+        Triple(ReleaseStatisticCategory.TODAY, R.string.stats_today, stats.statistics.today),
+        Triple(ReleaseStatisticCategory.THIS_WEEK, R.string.stats_week, stats.statistics.thisWeek),
+        Triple(ReleaseStatisticCategory.GER_SUB, R.string.stats_sub, stats.statistics.germanSub),
+        Triple(ReleaseStatisticCategory.GER_DUB, R.string.stats_dub, stats.statistics.germanDub),
+        Triple(ReleaseStatisticCategory.AVAILABLE, R.string.stats_available, stats.statistics.confirmedAvailable),
+        Triple(ReleaseStatisticCategory.DELAYED, R.string.stats_delayed, stats.statistics.delayed),
+        Triple(ReleaseStatisticCategory.POSTPONED, R.string.stats_postponed, stats.statistics.postponed)
     )
     AniSentinelPullToRefresh(refreshing, vm::refresh, Modifier.fillMaxSize().padding(padding)) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { SecondaryHeader(if (showPostponed) stringResource(R.string.stats_postponed) else stringResource(R.string.drawer_stats), if (showPostponed) ({ showPostponed = false }) else onBack) }
-        if (showPostponed) {
-            items(stats.scheduleChanges, key = { "change:${it.historyId}" }) { change ->
-                Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(change.titleGerman, style = MaterialTheme.typography.titleMedium)
-                        Text("S${change.seasonNumber ?: 1} · E${change.episodeNumber ?: 0} · ${change.releaseLanguage ?: "–"}")
-                        Text("${change.previousAt?.let { Instant.ofEpochSecond(it).atZone(ZoneId.systemDefault()).format(formatter) } ?: "–"} → ${Instant.ofEpochSecond(change.revisedAt).atZone(ZoneId.systemDefault()).format(formatter)}")
-                        Text(stringResource(R.string.schedule_change_reason_label, change.reason ?: stringResource(R.string.metadata_unavailable)))
-                        Text(stringResource(R.string.schedule_change_source_label, "AniWorld"), color = MaterialTheme.colorScheme.secondary)
-                    }
-                }
+        val selectedLabel = rows.firstOrNull { it.first == selectedCategory }?.second
+        item { SecondaryHeader(selectedLabel?.let { stringResource(it) } ?: stringResource(R.string.drawer_stats), if (selectedCategory != null) ({ selectedCategory = null }) else onBack) }
+        if (selectedCategory != null) {
+            val itemsForCategory = stats.statisticItems[selectedCategory].orEmpty()
+            if (itemsForCategory.isEmpty()) item { Text(stringResource(R.string.stats_list_empty)) }
+            items(itemsForCategory, key = { it.stableId }) { item ->
+                item.postponement?.let { PostponementCard(it, Modifier.fillMaxWidth()) }
+                    ?: ReleaseStatisticItemCard(item)
             }
         } else {
         items(rows, key = { "stat:${it.first}" }) { row ->
-            Card(Modifier.fillMaxWidth().then(if (row.first == R.string.stats_postponed) Modifier.clickable { showPostponed = true } else Modifier), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+            Card(Modifier.fillMaxWidth().clickable { selectedCategory = row.first }, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                 Row(Modifier.fillMaxWidth().padding(18.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(stringResource(row.first)); Text(row.second.toString(), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+                    Text(stringResource(row.second)); Text(row.third.toString(), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
                 }
             }
         }
         }
     }
     }
+}
+
+@Composable
+private fun ReleaseStatisticItemCard(item: ReleaseStatisticItem) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(item.title, style = MaterialTheme.typography.titleMedium)
+            Text(listOfNotNull(item.seasonNumber?.let { "S$it" }, item.episodeNumber?.let { "E$it" }, when (item.language) {
+                "GER_SUB" -> stringResource(R.string.release_language_sub)
+                "GER_DUB" -> stringResource(R.string.release_language_dub)
+                else -> null
+            }).joinToString(" · "))
+            item.expectedAt?.let { Text(formatReleaseDateTime(it, item.releaseTimePrecision)) }
+            item.provider?.takeIf(String::isNotBlank)?.let { Text(stringResource(R.string.release_provider, it), color = MaterialTheme.colorScheme.secondary) }
+            Text(item.status.replace('_', ' '), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+private fun formatReleaseDateTime(epoch: Long, precision: String): String {
+    val value = Instant.ofEpochSecond(epoch).atZone(ZoneId.systemDefault())
+    val date = value.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
+    return if (precision == "DATE" || value.toLocalTime() == java.time.LocalTime.MIDNIGHT) date
+    else "$date · ${value.format(DateTimeFormatter.ofPattern("HH:mm"))}"
 }
 
 @Composable

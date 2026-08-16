@@ -1,6 +1,6 @@
 # AniSentinel
 
-Aktueller Diagnose-/Teststand: **v0.25.2**. Externe Handlungstexte werden vor der Anzeige dekodiert und sprachlich geprüft. In der deutschen App wird ein fremdsprachiger realer Quelltext nur als nachvollziehbar gekennzeichnete deutsche Übersetzung angezeigt; bei fehlendem Text wird nichts erfunden. Dynamische Übersichten unterstützen Pull-to-Refresh und prüfen dabei ausschließlich relevante, fällige, noch nicht bestätigte Releases.
+Aktueller Diagnose-/Teststand: **v0.25.3**. Providerprüfungen starten still; eine Benachrichtigung entsteht nur bei erstmals bestätigter Verfügbarkeit oder einem echten technischen Prüffehler. Die Release-Statistik besitzt für alle sieben Kennzahlen nachvollziehbare Listen, deren Datensätze zugleich die jeweilige Zahl bestimmen. Aktive Verschiebungen und dauerhafte Verschiebungshistorie sind fachlich getrennt.
 
 > ⚠️ **Entwicklungs- und Testversion:** AniSentinel befindet sich in aktiver Entwicklung. Externe Webseiten und inoffizielle Schnittstellen können sich ändern; Provideradapter und historische Importe werden weiterhin mit realen Releases validiert.
 
@@ -13,7 +13,7 @@ AniSentinel ist eine native Android-App für deutsche Anime-Releasetermine. Sie 
 - deutscher Anime-Releasekalender mit getrennten `GER_SUB`- und `GER_DUB`-Einträgen
 - Startseite, Kalender, Favoriten, Entdecken, Einstellungen und Detailansicht
 - sekundengenaue Countdowns aus fester Zielzeit ohne Drift
-- Release-Due- und Availability-Benachrichtigungen mit dauerhafter Deduplizierung
+- stille Release-Prüfstarts sowie deduplizierte Availability- und technische Fehlermeldungen
 - direkte, episodengenaue Verfügbarkeitsprüfung bei Crunchyroll und diagnostisch bei ADN
 - AniWorld als Quelle aktueller deutscher Termine und als technischer T+10-Fallback
 - historische Crunchyroll-Termine für gezielt synchronisierte Monate

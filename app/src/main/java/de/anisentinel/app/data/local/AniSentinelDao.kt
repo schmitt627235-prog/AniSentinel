@@ -458,6 +458,18 @@ interface AniSentinelDao {
     @Query("SELECT * FROM release_postponements ORDER BY isActive DESC, CASE WHEN newExpectedAt IS NULL THEN 0 ELSE 1 END, detectedAt DESC")
     fun observeReleasePostponements(): Flow<List<ReleasePostponementEntity>>
 
+    @Query("""
+        SELECT p.* FROM release_postponements p
+        WHERE p.isActive = 1
+          AND NOT EXISTS (
+              SELECT 1 FROM episode_provider_availability a
+              WHERE a.releaseId = p.releaseId
+                AND (a.firstAvailableAt IS NOT NULL OR a.status LIKE 'AVAILABLE_%')
+          )
+        ORDER BY CASE WHEN p.newExpectedAt IS NULL THEN 0 ELSE 1 END, p.detectedAt DESC
+    """)
+    fun observeOpenReleasePostponements(): Flow<List<ReleasePostponementEntity>>
+
     @Query("SELECT * FROM release_postponements WHERE isActive = 1")
     suspend fun activeReleasePostponements(): List<ReleasePostponementEntity>
 

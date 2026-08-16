@@ -1,7 +1,8 @@
 # AniSentinel v0.24.0 – Validierungsbericht DIAGNOSETEST V24
 
 **Prüfdatum:** 11.08.2026  
-**Gerät:** Samsung `R3CX4056Q8L`, verbunden per ADB  
+**Gerät:** physisches Samsung-Android-Testgerät, verbunden per ADB
+
 **Paket:** `de.anisentinel.app`  
 **Version:** `versionCode 36`, `versionName 0.24.0-v24-diagnostic`
 

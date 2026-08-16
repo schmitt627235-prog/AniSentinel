@@ -20,12 +20,10 @@ internal suspend fun handleReleaseDue(context: Context, releaseId: String) {
             return
         }
         dao.favorite(release.animeId)?.takeIf { it.enabled } ?: return
-        val episode = release.episodeNumber ?: return
-        val animeTitle = dao.anime(release.animeId)?.titleGerman
+        release.episodeNumber ?: return
         dao.updateReleaseStatus(releaseId, "DUE")
-        deliverOnce(app, release, "RELEASE_DUE", NotificationEvent.ReleaseDue(
-            release.animeId, episode, animeTitle, release.seasonNumber, release.releaseLanguage
-        ))
+        // Due is an internal state transition. Provider checks start silently; users are only
+        // notified about a newly confirmed availability or a genuine technical check failure.
         dao.deleteScheduledReleaseNotification(releaseId)
         val request = OneTimeWorkRequestBuilder<ProviderEpisodeAvailabilitySyncWorker>()
             .setInputData(Data.Builder().putString(FavoriteReleaseScheduler.KEY_RELEASE_ID, releaseId).build())

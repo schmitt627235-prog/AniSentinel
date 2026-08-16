@@ -90,6 +90,25 @@ class AniSentinelDaoTest {
     }
 
     @Test
+    fun `confirmed release leaves active postponements but remains in history`() = runBlocking {
+        val anime = anime("aniworld:shifted", "Shifted")
+        val release = EpisodeReleaseEntity("release:shifted", anime.id, 7, null, 1_000, "Crunchyroll",
+            "ANIWORLD_CALENDAR", null, null, 900, seasonNumber = 1, releaseLanguage = "GER_SUB")
+        val shift = ReleasePostponementEntity("shifted", release.sourceReleaseId, anime.id, anime.titleGerman,
+            1, 7, "GER_SUB", 900, 1_000, "Pause", "DELAYED", "ANIWORLD", "https://example.org", null,
+            800, 900, true, 1, 1)
+        dao.upsertAnime(listOf(anime)); dao.upsertEpisodeReleases(listOf(release)); dao.upsertReleasePostponements(listOf(shift))
+        assertEquals(1, dao.observeOpenReleasePostponements().first().size)
+        dao.upsertEpisodeProviderAvailability(listOf(EpisodeProviderAvailabilityEntity(
+            "availability:shifted", release.sourceReleaseId, "cr", "Crunchyroll", 1, 7,
+            "AVAILABLE_GER_SUB", true, false, "FLATRATE", 1_010, null, 1_010, null, 1,
+            "https://example.org/e", "PUBLIC_EPISODE_METADATA", "https://example.org/e", null, "DIRECT_PROVIDER_CHECK"
+        )))
+        assertTrue(dao.observeOpenReleasePostponements().first().isEmpty())
+        assertEquals(1, dao.observeReleasePostponements().first().size)
+    }
+
+    @Test
     fun `episode persists honest availability window`() = runBlocking {
         dao.upsertAnime(listOf(anime("atlas", "Atlas of Ash")))
         dao.upsertEpisodes(

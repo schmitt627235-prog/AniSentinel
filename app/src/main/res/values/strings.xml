@@ -374,6 +374,7 @@
     <string name="stats_available">Bestätigt verfügbar</string>
     <string name="stats_delayed">Verspätete Releases</string>
     <string name="stats_postponed">Verschobene Releases</string>
+    <string name="stats_list_empty">Für diese Kategorie sind noch keine Datensätze gespeichert.</string>
     <string name="changelog_v19_title">Version 0.19 · Sicheres Provider-Matching</string>
     <string name="changelog_v19_body">Konservative Titelvarianten mit Jahres- und Formatprüfung, Provider-Anreicherung der aktuellen Season und ein schneller titelbasierter JustWatch-Abgleich.</string>
     <string name="changelog_v18_title">Version 0.18 · Reale Seasonbasis</string>

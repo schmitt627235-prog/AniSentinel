@@ -51,7 +51,8 @@ sealed interface NotificationEvent {
     data class ProviderError(
         val animeId: String,
         val providerId: String,
-        val retryable: Boolean
+        val retryable: Boolean,
+        val animeTitle: String? = null
     ) : NotificationEvent
     data class ProviderMaintenance(
         val providerId: String,
