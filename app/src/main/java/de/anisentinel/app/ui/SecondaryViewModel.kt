@@ -14,6 +14,9 @@ import java.time.Instant
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 data class ProviderSummary(val name: String, val titleCount: Int)
 data class DubReleaseItem(val release: EpisodeReleaseEntity, val title: String, val coverUrl: String?)
@@ -58,7 +61,29 @@ object CurrentSeasonResolver {
 }
 
 class SecondaryViewModel(application: Application) : AndroidViewModel(application) {
-    private val dao = (application as AniSentinelApplication).container.database.aniSentinelDao()
+    private val container = (application as AniSentinelApplication).container
+    private val dao = container.database.aniSentinelDao()
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing = _refreshing.asStateFlow()
+
+    fun refresh() {
+        if (_refreshing.value) return
+        viewModelScope.launch {
+            _refreshing.value = true
+            try {
+                val today = java.time.LocalDate.now()
+                container.aniWorldReleaseRepository.syncCalendar(today.minusDays(7), today.plusDays(35))
+                container.aniWorldReleaseRepository.syncScheduleChanges()
+                container.justWatchCatalogRepository.refreshGenres()
+                val now = Instant.now().epochSecond
+                dao.dueFavoriteReleases(now, now - 8 * 86_400)
+                    .filter { release -> dao.episodeProviderAvailability(release.sourceReleaseId).none { it.status.startsWith("AVAILABLE") } }
+                    .sortedByDescending { it.expectedAt }
+                    .take(2)
+                    .forEach { container.providerPipelineRepository.diagnoseHistoricalEpisode(it.sourceReleaseId) }
+            } finally { _refreshing.value = false }
+        }
+    }
 
     private data class BaseData(
         val catalog: List<JustWatchCatalogTitleEntity>,

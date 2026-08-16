@@ -61,14 +61,14 @@ private fun ReleaseHistoryCard(
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Text(heading, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-            Text("S${release.seasonNumber ?: 1} · Folge ${release.episodeNumber ?: 0} · ${release.releaseLanguage ?: "–"}")
+            Text("S${release.seasonNumber ?: 1} · Folge ${release.episodeNumber ?: 0} · ${localizedReleaseLanguage(release.releaseLanguage)}")
             release.expectedAt?.let {
                 val value = java.time.Instant.ofEpochSecond(it).atZone(java.time.ZoneId.systemDefault())
                 Text(if (release.releaseTimePrecision == "DATE") value.toLocalDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")) else value.format(formatter))
             }
             if (release.isHistoricalImport) Text(stringResource(R.string.historical_provider_date, release.provider ?: "Provider"), color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (inferred) Text(stringResource(R.string.previous_release_time_inferred), color = MaterialTheme.colorScheme.tertiary)
-            Text(check?.status ?: release.releaseStatus)
+            Text(localizedReleaseStatus(check?.status ?: release.releaseStatus))
             ReleaseDelayLabel(
                 release.expectedAt?.let(java.time.Instant::ofEpochSecond),
                 when {
@@ -138,9 +138,6 @@ fun AnimeDetailScreen(
             contentPadding = PaddingValues(20.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            items(state.postponements, key = { "shift:${it.postponementId}" }) { shift ->
-                PostponementCard(shift, Modifier.fillMaxWidth())
-            }
             if (focusedEpisode != null) {
                 item {
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
@@ -196,6 +193,7 @@ fun AnimeDetailScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(anime.title, style = MaterialTheme.typography.headlineMedium)
+                        CompactPostponementNotice(state.postponements)
                         ReleaseCountdownLabel(anime.expectedReleaseAt)
                         StatusChip(resolvedStatus)
                         Button(
@@ -231,12 +229,19 @@ fun AnimeDetailScreen(
             }
             item {
                 DetailSection(stringResource(R.string.synopsis)) {
+                    val justWatchDescription = state.justWatchMetadata?.description
+                        ?.takeIf { de.anisentinel.app.data.provider.MetadataTextNormalizer.detectedLanguage(it) == "de" }
+                    val fallbackDescription = anime.description
+                        ?.takeIf { de.anisentinel.app.data.provider.MetadataTextNormalizer.detectedLanguage(it) == "de" }
                     Text(
-                        state.justWatchMetadata?.description?.takeIf(String::isNotBlank)
-                            ?: anime.description?.takeIf(String::isNotBlank)
+                        justWatchDescription
+                            ?: fallbackDescription
                             ?: stringResource(R.string.metadata_unavailable),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    if (state.justWatchMetadata?.descriptionGermanSource == "TRANSLATED_FROM_JUSTWATCH") {
+                        Text(stringResource(R.string.synopsis_translated_notice), style = MaterialTheme.typography.labelSmall)
+                    }
                 }
             }
             item {
@@ -288,7 +293,7 @@ fun AnimeDetailScreen(
                             else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     state.latestEpisodeCheck?.let { check ->
-                        Text(stringResource(R.string.episode_check_status, check.status))
+                        Text(stringResource(R.string.episode_check_status, localizedReleaseStatus(check.status)))
                         Text(stringResource(R.string.episode_check_target, check.seasonNumber ?: 1, check.episodeNumber ?: 0))
                         check.providerName.takeIf(String::isNotBlank)?.let {
                             Text(stringResource(R.string.release_provider, it))
@@ -320,6 +325,14 @@ fun AnimeDetailScreen(
             }
             item {
                 DetailSection(stringResource(R.string.providers)) {
+                    val providerSummary = ProviderSummaryResolver.resolve(
+                        hasProviderReference = state.providerReference != null,
+                        titleStatus = state.providerAvailability?.status,
+                        confirmedEpisodeProviders = state.episodeChecks
+                            .filter { it.status.startsWith("AVAILABLE") }
+                            .sortedByDescending { it.lastCheckedAt }
+                            .map { it.providerName }
+                    )
                     val crunchyrollSeriesUrl = state.providerMetadataIdentities
                         .firstOrNull { it.provider.contains("CRUNCHYROLL") && it.sourceUrl?.startsWith("https://") == true }
                         ?.sourceUrl
@@ -330,10 +343,14 @@ fun AnimeDetailScreen(
                         it.provider.startsWith("ADN") && it.providerMarket == "DE"
                     }
                     Text(
-                        when {
-                            state.providerReference == null -> stringResource(R.string.provider_unknown)
-                            state.providerAvailability == null -> stringResource(R.string.provider_not_checked)
-                            else -> requireNotNull(state.providerAvailability).status.replace('_', ' ')
+                        when (providerSummary.status) {
+                            ProviderSummaryStatus.UNKNOWN -> stringResource(R.string.provider_unknown)
+                            ProviderSummaryStatus.NOT_CHECKED -> stringResource(R.string.provider_not_checked)
+                            ProviderSummaryStatus.AVAILABLE -> providerSummary.provider?.let {
+                                stringResource(R.string.provider_episode_availability_confirmed, it)
+                            } ?: stringResource(R.string.status_available)
+                            ProviderSummaryStatus.NOT_AVAILABLE_YET -> stringResource(R.string.status_not_available_yet)
+                            ProviderSummaryStatus.CHECK_FAILED -> stringResource(R.string.status_provider_check_failed)
                         },
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -368,7 +385,7 @@ fun AnimeDetailScreen(
                             onClick = { detailViewModel.importCrunchyrollHistory(url) },
                             enabled = !state.historyImportRunning
                         ) {
-                            Text(stringResource(if (state.historyImportRunning) R.string.historical_import_running else R.string.historical_import_action))
+                            Text(stringResource(if (state.historyImportRunning) R.string.historical_import_running else R.string.historical_update_action))
                         }
                     }
                     state.historyImportResult?.let { result ->
@@ -379,7 +396,7 @@ fun AnimeDetailScreen(
                                 parts.getOrNull(1)?.toIntOrNull() ?: 0,
                                 parts.getOrNull(2)?.toIntOrNull() ?: 0,
                                 parts.getOrNull(3)?.toIntOrNull() ?: 0
-                            ) else stringResource(R.string.historical_import_failed, parts.drop(1).joinToString(":")),
+                            ) else stringResource(R.string.historical_import_failed),
                             color = if (parts.firstOrNull() == "OK") MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error
                         )
                     }
@@ -391,7 +408,7 @@ fun AnimeDetailScreen(
                     }
                     state.adnHistoryDiagnostics?.let { diagnostic ->
                         val dateFields = diagnostic.observedDateFields.joinToString()
-                        Text(stringResource(R.string.adn_history_diagnostic_result, diagnostic.result))
+                        Text(stringResource(R.string.adn_history_diagnostic_completed))
                         Text(stringResource(R.string.adn_history_diagnostic_counts,
                             diagnostic.episodeCount, diagnostic.datedEpisodeCount,
                             diagnostic.imported, diagnostic.enriched, diagnostic.conflicts))
@@ -403,19 +420,18 @@ fun AnimeDetailScreen(
             }
             item {
                 DetailSection(stringResource(R.string.genres)) {
-                    val genres = state.justWatchMetadata?.genres.orEmpty().split(',')
-                        .mapNotNull { id -> state.justWatchGenreLabels[id]?.takeIf(String::isNotBlank) ?: id.takeIf(String::isNotBlank) }
-                        .distinct()
+                    val genres = de.anisentinel.app.data.provider.MetadataTextNormalizer.normalizeGenres(
+                        state.justWatchMetadata?.genres.orEmpty().split(','), state.justWatchGenreLabels
+                    )
                     Text(genres.takeIf(List<String>::isNotEmpty)?.joinToString(" · ")
                         ?: stringResource(R.string.metadata_unavailable))
                 }
             }
-            item {
+            if (!state.justWatchMetadata?.studios.isNullOrBlank()) item {
                 DetailSection(stringResource(R.string.studios)) {
                     val studios = state.justWatchMetadata?.studios.orEmpty().lines()
-                        .filter(String::isNotBlank).distinct()
-                    Text(studios.takeIf(List<String>::isNotEmpty)?.joinToString(" · ")
-                        ?: stringResource(R.string.metadata_unavailable))
+                        .mapNotNull(de.anisentinel.app.data.provider.MetadataTextNormalizer::decode).distinct()
+                    Text(studios.joinToString(" · "))
                 }
             }
             item { SectionHeader(stringResource(R.string.episodes)) }
@@ -424,11 +440,8 @@ fun AnimeDetailScreen(
                 .sortedByDescending { it.expectedAt ?: Long.MIN_VALUE }
                 .take(2)
                 .mapTo(mutableSetOf()) { it.sourceReleaseId }
-            val visibleEpisodes = if (isAniList) {
-                listOfNotNull(anime.episode.takeIf { it > 0 })
-            } else {
-                (1..anime.episode).toList()
-            }
+            val visibleEpisodes = if (isAniList) listOfNotNull(anime.episode.takeIf { it > 0 })
+                else EpisodeCardResolver.visibleEpisodeNumbers(anime.episode, state.releases)
             items(visibleEpisodes) { episode ->
                 val concreteCheck = state.episodeChecks
                     .filter { it.episodeNumber == episode }
@@ -456,25 +469,17 @@ fun AnimeDetailScreen(
                             R.string.episode_available_at,
                             historicalRelease.provider ?: state.providerReferences.firstOrNull()?.provider ?: "Provider"
                         )
-                    concreteOfferProviders.isNotEmpty() ->
-                        stringResource(
-                            R.string.episode_available_at,
-                            concreteOfferProviders.joinToString(" · ")
-                        )
+                    concreteOfferProviders.isNotEmpty() -> stringResource(R.string.episode_not_confirmed_checked)
                     concreteCheck != null ->
                         stringResource(R.string.episode_not_confirmed_checked)
-                    state.providerReferences.isNotEmpty() ->
-                        stringResource(
-                            R.string.series_available_episode_unchecked,
-                            state.providerReferences.map { it.provider }.distinct().joinToString(" · ")
-                        )
+                    state.providerReferences.isNotEmpty() -> stringResource(R.string.episode_not_confirmed_checked)
                     else -> stringResource(R.string.provider_availability_unknown)
                 }
                 val isConfirmedAvailable = concreteCheck?.status?.startsWith("AVAILABLE") == true ||
                     historicalRelease?.releaseStatus?.startsWith("AVAILABLE") == true
-                val showAvailabilityCheck = historicalRelease != null &&
-                    historicalRelease.sourceReleaseId in newestRelevantReleaseIds &&
-                    !isConfirmedAvailable
+                val showAvailabilityCheck = AvailabilityActionPolicy.showCheck(
+                    historicalRelease?.sourceReleaseId, newestRelevantReleaseIds, isConfirmedAvailable
+                )
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -575,6 +580,27 @@ fun AnimeDetailScreen(
 private fun Long.localTimeText(): String = java.time.Instant.ofEpochSecond(this)
     .atZone(java.time.ZoneId.systemDefault())
     .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
+
+@Composable
+private fun localizedReleaseLanguage(value: String?): String = stringResource(
+    when (value) {
+        "GER_SUB" -> R.string.release_language_sub
+        "GER_DUB" -> R.string.release_language_dub
+        else -> R.string.none
+    }
+)
+
+@Composable
+internal fun localizedReleaseStatus(value: String?): String = stringResource(
+    when {
+        value == "SCHEDULED" -> R.string.release_status_scheduled
+        value?.startsWith("AVAILABLE") == true -> R.string.release_status_available
+        value == "NOT_AVAILABLE_YET" -> R.string.release_status_not_available
+        value == "CHECK_FAILED" -> R.string.release_status_check_failed
+        value in setOf("POSTPONED", "RESCHEDULED", "DELAYED", "DELAYED_CONFIRMED") -> R.string.release_status_postponed
+        else -> R.string.release_status_not_available
+    }
+)
 
 private fun android.content.Context.openProviderUrlSafely(url: String): Boolean {
     val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return false

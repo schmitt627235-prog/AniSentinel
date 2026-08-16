@@ -33,12 +33,24 @@ class ProviderPipelineRepository(
 
     suspend fun sync(now: Instant = Instant.now()): ProviderPipelineRun = syncTitleProviders(now)
 
-    suspend fun syncTitleProviders(now: Instant = Instant.now()): ProviderPipelineRun = syncMutex.withLock {
-        if (lastCompletedAt?.isAfter(now.minusSeconds(10 * 60)) == true) return@withLock ProviderPipelineRun(0, 0, 0)
+    suspend fun syncTitleProviders(
+        now: Instant = Instant.now(),
+        animeIds: Set<String>? = null,
+        limit: Int = 150
+    ): ProviderPipelineRun = syncMutex.withLock {
+        require(limit in 1..150)
+        if (animeIds == null && lastCompletedAt?.isAfter(now.minusSeconds(10 * 60)) == true) {
+            return@withLock ProviderPipelineRun(0, 0, 0)
+        }
         dao.deletePhysicalProviderReferences()
         val due = dao.dueAniWorldReleases(now.epochSecond, now.minusSeconds(7 * 86_400).epochSecond, 100)
         val upcoming = dao.nextAniWorldReleases(now.epochSecond, 150)
         val releases = providerSyncCandidates(due, upcoming, 150)
+            .asSequence()
+            .filter { animeIds == null || it.animeId in animeIds }
+            .distinctBy { it.animeId }
+            .take(limit)
+            .toList()
         if (releases.isEmpty()) return@withLock ProviderPipelineRun(0, 0, 0)
         var matched = 0; var checked = 0; var failed = 0
         for (release in releases) {
@@ -103,7 +115,7 @@ class ProviderPipelineRepository(
                 ))
             }
         }
-        lastCompletedAt = now
+        if (animeIds == null) lastCompletedAt = now
         ProviderPipelineRun(matched, checked, failed)
     }
 

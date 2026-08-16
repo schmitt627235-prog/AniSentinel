@@ -60,8 +60,10 @@ private fun SecondaryHeader(title: String, onBack: () -> Unit) {
 @Composable
 fun ProvidersScreen(padding: PaddingValues, onBack: () -> Unit, onAnimeClick: (String) -> Unit, vm: SecondaryViewModel = viewModel()) {
     val state by vm.state.collectAsState()
+    val refreshing by vm.refreshing.collectAsState()
     var selected by remember { mutableStateOf<String?>(null) }
-    LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    AniSentinelPullToRefresh(refreshing, vm::refresh, Modifier.fillMaxSize().padding(padding)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { SecondaryHeader(selected ?: stringResource(R.string.drawer_providers), if (selected == null) onBack else ({ selected = null })) }
         if (selected == null) {
             items(state.providers, key = { "provider:${it.name}" }) { provider ->
@@ -77,25 +79,31 @@ fun ProvidersScreen(padding: PaddingValues, onBack: () -> Unit, onAnimeClick: (S
             items(titles, key = { "provider-title:${it.stableKey}" }) { item -> CatalogAnimeCard(item, Modifier.fillMaxWidth()) { onAnimeClick(item.id) } }
         }
     }
+    }
 }
 
 @Composable
 fun CurrentSeasonScreen(padding: PaddingValues, onBack: () -> Unit, onAnimeClick: (String) -> Unit, vm: SecondaryViewModel = viewModel()) {
     val state by vm.state.collectAsState()
+    val refreshing by vm.refreshing.collectAsState()
     val titles = state.currentSeasonTitles
-    LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    AniSentinelPullToRefresh(refreshing, vm::refresh, Modifier.fillMaxSize().padding(padding)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { SecondaryHeader(stringResource(R.string.drawer_season), onBack) }
         item { Text(stringResource(R.string.current_season_explanation), color = MaterialTheme.colorScheme.onSurfaceVariant) }
         item { Text(stringResource(R.string.current_season_count, titles.size), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary) }
         items(titles, key = { "season:${it.stableKey}" }) { item -> CatalogAnimeCard(item, Modifier.fillMaxWidth()) { onAnimeClick(item.id) } }
+    }
     }
 }
 
 @Composable
 fun DubReleasesScreen(padding: PaddingValues, onBack: () -> Unit, onAnimeClick: (String) -> Unit, vm: SecondaryViewModel = viewModel()) {
     val state by vm.state.collectAsState()
+    val refreshing by vm.refreshing.collectAsState()
     val formatter = remember { DateTimeFormatter.ofPattern("dd.MM.yyyy · HH:mm") }
-    LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    AniSentinelPullToRefresh(refreshing, vm::refresh, Modifier.fillMaxSize().padding(padding)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { SecondaryHeader(stringResource(R.string.drawer_dubs), onBack) }
         items(state.dubReleases, key = { "dub:${it.release.sourceReleaseId}" }) { item ->
             Card(Modifier.fillMaxWidth().clickable { onAnimeClick(item.release.animeId) }, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
@@ -108,6 +116,7 @@ fun DubReleasesScreen(padding: PaddingValues, onBack: () -> Unit, onAnimeClick: 
                 }
             }
         }
+    }
     }
 }
 
@@ -124,7 +133,7 @@ fun NewsScreen(padding: PaddingValues, onBack: () -> Unit, onNewsClick: (String)
             }
         }
         if (state.loading && state.items.isEmpty()) item { CircularProgressIndicator() }
-        state.errorCode?.let { code -> item { Text(stringResource(R.string.news_error, code), color = MaterialTheme.colorScheme.error) } }
+        state.errorCode?.let { item { Text(stringResource(R.string.news_error), color = MaterialTheme.colorScheme.error) } }
         if (!state.loading && state.items.isEmpty() && state.errorCode == null) item { Text(stringResource(R.string.news_empty)) }
         items(state.items, key = { "news:${it.announcementId}" }) { news ->
             Card(
@@ -235,6 +244,7 @@ private fun newsTypeLabel(type: String): String = stringResource(when (type) {
 @Composable
 fun ReleaseStatisticsScreen(padding: PaddingValues, onBack: () -> Unit, vm: SecondaryViewModel = viewModel()) {
     val stats by vm.state.collectAsState()
+    val refreshing by vm.refreshing.collectAsState()
     var showPostponed by remember { mutableStateOf(false) }
     val formatter = remember { DateTimeFormatter.ofPattern("dd.MM.yyyy · HH:mm") }
     val rows = listOf(
@@ -243,7 +253,8 @@ fun ReleaseStatisticsScreen(padding: PaddingValues, onBack: () -> Unit, vm: Seco
         R.string.stats_available to stats.statistics.confirmedAvailable, R.string.stats_delayed to stats.statistics.delayed,
         R.string.stats_postponed to stats.statistics.postponed
     )
-    LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    AniSentinelPullToRefresh(refreshing, vm::refresh, Modifier.fillMaxSize().padding(padding)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { SecondaryHeader(if (showPostponed) stringResource(R.string.stats_postponed) else stringResource(R.string.drawer_stats), if (showPostponed) ({ showPostponed = false }) else onBack) }
         if (showPostponed) {
             items(stats.scheduleChanges, key = { "change:${it.historyId}" }) { change ->
@@ -266,6 +277,7 @@ fun ReleaseStatisticsScreen(padding: PaddingValues, onBack: () -> Unit, vm: Seco
             }
         }
         }
+    }
     }
 }
 

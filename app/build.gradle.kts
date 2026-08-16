@@ -14,8 +14,8 @@ android {
         applicationId = "de.anisentinel.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 47
-        versionName = "0.25.1"
+        versionCode = 48
+        versionName = "0.25.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true

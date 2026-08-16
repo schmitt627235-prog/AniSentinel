@@ -202,15 +202,17 @@ fun HomeScreen(
                 item { Text(stringResource(R.string.live_empty)) }
             }
             if (showingSearch) items(searchState.results, key = { "search:${it.stableKey}" }) { item ->
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    searchState.postponementsByAnime[item.id].orEmpty().forEach { PostponementCard(it, Modifier.fillMaxWidth()) }
-                    CatalogAnimeCard(item, Modifier.fillMaxWidth()) { onAnimeClick(item.id) }
-                }
+                CatalogAnimeCard(
+                    item,
+                    Modifier.fillMaxWidth(),
+                    postponements = searchState.postponementsByAnime[item.id].orEmpty()
+                ) { onAnimeClick(item.id) }
             } else items(catalogState.anime, key = { it.id }) { anime ->
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    catalogState.postponementsByAnime[anime.id].orEmpty().forEach { PostponementCard(it, Modifier.fillMaxWidth()) }
-                    AnimeCard(anime, Modifier.fillMaxWidth()) { onAnimeClick(anime.id) }
-                }
+                AnimeCard(
+                    anime,
+                    Modifier.fillMaxWidth(),
+                    postponements = catalogState.postponementsByAnime[anime.id].orEmpty()
+                ) { onAnimeClick(anime.id) }
             }
         }
         }
@@ -485,7 +487,7 @@ fun CalendarScreen(
                             }
                         }
                         state.syncError?.let {
-                            Text(stringResource(R.string.calendar_sync_error_detail, it), color = MaterialTheme.colorScheme.error)
+                            Text(stringResource(R.string.calendar_sync_error_detail), color = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
@@ -626,8 +628,6 @@ fun CalendarScreen(
                 )
             }
             items(state.releasesForSelectedDate, key = { it.sourceReleaseId }) { release ->
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    release.postponements.forEach { PostponementCard(it, Modifier.fillMaxWidth()) }
                     AnimeCard(
                     anime = de.anisentinel.app.domain.model.Anime(
                         id = release.sourceReleaseId,
@@ -655,6 +655,7 @@ fun CalendarScreen(
                         releaseTimePrecision = release.releaseTimePrecision
                     ),
                     modifier = Modifier.fillMaxWidth(),
+                    postponements = release.postponements,
                     onClick = { onAnimeClick(release.animeId) },
                     auxiliaryLabel = buildString {
                         if (release.isHistoricalImport) append(stringResource(R.string.historical_provider_date, release.provider ?: "Provider"))
@@ -694,11 +695,17 @@ fun CalendarScreen(
                         }
                         if (!release.availabilityConfirmed && release.providerErrorCode != null) {
                             append("\n").append(stringResource(R.string.calendar_provider_check_failed))
-                            release.fallbackStatus?.let { append("\n").append(stringResource(R.string.calendar_fallback_status, it)) }
+                            release.fallbackStatus?.let {
+                                append("\n").append(
+                                    stringResource(
+                                        R.string.calendar_fallback_status,
+                                        localizedReleaseStatus(it.substringBefore(" ·"))
+                                    )
+                                )
+                            }
                         }
                     }.takeIf(String::isNotBlank)
                     )
-                }
             }
         }
         }
@@ -875,12 +882,12 @@ fun FavoritesScreen(
                 }
             }
             items(favoritesState.favorites) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    favoritesState.postponementsByAnime[it.id].orEmpty().forEach { shift ->
-                        PostponementCard(shift, Modifier.fillMaxWidth())
-                    }
-                    AnimeCard(it, Modifier.fillMaxWidth(), onClick = { onAnimeClick(it.id) })
-                }
+                AnimeCard(
+                    it,
+                    Modifier.fillMaxWidth(),
+                    postponements = favoritesState.postponementsByAnime[it.id].orEmpty(),
+                    onClick = { onAnimeClick(it.id) }
+                )
             }
         }
         }
@@ -904,8 +911,8 @@ fun DiscoverScreen(
         ) {
             item { PageTitle(stringResource(R.string.nav_discover), stringResource(R.string.discover_genre_subtitle)) }
             if (state.loading) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
-            state.error?.let { error -> item {
-                Text(stringResource(R.string.discover_real_data_error, error), color = MaterialTheme.colorScheme.error)
+            state.error?.let { item {
+                Text(stringResource(R.string.discover_real_data_error), color = MaterialTheme.colorScheme.error)
             } }
             item {
                 Text(stringResource(R.string.discover_genres), style = MaterialTheme.typography.titleLarge)
@@ -970,12 +977,13 @@ fun DiscoverScreen(
             }
             items(state.titles, key = { "discover:${it.stableKey}" }) {
                 title ->
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    state.postponementsByAnime[title.id].orEmpty().forEach { PostponementCard(it, Modifier.fillMaxWidth()) }
-                    CatalogAnimeCard(title, Modifier.fillMaxWidth()) {
+                    CatalogAnimeCard(
+                        title,
+                        Modifier.fillMaxWidth(),
+                        postponements = state.postponementsByAnime[title.id].orEmpty()
+                    ) {
                         onAnimeClick(title.id)
                     }
-                }
             }
         }
         }
@@ -1177,7 +1185,7 @@ fun SettingsScreen(
                         Text(stringResource(R.string.diagnostic_scheduled_jobs, monitoringDiagnostics.scheduledJobs))
                         Text(stringResource(R.string.diagnostic_deliveries, monitoringDiagnostics.deliveries))
                         monitoringDiagnostics.latestCheck?.let { check ->
-                            Text(stringResource(R.string.episode_check_status, check.status))
+                            Text(stringResource(R.string.episode_check_status, localizedReleaseStatus(check.status)))
                             Text(stringResource(R.string.episode_check_target, check.seasonNumber ?: 1, check.episodeNumber ?: 0))
                             check.providerName.takeIf(String::isNotBlank)?.let {
                                 Text(stringResource(R.string.release_provider, it))
@@ -1193,9 +1201,9 @@ fun SettingsScreen(
                         monitoringDiagnostics.latestChecks.forEach { check ->
                             Text(
                                 buildString {
-                                    append("${check.source}: ${check.status} · ${check.lastCheckedAt.diagnosticTime()}")
-                                    check.errorCode?.let { append(" · $it") }
-                                    check.nextCheckAt?.let { append(" · Retry ${it.diagnosticTime()}") }
+                                    append("${localizedReleaseStatus(check.status)} · ${check.lastCheckedAt.diagnosticTime()}")
+                                    if (check.errorCode != null) append(" · Prüfung derzeit nicht möglich")
+                                    check.nextCheckAt?.let { append(" · Nächste Prüfung ${it.diagnosticTime()}") }
                                     check.firstAvailableAt?.let { append(" · erkannt ${it.diagnosticTime()}") }
                                 },
                                 style = MaterialTheme.typography.bodySmall,

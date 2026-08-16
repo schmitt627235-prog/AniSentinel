@@ -1,5 +1,7 @@
 # AniSentinel
 
+Aktueller Diagnose-/Teststand: **v0.25.2**. Externe Handlungstexte werden vor der Anzeige dekodiert und sprachlich geprüft. In der deutschen App wird ein fremdsprachiger realer Quelltext nur als nachvollziehbar gekennzeichnete deutsche Übersetzung angezeigt; bei fehlendem Text wird nichts erfunden. Dynamische Übersichten unterstützen Pull-to-Refresh und prüfen dabei ausschließlich relevante, fällige, noch nicht bestätigte Releases.
+
 > ⚠️ **Entwicklungs- und Testversion:** AniSentinel befindet sich in aktiver Entwicklung. Externe Webseiten und inoffizielle Schnittstellen können sich ändern; Provideradapter und historische Importe werden weiterhin mit realen Releases validiert.
 
 ## Was ist AniSentinel?

@@ -22,15 +22,15 @@ object JustWatchPublicMetadataParser {
         val title = candidates.firstOrNull { row ->
             row.optString("@type") in setOf("TVSeries", "Movie", "CreativeWork", "TVSeason")
         } ?: candidates.firstOrNull()
-        val description = title?.optString("description")?.trim()?.takeIf(String::isNotBlank)
-            ?: document.selectFirst("meta[name=description]")?.attr("content")?.trim()?.takeIf(String::isNotBlank)
-        val genres = title?.values("genre").orEmpty()
+        val description = MetadataTextNormalizer.decode(title?.optString("description"))
+            ?: MetadataTextNormalizer.decode(document.selectFirst("meta[name=description]")?.attr("content"))
+        val genres = MetadataTextNormalizer.normalizeGenres(title?.values("genre").orEmpty()).toSet()
         val studios = buildSet {
             addAll(title?.names("productionCompany").orEmpty())
             addAll(title?.names("productionCompanies").orEmpty())
             addAll(title?.names("productionStudio").orEmpty())
         }
-        return JustWatchPublicMetadata(description, genres, studios)
+        return JustWatchPublicMetadata(description, genres, studios.mapNotNull(MetadataTextNormalizer::decode).toSet())
     }
 
     private fun jsonObjects(raw: String): List<JSONObject> = runCatching {
