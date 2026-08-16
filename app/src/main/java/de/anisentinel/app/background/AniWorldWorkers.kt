@@ -37,7 +37,8 @@ class AniWorldScheduleChangesSyncWorker(context: Context, params: WorkerParamete
                     val release = change.releaseId?.let { dao.release(it) } ?: return@forEach
                     app.container.favoriteReleaseScheduler.cancelAllReleaseWatchScheduling(release.sourceReleaseId)
                     val favorite = dao.favorite(release.animeId)
-                    if (favorite?.enabled == true && favorite.notifyPostponed) {
+                    val stillCurrent = shouldNotifyPostponement(change, Instant.now().epochSecond)
+                    if (stillCurrent && favorite?.enabled == true && favorite.notifyPostponed) {
                         deliverOnce(
                             app, release, "POSTPONED:${change.revision}",
                             de.anisentinel.app.domain.watcher.NotificationEvent.OfficiallyPostponed(
@@ -59,3 +60,8 @@ class AniWorldScheduleChangesSyncWorker(context: Context, params: WorkerParamete
         }
     }
 }
+
+internal fun shouldNotifyPostponement(
+    change: de.anisentinel.app.data.local.ReleasePostponementEntity,
+    nowEpochSeconds: Long
+): Boolean = change.isActive && (change.newExpectedAt == null || change.newExpectedAt > nowEpochSeconds)

@@ -76,6 +76,14 @@ class ProviderEpisodeAvailabilitySyncWorker(context: Context, params: WorkerPara
                 }
                 app.container.favoriteReleaseScheduler.cancelAllReleaseWatchScheduling(releaseId)
             } else if (release != null && favorite?.enabled == true) {
+                if (run.failed > 0 && run.checked == 0) {
+                    deliverOnce(
+                        app, release, "PROVIDER_CHECK_FAILED",
+                        de.anisentinel.app.domain.watcher.NotificationEvent.ProviderError(
+                            release.animeId, "provider-pipeline", true, animeTitle
+                        )
+                    )
+                }
                 val refreshed = dao.release(releaseId)
                 if (refreshed?.releaseStatus == "DELAYED_CONFIRMED" && favorite.notifyDelayed) {
                     deliverOnce(

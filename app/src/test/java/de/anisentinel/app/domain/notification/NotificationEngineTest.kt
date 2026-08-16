@@ -43,51 +43,44 @@ class NotificationEngineTest {
     }
 
     @Test
-    fun `release due starts provider check message`() {
+    fun `release due stays silent`() {
         val result = engine.create(
             NotificationEvent.ReleaseDue("atlas", 11),
             NotificationPreferences()
         )
 
-        assertEquals("due:atlas:11", result?.stableId)
-        assertTrue(result?.message?.contains("Anbieterprüfung") == true)
+        assertNull(result)
     }
 
     @Test
     fun `real availability adds provider and language evidence`() {
         val result = engine.create(
-            NotificationEvent.EpisodeAvailable("atlas", 11, "Crunchyroll", "Deutsch (Sub)"),
+            NotificationEvent.EpisodeAvailable("atlas", 11, "Crunchyroll", "Deutsch (Sub)", "Atlas of Ash", 2),
             NotificationPreferences()
         )
 
+        assertTrue(result?.message?.contains("Atlas of Ash") == true)
+        assertTrue(result?.message?.contains("Folge 11") == true)
         assertTrue(result?.message?.contains("Crunchyroll") == true)
         assertTrue(result?.message?.contains("Deutsch (Sub)") == true)
     }
 
     @Test
-    fun `due and available notifications carry concrete release target`() {
-        val due = engine.create(NotificationEvent.ReleaseDue("anime:id", 6, "Titel", 2, "GER_SUB"), NotificationPreferences())
+    fun `available notification carries concrete release target`() {
         val available = engine.create(NotificationEvent.EpisodeAvailable("anime:id", 6, "Crunchyroll", "GER_SUB", "Titel", 2), NotificationPreferences())
 
-        listOf(due, available).forEach {
-            assertEquals("anime:id", it?.targetAnimeId)
-            assertEquals(2, it?.targetSeason)
-            assertEquals(6, it?.targetEpisode)
-        }
-        assertEquals("GER_SUB", due?.targetLanguage)
+        assertEquals("anime:id", available?.targetAnimeId)
+        assertEquals(2, available?.targetSeason)
+        assertEquals(6, available?.targetEpisode)
         assertEquals("GER_SUB", available?.targetLanguage)
     }
 
     @Test
-    fun `provider errors are opt in`() {
-        val event = NotificationEvent.ProviderError("atlas", "fake-cr", true)
-        assertNull(engine.create(event, NotificationPreferences()))
-        assertTrue(
-            engine.create(
-                event,
-                NotificationPreferences(providerErrors = true)
-            ) != null
-        )
+    fun `technical provider error contains anime title and failure text`() {
+        val event = NotificationEvent.ProviderError("atlas", "fake-cr", true, "Atlas")
+        val result = engine.create(event, NotificationPreferences())
+        assertEquals("Atlas", result?.title)
+        assertTrue(result?.message?.contains("Anbieterprüfung fehlgeschlagen") == true)
     }
 
     @Test

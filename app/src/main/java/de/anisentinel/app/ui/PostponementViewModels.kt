@@ -17,7 +17,7 @@ class PostponementsViewModel(application: Application) : AndroidViewModel(applic
     private val dao = container.database.aniSentinelDao()
     private val _refreshing = MutableStateFlow(false)
     val refreshing = _refreshing.asStateFlow()
-    val items = dao.observeReleasePostponements()
+    val items = dao.observeOpenReleasePostponements()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun refresh() {
