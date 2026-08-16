@@ -1,6 +1,6 @@
 # AniSentinel DIAGNOSETEST V18 – Validierungsbericht
 
-Stand: 2026-08-09, Gerät `R3CX4056Q8L`, Europe/Berlin
+Stand: 2026-08-09, physisches Android-Testgerät, Europe/Berlin
 
 ## Build und Tests
 

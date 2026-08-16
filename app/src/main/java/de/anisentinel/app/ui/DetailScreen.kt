@@ -64,7 +64,9 @@ private fun ReleaseHistoryCard(
             Text("S${release.seasonNumber ?: 1} · Folge ${release.episodeNumber ?: 0} · ${localizedReleaseLanguage(release.releaseLanguage)}")
             release.expectedAt?.let {
                 val value = java.time.Instant.ofEpochSecond(it).atZone(java.time.ZoneId.systemDefault())
-                Text(if (release.releaseTimePrecision == "DATE") value.toLocalDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")) else value.format(formatter))
+                Text(if (release.releaseTimePrecision == "DATE" ||
+                    (value.toLocalTime() == java.time.LocalTime.MIDNIGHT && release.releaseTimePrecision != "EXACT_MIDNIGHT"))
+                    value.toLocalDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")) else value.format(formatter))
             }
             if (release.isHistoricalImport) Text(stringResource(R.string.historical_provider_date, release.provider ?: "Provider"), color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (inferred) Text(stringResource(R.string.previous_release_time_inferred), color = MaterialTheme.colorScheme.tertiary)

@@ -1,6 +1,6 @@
 # AniSentinel DIAGNOSETEST V17 – Validierungsbericht
 
-Stand: 2026-08-09, Gerät `R3CX4056Q8L`, Europe/Berlin
+Stand: 2026-08-09, physisches Android-Testgerät, Europe/Berlin
 
 ## Ergebnis
 
@@ -64,6 +64,6 @@ Bestätigung möglich. Es wurden keine Login-, Playback-, DRM- oder Schutzmechan
 
 ```powershell
 $env:JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'
-$env:ANDROID_HOME='C:\Users\handi\AppData\Local\Android\Sdk'
+$env:ANDROID_HOME='<lokaler-Android-SDK-Pfad>'
 .\gradlew.bat testDebugUnitTest assembleDebug
 ```

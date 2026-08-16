@@ -225,7 +225,8 @@ fun AnimeCard(
                 val zonedRelease = anime.expectedReleaseAt?.atZone(ZoneId.systemDefault())
                 val releaseText = if (zonedRelease == null) {
                     stringResource(R.string.no_next_release)
-                } else if (anime.releaseTimePrecision == "DATE") {
+                } else if (anime.releaseTimePrecision == "DATE" ||
+                    (zonedRelease.toLocalTime() == java.time.LocalTime.MIDNIGHT && anime.releaseTimePrecision != "EXACT_MIDNIGHT")) {
                     zonedRelease.toLocalDate().format(
                         DateTimeFormatter.ofPattern("dd.MM.yyyy", LocalConfiguration.current.locales[0])
                     )
@@ -256,7 +257,10 @@ fun AnimeCard(
                     }
                 }
                 Text(releaseText, style = MaterialTheme.typography.bodyMedium)
-                if (anime.releaseTimePrecision != "DATE") ReleaseCountdownLabel(anime.expectedReleaseAt)
+                if (anime.releaseTimePrecision != "DATE" &&
+                    !(zonedRelease?.toLocalTime() == java.time.LocalTime.MIDNIGHT && anime.releaseTimePrecision != "EXACT_MIDNIGHT")) {
+                    ReleaseCountdownLabel(anime.expectedReleaseAt)
+                }
                 ReleaseDelayLabel(anime.expectedReleaseAt, anime.status)
                 anime.provider.takeIf { it.isNotBlank() }?.let { provider ->
                     Text(

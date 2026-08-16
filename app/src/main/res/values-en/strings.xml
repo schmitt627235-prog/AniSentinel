@@ -335,6 +335,7 @@
     <string name="stats_available">Confirmed available</string>
     <string name="stats_delayed">Delayed releases</string>
     <string name="stats_postponed">Postponed releases</string>
+    <string name="stats_list_empty">No records are stored for this category yet.</string>
     <string name="changelog_v19_title">Version 0.19 · Safe provider matching</string>
     <string name="changelog_v19_body">Conservative title variants guarded by year and format, provider enrichment for the current season, and faster title-level JustWatch matching.</string>
     <string name="changelog_v18_title">Version 0.18 · Real season source</string>

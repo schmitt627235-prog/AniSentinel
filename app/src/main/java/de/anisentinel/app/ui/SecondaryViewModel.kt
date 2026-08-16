@@ -20,6 +20,20 @@ import kotlinx.coroutines.launch
 
 data class ProviderSummary(val name: String, val titleCount: Int)
 data class DubReleaseItem(val release: EpisodeReleaseEntity, val title: String, val coverUrl: String?)
+enum class ReleaseStatisticCategory { TODAY, THIS_WEEK, GER_SUB, GER_DUB, AVAILABLE, DELAYED, POSTPONED }
+data class ReleaseStatisticItem(
+    val stableId: String,
+    val animeId: String?,
+    val title: String,
+    val seasonNumber: Int?,
+    val episodeNumber: Int?,
+    val language: String?,
+    val expectedAt: Long?,
+    val releaseTimePrecision: String,
+    val provider: String?,
+    val status: String,
+    val postponement: de.anisentinel.app.data.local.ReleasePostponementEntity? = null
+)
 data class ReleaseStatistics(
     val today: Int = 0,
     val thisWeek: Int = 0,
@@ -29,13 +43,23 @@ data class ReleaseStatistics(
     val delayed: Int = 0,
     val postponed: Int = 0
 )
+internal fun releaseStatisticsFrom(items: Map<ReleaseStatisticCategory, List<ReleaseStatisticItem>>) = ReleaseStatistics(
+    today = items[ReleaseStatisticCategory.TODAY].orEmpty().size,
+    thisWeek = items[ReleaseStatisticCategory.THIS_WEEK].orEmpty().size,
+    germanSub = items[ReleaseStatisticCategory.GER_SUB].orEmpty().size,
+    germanDub = items[ReleaseStatisticCategory.GER_DUB].orEmpty().size,
+    confirmedAvailable = items[ReleaseStatisticCategory.AVAILABLE].orEmpty().size,
+    delayed = items[ReleaseStatisticCategory.DELAYED].orEmpty().size,
+    postponed = items[ReleaseStatisticCategory.POSTPONED].orEmpty().size
+)
 data class SecondaryUiState(
     val catalog: List<JustWatchCatalogTitleEntity> = emptyList(),
     val currentSeasonTitles: List<CatalogAnimeItem> = emptyList(),
     val providers: List<ProviderSummary> = emptyList(),
     val dubReleases: List<DubReleaseItem> = emptyList(),
     val statistics: ReleaseStatistics = ReleaseStatistics(),
-    val scheduleChanges: List<de.anisentinel.app.data.local.ReleaseScheduleHistorySummary> = emptyList()
+    val scheduleChanges: List<de.anisentinel.app.data.local.ReleaseScheduleHistorySummary> = emptyList(),
+    val statisticItems: Map<ReleaseStatisticCategory, List<ReleaseStatisticItem>> = emptyMap()
 )
 
 object CurrentSeasonResolver {
@@ -101,8 +125,8 @@ class SecondaryViewModel(application: Application) : AndroidViewModel(applicatio
     ) { catalog, releases, anime, availability, references ->
         BaseData(catalog, releases, anime, availability, references)
     }
-    val state = combine(base, dao.observeAllReleaseScheduleHistory()) { data, history ->
-        buildState(data.catalog, data.releases, data.anime, data.availability, data.providerReferences)
+    val state = combine(base, dao.observeAllReleaseScheduleHistory(), dao.observeReleasePostponements()) { data, history, postponements ->
+        buildState(data.catalog, data.releases, data.anime, data.availability, data.providerReferences, postponements)
             .copy(scheduleChanges = history)
     }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SecondaryUiState())
@@ -112,11 +136,15 @@ class SecondaryViewModel(application: Application) : AndroidViewModel(applicatio
         releases: List<EpisodeReleaseEntity>,
         anime: List<AnimeEntity>,
         availability: List<EpisodeProviderAvailabilityEntity>,
-        providerReferences: List<ProviderReferenceEntity>
+        providerReferences: List<ProviderReferenceEntity>,
+        postponements: List<de.anisentinel.app.data.local.ReleasePostponementEntity>
     ): SecondaryUiState {
         val now = Instant.now().epochSecond
-        val dayStart = java.time.LocalDate.now().atStartOfDay(java.time.ZoneId.systemDefault()).toEpochSecond()
-        val weekEnd = dayStart + 7 * 86_400
+        val zone = java.time.ZoneId.systemDefault()
+        val today = java.time.LocalDate.now(zone)
+        val dayStart = today.atStartOfDay(zone).toEpochSecond()
+        val weekStart = today.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY)).atStartOfDay(zone).toEpochSecond()
+        val weekEnd = java.time.Instant.ofEpochSecond(weekStart).atZone(zone).plusWeeks(1).toEpochSecond()
         val animeById = anime.associateBy { it.id }
         val activeIds = CurrentSeasonResolver.activeAnimeIds(releases, now)
         val catalogByAnime = catalog.filter { it.internalAnimeId != null }.groupBy { it.internalAnimeId!! }
@@ -151,21 +179,42 @@ class SecondaryViewModel(application: Application) : AndroidViewModel(applicatio
         val dubs = releases.filter { it.releaseLanguage == "GER_DUB" }
             .sortedByDescending { it.expectedAt }
             .map { DubReleaseItem(it, animeById[it.animeId]?.titleGerman ?: it.animeId, animeById[it.animeId]?.coverUrl) }
-        val availableReleaseIds = availability.filter { it.status.startsWith("AVAILABLE_") }.mapTo(mutableSetOf()) { it.releaseId }
+        val availabilityByRelease = availability.groupBy { it.releaseId }
+        val releaseItems = releases.map { release ->
+            val evidence = availabilityByRelease[release.sourceReleaseId].orEmpty()
+                .filter { it.firstAvailableAt != null || it.status.startsWith("AVAILABLE_") }
+                .maxByOrNull { it.lastCheckedAt }
+            ReleaseStatisticItem(
+                release.sourceReleaseId, release.animeId,
+                animeById[release.animeId]?.titleGerman ?: release.animeId,
+                release.seasonNumber, release.episodeNumber, release.releaseLanguage,
+                release.expectedAt, release.releaseTimePrecision, evidence?.providerName ?: release.provider,
+                if (evidence != null) "AVAILABLE" else release.releaseStatus
+            )
+        }
+        val postponedItems = postponements.sortedByDescending { it.detectedAt }.map { row ->
+            ReleaseStatisticItem(
+                "postponement:${row.postponementId}", row.animeId, row.title, row.seasonNumber,
+                row.episodeNumber, row.releaseLanguage, row.newExpectedAt, "DERIVED", null,
+                if (row.isActive) "POSTPONED" else "ARCHIVED", row
+            )
+        }
+        val statisticItems = mapOf(
+            ReleaseStatisticCategory.TODAY to releaseItems.filter { it.expectedAt in dayStart until (dayStart + 86_400) },
+            ReleaseStatisticCategory.THIS_WEEK to releaseItems.filter { it.expectedAt in weekStart until weekEnd },
+            ReleaseStatisticCategory.GER_SUB to releaseItems.filter { it.language == "GER_SUB" },
+            ReleaseStatisticCategory.GER_DUB to releaseItems.filter { it.language == "GER_DUB" },
+            ReleaseStatisticCategory.AVAILABLE to releaseItems.filter { it.status == "AVAILABLE" },
+            ReleaseStatisticCategory.DELAYED to releaseItems.filter { it.status.contains("DELAYED") },
+            ReleaseStatisticCategory.POSTPONED to postponedItems
+        ).mapValues { (_, items) -> items.sortedByDescending { it.expectedAt ?: Long.MIN_VALUE } }
         return SecondaryUiState(
             catalog = catalog,
             currentSeasonTitles = currentSeasonTitles,
             providers = providerCounts,
             dubReleases = dubs,
-            statistics = ReleaseStatistics(
-                today = releases.count { it.expectedAt in dayStart until (dayStart + 86_400) },
-                thisWeek = releases.count { it.expectedAt in dayStart until weekEnd },
-                germanSub = releases.count { it.releaseLanguage == "GER_SUB" },
-                germanDub = releases.count { it.releaseLanguage == "GER_DUB" },
-                confirmedAvailable = releases.count { it.sourceReleaseId in availableReleaseIds },
-                delayed = releases.count { it.releaseStatus.contains("DELAYED") },
-                postponed = releases.count { it.releaseStatus in listOf("POSTPONED", "RESCHEDULED") }
-            )
+            statistics = releaseStatisticsFrom(statisticItems),
+            statisticItems = statisticItems
         )
     }
 }

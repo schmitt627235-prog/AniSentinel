@@ -160,7 +160,10 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
             dao.observeEpisodeReleasesWithAnimeForWindow(date.startEpoch(), date.plusDays(1).startEpoch()),
             dao.observeReleasePostponements()
         ) { rows, postponements -> rows.mapNotNull { row ->
-                row.release.expectedAt?.let { at ->
+                de.anisentinel.app.domain.watcher.ReleaseTimePolicy.resolve(
+                    row.release, rows.map { it.release }, container.deviceTimeZoneProvider.currentZoneId()
+                )?.let { resolved ->
+                    val at = resolved.epochSecond
                     val relevantChecks = row.episodeAvailability.filter {
                         it.source == "DIRECT_PROVIDER_CHECK" || it.source == "ANIWORLD_CALENDAR_FALLBACK_V15"
                     }
@@ -204,7 +207,7 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
                         fallback?.let { it.status + (it.errorCode?.let { code -> " · $code" } ?: "") }
                     ).copy(
                         isHistoricalImport = row.release.isHistoricalImport,
-                        releaseTimePrecision = row.release.releaseTimePrecision,
+                        releaseTimePrecision = resolved.precision,
                         postponements = postponements.filter { it.isActive && it.animeId == row.release.animeId }
                     )
                 }

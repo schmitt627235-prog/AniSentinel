@@ -130,5 +130,9 @@ fun PostponementCard(row: ReleasePostponementEntity, modifier: Modifier = Modifi
     }
 }
 
-private fun formatPostponementTime(epoch: Long): String = Instant.ofEpochSecond(epoch)
-    .atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("dd.MM.yyyy · HH:mm"))
+private fun formatPostponementTime(epoch: Long): String {
+    val value = Instant.ofEpochSecond(epoch).atZone(ZoneId.systemDefault())
+    return if (value.toLocalTime() == java.time.LocalTime.MIDNIGHT) {
+        value.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
+    } else value.format(DateTimeFormatter.ofPattern("dd.MM.yyyy · HH:mm"))
+}

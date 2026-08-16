@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.25.3 – Ergebnisbenachrichtigungen und prüfbare Release-Statistik – 2026-08-16
+
+- Fälligkeit und Start einer Providerprüfung laufen ohne Nutzerbenachrichtigung.
+- Neu bestätigte Verfügbarkeit meldet Titel, Folge und Anbieter genau einmal; echte technische Prüffehler melden Titel und Fehlertext.
+- Historisch nachgeladene, bereits abgelaufene Verschiebungen erzeugen keine verspäteten Push-Meldungen.
+- Die operative Verschiebungsseite blendet providerbestätigte abgeschlossene Fälle aus; die vollständigen Datensätze bleiben in der Statistik erhalten.
+- Alle sieben Statistik-Karten öffnen eine smartphonegerechte Liste. Zähler und Liste stammen aus derselben Datenmenge.
+- Mitternachts-Platzhalter werden nicht als normale Uhrzeit dargestellt; eine belegte Titel-/Staffelzeit kann intern als `DERIVED_TITLE_PATTERN` abgeleitet werden, echte Mitternacht erfordert `EXACT_MIDNIGHT`.
+
 ## v0.25.2 – deutsche Metadaten und vollständige dynamische Aktualisierung – 2026-08-14
 
 - JustWatch-Handlungen werden unabhängig vom `Accept-Language`-Header sprachlich geprüft; englische reale Quelltexte werden im Diagnosebuild deutsch übersetzt und als `TRANSLATED_FROM_JUSTWATCH` gekennzeichnet.
