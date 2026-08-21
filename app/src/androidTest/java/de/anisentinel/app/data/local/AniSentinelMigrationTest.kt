@@ -252,6 +252,27 @@ class AniSentinelMigrationTest {
         }
     }
 
+    @Test
+    fun migration25To26KeepsUserDataAndSeparatesCanonicalProviderSeasons() {
+        val databaseName = "migration-25-26"
+        helper.createDatabase(databaseName, 25).apply {
+            execSQL("INSERT INTO anime (id,anilistId,anisearchId,titleGerman,titleEnglish,titleRomaji,titleNative,description,coverUrl,bannerUrl,season,seasonYear,totalEpisodes,updatedAt,nextAiringAt,nextEpisode,sourceUpdatedAt,cachedAt) VALUES ('anime',NULL,NULL,'Titel',NULL,NULL,NULL,'',NULL,NULL,NULL,2026,12,1,NULL,NULL,NULL,NULL)")
+            execSQL("INSERT INTO favorites (animeId,enabled,createdAt,languagePreference,monitoringProfileId,notifyAvailable,notifyDelayed) VALUES ('anime',1,1,'BOTH','automatic',1,1)")
+            execSQL("INSERT INTO episode_releases (sourceReleaseId,animeId,episodeNumber,episodeTitle,expectedAt,provider,metadataSource,sourceUrl,providerUrl,fetchedAt,seasonNumber,listedAt,adjustmentMinutes,originalTimeWasEndOfDayMarker,releaseStatus,releaseLanguage,isHistoricalImport,historicalReleasedAt,releaseTimePrecision,historicalSourcePriority,historicalConflict) VALUES ('release','anime',1,NULL,100,'Crunchyroll','TEST',NULL,NULL,1,2,NULL,NULL,0,'SCHEDULED','GER_SUB',0,NULL,'EXACT',0,0)")
+            close()
+        }
+        helper.runMigrationsAndValidate(databaseName, 26, true, AniSentinelDatabase.MIGRATION_25_26).use { database ->
+            database.query("SELECT enabled FROM favorites WHERE animeId='anime'").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals(1, it.getInt(0))
+            }
+            database.query("SELECT canonicalSeasonNumber FROM anime_seasons WHERE animeId='anime'").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals(2, it.getInt(0))
+            }
+        }
+    }
+
     private fun assertMigration7To8(batchCount: Int) {
         val databaseName = "migration-7-8-$batchCount"
         helper.createDatabase(databaseName, 7).apply {

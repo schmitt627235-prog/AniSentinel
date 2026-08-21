@@ -41,6 +41,6 @@ object AvailabilityWatchStrategy {
     }
 
     fun isTerminal(status: String): Boolean =
-        status == "AVAILABLE" || status == "POSTPONED" || status == "DELAYED" ||
+        status == "AVAILABLE" || status == "POSTPONED" || status == "DELAYED" || status == "STALE_UNCONFIRMED" ||
             status == "DELAYED_CONFIRMED" || status.startsWith("AVAILABLE_")
 }

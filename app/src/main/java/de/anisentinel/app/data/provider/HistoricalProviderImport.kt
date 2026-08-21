@@ -51,7 +51,7 @@ object AdnPublicHistoryParser {
     fun parse(body: String): Parsed {
         val objects = collectJsonObjects(body)
         val observed = objects.flatMap { obj -> exactDateFields.filter(obj::has) }.toSet()
-        val episodes = objects.mapNotNull { obj ->
+        val rawEpisodes = objects.mapNotNull { obj ->
             val id = text(obj, "id") ?: text(obj, "videoId") ?: return@mapNotNull null
             val episode = number(obj, "shortNumber") ?: number(obj, "episodeNumber") ?: return@mapNotNull null
             val languages = languageSet(obj.opt("languages"))
@@ -72,6 +72,14 @@ object AdnPublicHistoryParser {
                 dateEntry?.first
             )
         }.distinctBy { listOf(it.episodeId, it.seasonNumber, it.episodeNumber) }
+        val firstProviderNumberBySeason = rawEpisodes.groupBy { it.seasonNumber }
+            .mapValues { (season, episodes) ->
+                if (season > 1 && episodes.size > 1) episodes.minOf { it.episodeNumber } else 1
+            }
+        val episodes = rawEpisodes.map { episode ->
+            val firstProviderNumber = firstProviderNumberBySeason.getValue(episode.seasonNumber)
+            episode.copy(episodeNumber = episode.episodeNumber - firstProviderNumber + 1)
+        }
         return Parsed(episodes, observed)
     }
 

@@ -31,8 +31,12 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ,AnnouncementEntity::class
         ,ProviderMetadataIdentityEntity::class
         ,ReleasePostponementEntity::class
+        ,AnimeSeasonEntity::class
+        ,ProviderSeasonMappingEntity::class
+        ,ProviderPreferenceEntity::class
+        ,ProviderFailureStateEntity::class
     ],
-    version = 25,
+    version = 26,
     exportSchema = true
 )
 abstract class AniSentinelDatabase : RoomDatabase() {
@@ -404,6 +408,19 @@ abstract class AniSentinelDatabase : RoomDatabase() {
                 database.execSQL("ALTER TABLE justwatch_catalog_titles ADD COLUMN descriptionOriginal TEXT")
                 database.execSQL("ALTER TABLE justwatch_catalog_titles ADD COLUMN descriptionOriginalLanguage TEXT")
                 database.execSQL("ALTER TABLE justwatch_catalog_titles ADD COLUMN descriptionGermanSource TEXT")
+            }
+        }
+        val MIGRATION_25_26 = object : Migration(25, 26) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("CREATE TABLE IF NOT EXISTS anime_seasons (animeId TEXT NOT NULL, canonicalSeasonNumber INTEGER NOT NULL, source TEXT NOT NULL, confirmedAt INTEGER NOT NULL, PRIMARY KEY(animeId, canonicalSeasonNumber), FOREIGN KEY(animeId) REFERENCES anime(id) ON UPDATE NO ACTION ON DELETE CASCADE)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_anime_seasons_animeId ON anime_seasons(animeId)")
+                database.execSQL("CREATE TABLE IF NOT EXISTS provider_season_mappings (animeId TEXT NOT NULL, canonicalSeasonNumber INTEGER NOT NULL, provider TEXT NOT NULL, providerSeasonNumber INTEGER, providerSeriesId TEXT, providerSeasonId TEXT, providerSeriesUrl TEXT, region TEXT NOT NULL, available INTEGER NOT NULL, lastConfirmedAt INTEGER NOT NULL, PRIMARY KEY(animeId, canonicalSeasonNumber, provider), FOREIGN KEY(animeId) REFERENCES anime(id) ON UPDATE NO ACTION ON DELETE CASCADE)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_provider_season_mappings_animeId ON provider_season_mappings(animeId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_provider_season_mappings_animeId_canonicalSeasonNumber ON provider_season_mappings(animeId, canonicalSeasonNumber)")
+                database.execSQL("CREATE TABLE IF NOT EXISTS provider_preferences (animeId TEXT NOT NULL, seasonNumber INTEGER NOT NULL, provider TEXT NOT NULL, updatedAt INTEGER NOT NULL, PRIMARY KEY(animeId, seasonNumber), FOREIGN KEY(animeId) REFERENCES anime(id) ON UPDATE NO ACTION ON DELETE CASCADE)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_provider_preferences_animeId ON provider_preferences(animeId)")
+                database.execSQL("CREATE TABLE IF NOT EXISTS provider_failure_states (providerKey TEXT NOT NULL, consecutiveFailures INTEGER NOT NULL, firstFailureAt INTEGER NOT NULL, lastFailureAt INTEGER NOT NULL, lastErrorCode TEXT, lastNotifiedAt INTEGER, PRIMARY KEY(providerKey))")
+                database.execSQL("INSERT OR IGNORE INTO anime_seasons (animeId, canonicalSeasonNumber, source, confirmedAt) SELECT animeId, seasonNumber, 'RELEASE_BACKFILL', MAX(fetchedAt) FROM episode_releases WHERE seasonNumber IS NOT NULL AND seasonNumber > 0 GROUP BY animeId, seasonNumber")
             }
         }
     }

@@ -69,6 +69,7 @@ class AppContainer(context: Context) {
         ,AniSentinelDatabase.MIGRATION_22_23
         ,AniSentinelDatabase.MIGRATION_23_24
         ,AniSentinelDatabase.MIGRATION_24_25
+        ,AniSentinelDatabase.MIGRATION_25_26
     ).build()
 
     val newsRepository = Anime2YouNewsRepository(database.aniSentinelDao())
@@ -125,8 +126,7 @@ class AppContainer(context: Context) {
     )
     private val justWatchSource = loadJustWatchDiagnosticSource()
     val justWatchCatalogSource: de.anisentinel.app.domain.provider.JustWatchCatalogSource =
-        justWatchSource as? de.anisentinel.app.domain.provider.JustWatchCatalogSource
-            ?: de.anisentinel.app.domain.provider.UnconfiguredJustWatchCatalogSource
+        loadJustWatchDiagnosticCatalogSource()
     val justWatchCatalogRepository = JustWatchCatalogRepository(
         database.aniSentinelDao(), justWatchCatalogSource
     )
@@ -139,7 +139,10 @@ class AppContainer(context: Context) {
         listOf(
             de.anisentinel.app.data.provider.CrunchyrollMetadataAdapter(catalogClient = crunchyrollCatalogClient),
             de.anisentinel.app.data.provider.CrunchyrollPublicWebAdapter(),
-            de.anisentinel.app.data.provider.AdnMetadataAdapter()
+            de.anisentinel.app.data.provider.NetflixPublicEpisodeAdapter(),
+            de.anisentinel.app.data.provider.DisneyPlusPublicEpisodeAdapter(),
+            de.anisentinel.app.data.provider.AdnMetadataAdapter(),
+            de.anisentinel.app.data.provider.AniversePublicEpisodeAdapter()
         )
     )
     val crunchyrollHistoricalReleaseImporter = CrunchyrollHistoricalReleaseImporter(
@@ -160,5 +163,19 @@ class AppContainer(context: Context) {
             Class.forName("de.anisentinel.app.data.provider.UnofficialJustWatchDiagnosticSource")
                 .getDeclaredConstructor().newInstance() as JustWatchPartnerSource
         }.getOrDefault(UnconfiguredJustWatchPartnerSource)
+    }
+
+    /**
+     * Catalogue browsing has its own rate-limited source instance so provider episode
+     * probes cannot hold its synchronized HTTP queue and cause a false UI timeout.
+     */
+    private fun loadJustWatchDiagnosticCatalogSource(): de.anisentinel.app.domain.provider.JustWatchCatalogSource {
+        if (!BuildConfig.UNOFFICIAL_JUSTWATCH_DIAGNOSTIC_ENABLED) {
+            return de.anisentinel.app.domain.provider.UnconfiguredJustWatchCatalogSource
+        }
+        return runCatching {
+            Class.forName("de.anisentinel.app.data.provider.UnofficialJustWatchDiagnosticSource")
+                .getDeclaredConstructor().newInstance() as de.anisentinel.app.domain.provider.JustWatchCatalogSource
+        }.getOrDefault(de.anisentinel.app.domain.provider.UnconfiguredJustWatchCatalogSource)
     }
 }

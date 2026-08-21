@@ -13,7 +13,11 @@ import java.time.Instant
 internal suspend fun handleReleaseDue(context: Context, releaseId: String) {
         val app = context.applicationContext as AniSentinelApplication
         val dao = app.container.database.aniSentinelDao()
-        val release = dao.release(releaseId) ?: return
+    val release = dao.release(releaseId) ?: return
+    ProviderCheckTrace.event(
+        releaseId, "DUE_ALARM_HANDLED",
+        detail = "expectedAt=${release.expectedAt ?: "unknown"}"
+    )
         if (release.isHistoricalImport) {
             app.container.favoriteReleaseScheduler.cancelAvailabilityCheck(releaseId)
             dao.deleteScheduledReleaseNotification(releaseId)
@@ -28,9 +32,10 @@ internal suspend fun handleReleaseDue(context: Context, releaseId: String) {
         val request = OneTimeWorkRequestBuilder<ProviderEpisodeAvailabilitySyncWorker>()
             .setInputData(Data.Builder().putString(FavoriteReleaseScheduler.KEY_RELEASE_ID, releaseId).build())
             .build()
-        androidx.work.WorkManager.getInstance(context).enqueueUniqueWork(
+    androidx.work.WorkManager.getInstance(context).enqueueUniqueWork(
             ProviderEpisodeAvailabilitySyncWorker.checkWorkName(releaseId), ExistingWorkPolicy.REPLACE, request
-        )
+    )
+    ProviderCheckTrace.event(releaseId, "PROVIDER_WORK_ENQUEUED")
 }
 
 internal suspend fun deliverOnce(
@@ -61,6 +66,7 @@ internal suspend fun deliverOnce(
         dao.deleteNotificationDelivery(deliveryId)
         return false
     }
+    ProviderCheckTrace.event(release.sourceReleaseId, "NOTIFICATION_DISPATCHED", detail = "type=$eventType")
     return true
 }
 

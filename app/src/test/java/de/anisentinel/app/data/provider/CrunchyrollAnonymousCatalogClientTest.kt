@@ -24,6 +24,9 @@ class CrunchyrollAnonymousCatalogClientTest {
                 {"id":"E-PLACEHOLDER","season_number":2,"episode_number":7,
                  "audio_locale":"ja-JP","subtitle_locales":["de-DE"],
                  "premium_available_date":"9998-11-30T17:45:00Z"}
+                ,{"id":"E-FR","season_number":2,"episode_number":6,"title":"French audio",
+                 "audio_locale":"fr-FR","subtitle_locales":["de-DE"],
+                 "premium_available_date":"2026-08-09T15:30:00Z","availability_status":"premium_only"}
             ]}""")
             "/seasons/S-DE/episodes" in url -> response(url, """{"data":[
                 {"id":"E-DUB","season_number":2,"episode_number":3,"title":"Dub",
@@ -40,6 +43,7 @@ class CrunchyrollAnonymousCatalogClientTest {
         val rows = client.loadSeries("GSERIES").episodes
         assertEquals(setOf("GER_SUB"), rows.single { it.episodeId == "E-SUB" }.releaseLanguages)
         assertEquals(setOf("GER_DUB"), rows.single { it.episodeId == "E-DUB" }.releaseLanguages)
+        assertTrue(rows.single { it.episodeId == "E-FR" }.releaseLanguages.isEmpty())
         assertEquals(6, rows.single { it.episodeId == "E-SUB" }.episodeNumber)
     }
 

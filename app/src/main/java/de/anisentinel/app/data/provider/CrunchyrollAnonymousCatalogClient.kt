@@ -26,7 +26,10 @@ data class CrunchyrollCatalogEpisode(
     val episodeUrl: String
 ) {
     val releaseLanguages: Set<String> = buildSet {
-        if (subtitleLocales.any { it.equals("de", true) || it.startsWith("de-", true) }) add("GER_SUB")
+        // Crunchyroll exposes one episode object per audio version. German subtitles
+        // on a French/English audio object do not make that object the German OmU link.
+        val originalAudio = audioLocale == null || audioLocale.equals("ja", true) || audioLocale.startsWith("ja-", true)
+        if (originalAudio && subtitleLocales.any { it.equals("de", true) || it.startsWith("de-", true) }) add("GER_SUB")
         if (audioLocale.equals("de", true) || audioLocale?.startsWith("de-", true) == true) add("GER_DUB")
     }
 }

@@ -258,6 +258,65 @@ data class ProviderMetadataIdentityEntity(
     val lastCheckedAt: Long
 )
 
+/** Canonical season known for an anime, independent from any provider catalogue numbering. */
+@Entity(
+    tableName = "anime_seasons",
+    primaryKeys = ["animeId", "canonicalSeasonNumber"],
+    foreignKeys = [ForeignKey(entity = AnimeEntity::class, parentColumns = ["id"], childColumns = ["animeId"], onDelete = ForeignKey.CASCADE)],
+    indices = [Index("animeId")]
+)
+data class AnimeSeasonEntity(
+    val animeId: String,
+    val canonicalSeasonNumber: Int,
+    val source: String,
+    val confirmedAt: Long
+)
+
+/** Provider catalogue season mapped to a canonical anime season for the German market. */
+@Entity(
+    tableName = "provider_season_mappings",
+    primaryKeys = ["animeId", "canonicalSeasonNumber", "provider"],
+    foreignKeys = [ForeignKey(entity = AnimeEntity::class, parentColumns = ["id"], childColumns = ["animeId"], onDelete = ForeignKey.CASCADE)],
+    indices = [Index("animeId"), Index(value = ["animeId", "canonicalSeasonNumber"])]
+)
+data class ProviderSeasonMappingEntity(
+    val animeId: String,
+    val canonicalSeasonNumber: Int,
+    val provider: String,
+    val providerSeasonNumber: Int?,
+    val providerSeriesId: String?,
+    val providerSeasonId: String?,
+    val providerSeriesUrl: String?,
+    val region: String,
+    val available: Boolean,
+    val lastConfirmedAt: Long
+)
+
+/** seasonNumber 0 is the anime-wide default; positive values are explicit season overrides. */
+@Entity(
+    tableName = "provider_preferences",
+    primaryKeys = ["animeId", "seasonNumber"],
+    foreignKeys = [ForeignKey(entity = AnimeEntity::class, parentColumns = ["id"], childColumns = ["animeId"], onDelete = ForeignKey.CASCADE)],
+    indices = [Index("animeId")]
+)
+data class ProviderPreferenceEntity(
+    val animeId: String,
+    val seasonNumber: Int,
+    val provider: String,
+    val updatedAt: Long
+)
+
+/** Persistent provider-wide technical failure streak used to suppress transient push spam. */
+@Entity(tableName = "provider_failure_states")
+data class ProviderFailureStateEntity(
+    @PrimaryKey val providerKey: String,
+    val consecutiveFailures: Int,
+    val firstFailureAt: Long,
+    val lastFailureAt: Long,
+    val lastErrorCode: String?,
+    val lastNotifiedAt: Long?
+)
+
 @Entity(
     tableName = "episode_releases",
     foreignKeys = [ForeignKey(

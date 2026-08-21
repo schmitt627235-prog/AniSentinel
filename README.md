@@ -1,6 +1,8 @@
 # AniSentinel
 
-Aktueller Diagnose-/Teststand: **v0.25.3**. Providerprüfungen starten still; eine Benachrichtigung entsteht nur bei erstmals bestätigter Verfügbarkeit oder einem echten technischen Prüffehler. Die Release-Statistik besitzt für alle sieben Kennzahlen nachvollziehbare Listen, deren Datensätze zugleich die jeweilige Zahl bestimmen. Aktive Verschiebungen und dauerhafte Verschiebungshistorie sind fachlich getrennt.
+Aktueller Diagnose-/Teststand: **v0.25.5**. JustWatch Deutschland löst Titel und Anbieter auf; die konkrete Staffel, Episode und deutsche Sprachfassung werden anschließend direkt über öffentliche Metadaten des ausgewählten Providers geprüft. AniWorld bleibt der letzte technische Fallback. Kurzzeitige technische Providerfehler bleiben still und werden erst nach einem persistenten, providerweit deduplizierten Fehlerzustand benachrichtigt.
+
+Der Bereich **Entdecken** zeigt aus dem deutschen JustWatch-Datenbestand nur sicher als Anime erkannte Serien und Filme sowie ausdrücklich belegte Live-Action-Adaptionen. Der allgemeine JustWatch-Film- und Serienkatalog wird dort nicht angeboten.
 
 > ⚠️ **Entwicklungs- und Testversion:** AniSentinel befindet sich in aktiver Entwicklung. Externe Webseiten und inoffizielle Schnittstellen können sich ändern; Provideradapter und historische Importe werden weiterhin mit realen Releases validiert.
 
@@ -14,14 +16,24 @@ AniSentinel ist eine native Android-App für deutsche Anime-Releasetermine. Sie 
 - Startseite, Kalender, Favoriten, Entdecken, Einstellungen und Detailansicht
 - sekundengenaue Countdowns aus fester Zielzeit ohne Drift
 - stille Release-Prüfstarts sowie deduplizierte Availability- und technische Fehlermeldungen
-- direkte, episodengenaue Verfügbarkeitsprüfung bei Crunchyroll und diagnostisch bei ADN
-- AniWorld als Quelle aktueller deutscher Termine und als technischer T+10-Fallback
+- provider-first Verfügbarkeitsprüfung über öffentliche Crunchyroll-, Netflix-, Disney+-, ADN- und ANIVERSE-Metadaten
+- AniWorld als Quelle aktueller deutscher Termine und als letzter technischer Fallback
 - historische Crunchyroll-Termine für gezielt synchronisierte Monate
 - News- und Verschiebungssignale über Anime2You
 - sichere HTTPS-Deep-Links zu real ermittelten Providerseiten
 - Room als alleinige lokale UI-Datenbasis; DataStore für Einstellungen
 - reale JustWatch-DE-Titelmetadaten für Handlung und Genres sowie Studioangaben, sofern die öffentliche Quelle sie eindeutig liefert
 - Pull-to-Refresh in den datenabhängigen Hauptansichten; bestehende Room-Daten bleiben bei Netzwerkfehlern sichtbar
+- kanonische Anime-Staffeln getrennt von providerabhängigen Staffelnummern
+- persistente Providerwahl pro Staffel; Crunchyroll wird ohne manuelle Wahl nur bei bestätigter DACH-Staffel bevorzugt
+
+### Release-Lifecycle und Providerwahl
+
+Ein überfälliger Release bleibt nur während seines fachlich relevanten Beobachtungsfensters im engen AUTO-Watcher. Ein bekannter Episodennachfolger beendet den alten Watcher nach einer kurzen Karenz; spätestens nach 24 Stunden wird ein weiterhin unbestätigter Eintrag als `STALE_UNCONFIRMED` geführt. Dabei wird weder Verfügbarkeit erfunden noch eine technische Push-Meldung erzeugt. Historien- und Providerbackfills dürfen den Status später weiterhin korrigieren.
+
+Technische Providerfehler werden pro Provider persistent gezählt. Eine sichtbare Systemmeldung ist frühestens nach drei aufeinanderfolgenden Fehlern über mindestens zehn Minuten möglich. Ein sechs Stunden langer providerweiter Cooldown verhindert, dass ein einzelner Crunchyroll-Ausfall für jeden Favoriten eine eigene Meldung erzeugt. `AVAILABLE` oder `NOT_AVAILABLE_YET` setzt den Fehlerzustand zurück.
+
+Room trennt `AnimeSeason`, `ProviderSeasonMapping` und `ProviderPreference`. Eine manuelle Staffelwahl hat Vorrang, danach folgt eine Anime-Vorgabe, anschließend ein für die konkrete deutsche Staffel bestätigtes Crunchyroll-Angebot und erst danach ein anderer bestätigter DACH-Anbieter. Fehlt ein belegtes Angebot, zeigt die App dies ehrlich an.
 
 ### JustWatch-Metadaten
 
@@ -31,7 +43,7 @@ Dieser Metadatenweg ist strikt von der Episodenprüfung getrennt: JustWatch ordn
 
 ### Manuelles Aktualisieren
 
-Pull-to-Refresh synchronisiert die für die sichtbare Ansicht relevanten Daten aus den aktivierten Quellen. Fällige, noch nicht bestätigte Favoriten können dabei direkt beim Anbieter geprüft werden. Bereits bestätigte Episoden werden nicht unnötig erneut geprüft; der manuelle Refresh startet keine historischen Watcher und erzeugt keine künstlichen Due- oder T+10-Ereignisse.
+Pull-to-Refresh synchronisiert die für die sichtbare Ansicht relevanten Daten aus den aktivierten Quellen. Fällige, noch nicht bestätigte Favoriten können dabei direkt beim Anbieter geprüft werden. Bereits bestätigte Episoden werden nicht unnötig erneut geprüft; der manuelle Refresh startet keine historischen Watcher oder künstlichen Due-Ereignisse.
 
 ### Favoriten-Kategorien
 
@@ -41,7 +53,7 @@ Beim Hinzufügen oder Wiederherstellen eines Favoriten startet AniSentinel autom
 - **Demnächst:** kein heutiger, aber ein konkreter zukünftiger Release ist bekannt
 - **Abgeschlossen:** mindestens ein vergangener Release ist bekannt und es gibt weder heute noch zukünftig einen konkreten Termin
 
-Historische Crunchyroll-/ADN-Releases zählen für diese UI-Kategorisierung als reale Historie. Sie bleiben gleichzeitig strikt von Alarmen, Benachrichtigungen, AUTO-Watcher, WorkManager-Prüfungen und T+10-Fallback ausgeschlossen. Wird später ein neuer konkreter Termin importiert, wechselt der Titel automatisch von „Abgeschlossen“ zu „Demnächst“.
+Historische Crunchyroll-/ADN-Releases zählen für diese UI-Kategorisierung als reale Historie. Sie bleiben gleichzeitig strikt von Alarmen, Benachrichtigungen, AUTO-Watcher, WorkManager-Prüfungen und Fallbacks ausgeschlossen. Wird später ein neuer konkreter Termin importiert, wechselt der Titel automatisch von „Abgeschlossen“ zu „Demnächst“.
 
 ## Datenschutzfreundlich – kein Login erforderlich
 
@@ -55,7 +67,7 @@ Kurze Einzelverschiebungen gelten nur für die konkret betroffene Folge. Bei ein
 
 AniSentinel überwacht die veröffentlichte AniWorld-Seite [Animeverschiebungen](https://aniworld.to/support/frage/anime-verschiebungen). Aktuelle Meldungen erscheinen dauerhaft aus Room unter „Entdecken & Mehr → Verschiebungen“ mit interner Detailansicht und einem getrennten Link zur Originalmeldung.
 
-Wenn Titel, Staffel, Episode und deutsche Sprachfassung eindeutig zu einem vorhandenen Release passen, erscheint der Zustand zusätzlich direkt im Kalender, bei Favoriten, auf der Startseite und in der Detailansicht. Der ursprüngliche Termin bleibt nachvollziehbar. Ein belastbarer Ersatztermin wird gespeichert und neu geplant; ohne Ersatztermin werden Due-Alarm, AUTO-Prüfung und AniWorld-T+10-Fallback gestoppt.
+Wenn Titel, Staffel, Episode und deutsche Sprachfassung eindeutig zu einem vorhandenen Release passen, erscheint der Zustand zusätzlich direkt im Kalender, bei Favoriten, auf der Startseite und in der Detailansicht. Der ursprüngliche Termin bleibt nachvollziehbar. Ein belastbarer Ersatztermin wird gespeichert und neu geplant; ohne Ersatztermin werden Due-Alarm, AUTO-Prüfung und Fallback gestoppt.
 
 GER SUB und GER DUB werden getrennt behandelt. Gründe und Ersatztermine erscheinen nur, wenn AniWorld sie tatsächlich nennt. Eine unveränderte Meldung erzeugt weder einen zweiten Room-Eintrag noch eine weitere Benachrichtigung. Bereits direkt bestätigte Verfügbarkeit wird nicht überschrieben.
 
@@ -65,11 +77,11 @@ JustWatch ordnet einen Titel dem deutschen Anbieterkatalog zu, bestätigt aber k
 
 ```text
 JustWatch → Anbieterzuordnung
-Crunchyroll/ADN → konkrete Episode und Sprache
-technischer CHECK_FAILED → frühestens T+10 AniWorld-Fallback
+Crunchyroll/Netflix/Disney+/ADN/ANIVERSE → konkrete Episode und Sprache
+technischer CHECK_FAILED oder UNSUPPORTED → kontrollierter AniWorld-Fallback
 ```
 
-Ein direkt bestätigtes `AVAILABLE` wird sofort gespeichert und kann genau eine Benachrichtigung auslösen. Danach beendet AniSentinel AUTO-Überwachung, Provider-Retries und den T+10-Fallback. `NOT_AVAILABLE_YET` bedeutet eine erfolgreich ausgewertete Providerseite ohne Zielrelease und startet deshalb keinen technischen Fallback. Bei einem Alarm-Rennen wird Room unmittelbar vor dem Fallback erneut geprüft.
+Ein direkt bestätigtes `AVAILABLE` wird sofort gespeichert und kann genau eine Benachrichtigung auslösen. Danach beendet AniSentinel AUTO-Überwachung, Provider-Retries und den Fallback. `NOT_AVAILABLE_YET` bedeutet eine erfolgreich ausgewertete Providerseite ohne Zielrelease und startet deshalb keinen technischen Fallback. Ein separater T+10-Alarm existiert nicht mehr. Bei einem Alarm-Rennen wird Room unmittelbar vor einem Fallback erneut geprüft.
 
 ### Watch-Profile
 
@@ -99,9 +111,12 @@ Fehlende Termine oder Sprachfassungen werden nicht geraten. Ein japanischer Auss
 
 | Quelle | Tatsächliche Rolle |
 |---|---|
-| [AniWorld](https://aniworld.to/animes) | aktuelle/kommende deutsche Termine, Verschiebungen, T+10-Fallback |
+| [AniWorld](https://aniworld.to/animes) | aktuelle/kommende deutsche Termine, Verschiebungen, letzter technischer Fallback |
 | [Crunchyroll Deutschland](https://www.crunchyroll.com/de/videos/new) | anonyme Katalog-, Serien-, Staffel- und Episodenmetadaten; direkte Prüfung und Historie |
-| [ADN Deutschland](https://animationdigitalnetwork.com/de/) | anonyme DE-Katalog-/Episodenmetadaten, soweit öffentlich belastbar |
+| [Netflix Deutschland](https://www.netflix.com/de/) | öffentliche Titelseite nach JustWatch-Auflösung; konkrete Episode nur bei belastbarer Sprach-/Verfügbarkeitsevidenz |
+| [Disney+ Deutschland](https://www.disneyplus.com/de-de) | öffentliche Entity-, Staffel- und Episodenmetadaten nach JustWatch-Auflösung |
+| [ADN Deutschland](https://animationdigitalnetwork.com/de/) | anonyme DE-Katalog-/Episodenmetadaten einschließlich Platzhalterprüfung |
+| [ANIVERSE bei Prime Video](https://www.primevideo.com/-/de_DE/channel/0bc7238a-ac57-4e04-a3f3-1be6f9aefa32) | öffentliche Prime-Titelseite; Bestätigung nur mit konkreter Episode und ANIVERSE-Channelnachweis |
 | [Anime2You](https://www.anime2you.de/feed/) | öffentlicher RSS-Feed für News und Releasesignale |
 | [JustWatch Deutschland](https://www.justwatch.com/de) | Katalog- und Providerzuordnung, nicht Episodenbestätigung |
 

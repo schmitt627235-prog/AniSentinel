@@ -26,6 +26,15 @@ class ProviderEpisodeAvailabilitySyncWorker(context: Context, params: WorkerPara
         val requestedReleaseId = inputData.getString(FavoriteReleaseScheduler.KEY_RELEASE_ID)
         val fallbackTrigger = inputData.getBoolean(KEY_FALLBACK_TRIGGER, false)
         if (requestedReleaseId?.contains("aniworld:episode-") == true) return Result.success()
+        val requestedRelease = requestedReleaseId?.let { daoReleaseId ->
+            app.container.database.aniSentinelDao().release(daoReleaseId)
+        }
+        if (requestedReleaseId != null && (requestedRelease == null ||
+                requestedRelease.releaseStatus == "STALE_UNCONFIRMED" ||
+                AvailabilityWatchStrategy.isTerminal(requestedRelease.releaseStatus))) {
+            app.container.favoriteReleaseScheduler.cancelAllReleaseWatchScheduling(requestedReleaseId)
+            return Result.success()
+        }
         val dao = app.container.database.aniSentinelDao()
         if (requestedReleaseId?.let { dao.release(it)?.isHistoricalImport } == true) {
             app.container.favoriteReleaseScheduler.cancelAvailabilityCheck(requestedReleaseId)
@@ -42,11 +51,12 @@ class ProviderEpisodeAvailabilitySyncWorker(context: Context, params: WorkerPara
         }
         val now = Instant.now()
         val releaseIds = requestedReleaseId?.let(::listOf) ?: dao
-            .dueFavoriteReleases(now.epochSecond, now.minusSeconds(7 * 86_400).epochSecond)
+            .dueFavoriteReleases(now.epochSecond, now.minusSeconds(ReleaseWatchSelectionPolicy.ACTIVE_OVERDUE_WINDOW_SECONDS).epochSecond)
             .groupBy { listOf(it.seasonNumber, it.episodeNumber, it.releaseLanguage, it.expectedAt) }
             .values
             .map { rows -> rows.minBy { if (it.animeId.startsWith("aniworld:episode-")) 1 else 0 }.sourceReleaseId }
         val run = if (requestedReleaseId != null) {
+            ProviderCheckTrace.event(requestedReleaseId, "WORKER_STARTED", now)
             app.container.providerPipelineRepository.checkEpisode(requestedReleaseId)
         } else {
             app.container.providerPipelineRepository.checkDueEpisodes(now)
@@ -60,6 +70,14 @@ class ProviderEpisodeAvailabilitySyncWorker(context: Context, params: WorkerPara
                 dao.episodeProviderAvailability(releaseId)
             )
             if (release != null && available != null) {
+                dao.episodeProviderAvailability(releaseId)
+                    .mapNotNull(ProviderFailureNotificationPolicy::providerKey)
+                    .distinct()
+                    .forEach { dao.deleteProviderFailureState(it) }
+                ProviderCheckTrace.event(
+                    releaseId, "AVAILABLE_READ_FROM_ROOM",
+                    detail = "provider=${available.providerName};firstAvailableAt=${available.firstAvailableAt ?: "unknown"}"
+                )
                 if (favorite?.enabled == true && favorite.notifyAvailable) {
                     deliverOnce(
                         app, release, "EPISODE_AVAILABLE",
@@ -76,12 +94,25 @@ class ProviderEpisodeAvailabilitySyncWorker(context: Context, params: WorkerPara
                 }
                 app.container.favoriteReleaseScheduler.cancelAllReleaseWatchScheduling(releaseId)
             } else if (release != null && favorite?.enabled == true) {
-                if (run.failed > 0 && run.checked == 0) {
-                    deliverOnce(
+                val providerRows = dao.episodeProviderAvailability(releaseId)
+                val tentativeKey = providerRows.mapNotNull(ProviderFailureNotificationPolicy::providerKey)
+                    .groupingBy { it }.eachCount().maxByOrNull { it.value }?.key
+                val previousFailure = tentativeKey?.let { dao.providerFailureState(it) }
+                val failure = ProviderFailureNotificationPolicy.evaluate(providerRows, previousFailure, Instant.now().epochSecond)
+                failure.resetProviderKeys.forEach { dao.deleteProviderFailureState(it) }
+                failure.nextState?.let { dao.upsertProviderFailureState(it) }
+                if (failure.shouldNotify && failure.nextState != null) {
+                    val delivered = deliverOnce(
                         app, release, "PROVIDER_CHECK_FAILED",
                         de.anisentinel.app.domain.watcher.NotificationEvent.ProviderError(
-                            release.animeId, "provider-pipeline", true, animeTitle
+                            failure.providerKey ?: "provider-pipeline",
+                            failure.providerKey ?: "provider-pipeline",
+                            true,
+                            null
                         )
+                    )
+                    if (delivered) dao.upsertProviderFailureState(
+                        failure.nextState.copy(lastNotifiedAt = Instant.now().epochSecond)
                     )
                 }
                 val refreshed = dao.release(releaseId)
@@ -146,3 +177,14 @@ internal fun selectAvailableEvidence(
             .thenByDescending { it.lastCheckedAt }
     )
     .firstOrNull()
+
+internal fun hasTechnicalProviderFailure(
+    rows: List<de.anisentinel.app.data.local.EpisodeProviderAvailabilityEntity>
+): Boolean {
+    val direct = rows.filterNot {
+        it.source == "ANIWORLD_CALENDAR_FALLBACK_V15" ||
+            it.source == "UNOFFICIAL_JUSTWATCH_DIAGNOSTIC"
+    }
+    if (direct.any { it.status.startsWith("AVAILABLE_") || it.status == "NOT_AVAILABLE_YET" }) return false
+    return direct.any { it.status == "CHECK_FAILED" || it.status == "PROVIDER_CHECK_FAILED" }
+}

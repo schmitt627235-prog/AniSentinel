@@ -26,7 +26,7 @@ class PublicProviderMetadataTransport : ProviderMetadataTransport {
             connection.connectTimeout = 15_000
             connection.readTimeout = 25_000
             connection.instanceFollowRedirects = true
-            connection.setRequestProperty("User-Agent", "AniSentinel/0.24.2 provider-metadata-diagnostic (Android; no login; no playback)")
+            connection.setRequestProperty("User-Agent", "AniSentinel/0.25.4 provider-metadata-diagnostic (Android; no login; no playback)")
             connection.setRequestProperty("Accept", "application/json,text/html,application/xhtml+xml")
             headers.forEach(connection::setRequestProperty)
             val status = connection.responseCode
@@ -49,46 +49,136 @@ class AdnMetadataAdapter(
         val now = clock.instant()
         if (request.market != ProviderMarketPolicy.GERMANY) return ProviderMetadataProbeResult.CheckFailed("ADN_MARKET_NOT_DE", now, false)
         return try {
-            val showIdentity = identity ?: findShow(request, now) ?: return ProviderMetadataProbeResult.CheckFailed("ADN_TITLE_NOT_MATCHED", now, false)
-            val url = "https://gw.api.animationdigitalnetwork.com/video/show/${showIdentity.seriesId}?maxAgeCategory=18&limit=-1&order=asc"
-            val response = transport.get(url, mapOf("X-Target-Distribution" to "de"))
-            if (response.status !in 200..299) return failed("ADN_HTTP_${response.status}", now, response.status >= 500 || response.status == 429)
-            parseEpisodes(response.body, request, showIdentity.copy(sourceUrl = response.finalUrl), now)
+            val candidates = (listOfNotNull(identity) + findShows(request)).distinctBy { it.seriesId }
+            if (candidates.isEmpty()) return ProviderMetadataProbeResult.CheckFailed("ADN_TITLE_NOT_MATCHED", now, false)
+            // ADN's public page is season-aware (?s=N) while its API may expose title-wide
+            // episode numbers. For an explicit season this is the authoritative mapping path.
+            if (request.seasonNumber != null) {
+                probePublicSeasonPage(request, candidates.first(), now)?.let { return it }
+            }
+            var best: ProviderMetadataProbeResult? = null
+            for (showIdentity in candidates) {
+                val url = "https://gw.api.animationdigitalnetwork.com/video/show/${showIdentity.seriesId}?maxAgeCategory=18&limit=-1&order=asc"
+                val response = transport.get(url, mapOf("X-Target-Distribution" to "de"))
+                if (response.status !in 200..299) {
+                    best = best ?: failed("ADN_HTTP_${response.status}", now, response.status >= 500 || response.status == 429)
+                    continue
+                }
+                val parsed = parseEpisodes(response.body, request, showIdentity.copy(sourceUrl = response.finalUrl), now)
+                if (parsed is ProviderMetadataProbeResult.Available) return parsed
+                if (parsed is ProviderMetadataProbeResult.NotAvailableYet && parsed.diagnostic != "ADN_EPISODE_NOT_LISTED") return parsed
+                best = parsed
+            }
+            best ?: ProviderMetadataProbeResult.NotAvailableYet(identity, now, "ADN_EPISODE_NOT_LISTED")
         } catch (_: Exception) { failed("ADN_RESPONSE_INVALID", now, true) }
     }
 
-    private suspend fun findShow(request: ProviderMetadataProbeRequest, now: Instant): ProviderMetadataIdentity? {
+    private suspend fun probePublicSeasonPage(
+        request: ProviderMetadataProbeRequest,
+        identity: ProviderMetadataIdentity,
+        now: Instant
+    ): ProviderMetadataProbeResult? {
+        val season = request.seasonNumber ?: return null
+        val slug = normalized(request.title).replace(' ', '-')
+        val url = "https://animationdigitalnetwork.com/de/video/${identity.seriesId}-$slug?s=$season"
+        val response = transport.get(url, emptyMap())
+        if (response.status !in 200..299) return null
+        val document = Jsoup.parse(response.body, response.finalUrl)
+        val renderedLinks = document.select("a[href*='-folge-']").mapNotNull { link ->
+            val href = link.absUrl("href").ifBlank { link.attr("href") }
+            val number = Regex("-folge-(\\d+)", RegexOption.IGNORE_CASE)
+                .find(href)?.groupValues?.get(1)?.toIntOrNull() ?: return@mapNotNull null
+            number to href
+        }
+        val normalizedBody = response.body.replace("\\/", "/").replace("\\u002F", "/")
+        val embeddedLinks = Regex(
+            "(/de/video/[^\\\"'\\s]+/\\d+-folge-(\\d+))",
+            RegexOption.IGNORE_CASE
+        ).findAll(normalizedBody).mapNotNull { match ->
+            val number = match.groupValues[2].toIntOrNull() ?: return@mapNotNull null
+            number to "https://animationdigitalnetwork.com${match.groupValues[1]}"
+        }.toList()
+        val episodeLinks = (renderedLinks + embeddedLinks).distinctBy { it.first }.sortedBy { it.first }
+        if (episodeLinks.isEmpty()) return null
+        val providerNumber = episodeLinks.first().first + request.episodeNumber - 1
+        val episodeUrl = episodeLinks.firstOrNull { it.first == providerNumber }?.second
+            ?: return ProviderMetadataProbeResult.NotAvailableYet(identity, now, "ADN_PUBLIC_SEASON_EPISODE_NOT_LISTED")
+        if (request.expectedAt?.isAfter(now) == true) {
+            return ProviderMetadataProbeResult.NotAvailableYet(identity, now, "ADN_PUBLIC_SEASON_EPISODE_NOT_RELEASED")
+        }
+        val pageText = document.text().lowercase()
+        val sub = "untertitel" in pageText
+        if (request.expectedLanguage == "GER_DUB") {
+            return ProviderMetadataProbeResult.NotAvailableYet(identity, now, "ADN_PUBLIC_DUB_NOT_CONFIRMED")
+        }
+        if (request.expectedLanguage == "GER_SUB" && !sub) return null
+        val stable = identity.copy(episodeId = episodeUrl.substringAfterLast('/').substringBefore('-'), sourceUrl = response.finalUrl, seasonNumber = season)
+        return ProviderMetadataProbeResult.Available(
+            ProviderEpisodeAvailability(
+                "ADN", season, request.episodeNumber, true, sub, false, request.expectedAt,
+                episodeUrl, now, "OFFICIAL_PUBLIC_SEASON_PAGE", response.finalUrl
+            ), stable
+        )
+    }
+
+    private suspend fun findShows(request: ProviderMetadataProbeRequest): List<ProviderMetadataIdentity> {
         val query = URLEncoder.encode(request.title, Charsets.UTF_8.name())
         val url = "https://gw.api.animationdigitalnetwork.com/show/catalog?search=$query&limit=20&offset=0"
         val response = transport.get(url, mapOf("X-Target-Distribution" to "de"))
-        if (response.status !in 200..299) return null
+        if (response.status !in 200..299) return emptyList()
         val candidates = collectObjects(response.body).mapNotNull { obj ->
             val id = string(obj, "id") ?: string(obj, "showId") ?: return@mapNotNull null
             val title = string(obj, "title") ?: string(obj, "name") ?: return@mapNotNull null
             Triple(id, title, normalized(title))
         }.distinctBy { it.first }
         val target = normalized(request.title)
-        val exact = candidates.filter { it.third == target }
-        val selected = exact.singleOrNull() ?: candidates.filter { titleSimilarity(target, it.third) >= .86 }.singleOrNull() ?: return null
-        return ProviderMetadataIdentity("ADN", "DE", selected.first, sourceUrl = response.finalUrl)
+        val selected = candidates.filter { it.third == target }.ifEmpty {
+            candidates.filter { titleSimilarity(target, it.third) >= .86 }
+        }
+        return selected.map { ProviderMetadataIdentity("ADN", "DE", it.first, sourceUrl = response.finalUrl) }
     }
 
     internal fun parseEpisodes(body: String, request: ProviderMetadataProbeRequest, identity: ProviderMetadataIdentity, now: Instant): ProviderMetadataProbeResult {
-        val episode = collectObjects(body).firstOrNull { obj ->
-            val number = int(obj, "shortNumber") ?: int(obj, "episodeNumber") ?: int(obj, "number")
+        val candidates = collectObjects(body).mapNotNull { obj ->
+            val providerNumber = int(obj, "shortNumber") ?: int(obj, "episodeNumber") ?: int(obj, "number")
+                ?: return@mapNotNull null
             val season = int(obj, "season") ?: int(obj, "seasonNumber")
-            number == request.episodeNumber && (request.seasonNumber == null || season == null || season == request.seasonNumber)
-        } ?: return ProviderMetadataProbeResult.NotAvailableYet(identity, now, "ADN_EPISODE_NOT_LISTED")
+            Triple(obj, season, providerNumber)
+        }
+        val requestedSeason = request.seasonNumber
+        val seasonCandidates = when (requestedSeason) {
+            null -> candidates
+            1 -> candidates.filter { it.second == null || it.second == 1 }
+            else -> candidates.filter { it.second == requestedSeason }
+        }
+        // ADN numbers episodes across the complete title (for example season 2 starts
+        // at provider episode 13). AniSentinel always exposes season-local numbering.
+        val firstProviderNumber = seasonCandidates.minOfOrNull { it.third }?.let { first ->
+            if ((requestedSeason ?: 1) > 1 && seasonCandidates.size > 1) first else 1
+        }
+        val providerNumber = firstProviderNumber?.plus(request.episodeNumber - 1)
+        val episode = seasonCandidates.firstOrNull { it.third == providerNumber }?.first
+            ?: return ProviderMetadataProbeResult.NotAvailableYet(identity, now, "ADN_EPISODE_NOT_LISTED")
         val languages = stringSet(episode.opt("languages"))
         val sub = "vostde" in languages
         val dub = "vde" in languages
         val episodeId = string(episode, "id") ?: string(episode, "videoId")
         val resolved = identity.copy(episodeId = episodeId)
+        val explicitlyUnavailable = episode.has("available") && !episode.optBoolean("available", false)
+        val explicitlyAvailable = episode.has("available") && episode.optBoolean("available", false)
+        val publicAt = sequenceOf("availableAt", "releaseDate", "startDate")
+            .mapNotNull { key -> string(episode, key)?.let(::parseProviderInstant) }
+            .firstOrNull()
+        val scheduledInFutureWithoutReleaseEvidence = request.expectedAt?.isAfter(now) == true &&
+            !explicitlyAvailable && publicAt == null
+        if (explicitlyUnavailable || publicAt?.isAfter(now) == true || scheduledInFutureWithoutReleaseEvidence) {
+            return ProviderMetadataProbeResult.NotAvailableYet(resolved, now, "ADN_EPISODE_PLACEHOLDER_NOT_RELEASED")
+        }
         val expectedPresent = when (request.expectedLanguage) { "GER_SUB" -> sub; "GER_DUB" -> dub; else -> sub || dub }
         if (!expectedPresent) return ProviderMetadataProbeResult.NotAvailableYet(resolved, now, "ADN_EXPECTED_LANGUAGE_NOT_LISTED")
         val episodeUrl = episodeId?.let { "https://animationdigitalnetwork.com/de/video/-/$it" } ?: identity.sourceUrl
         return ProviderMetadataProbeResult.Available(ProviderEpisodeAvailability(
-            "ADN", request.seasonNumber, request.episodeNumber, true, sub, dub, null, episodeUrl,
+            "ADN", request.seasonNumber, request.episodeNumber, true, sub, dub, publicAt, episodeUrl,
             now, "OFFICIAL_STRUCTURED_METADATA", identity.sourceUrl
         ), resolved)
     }
@@ -252,10 +342,17 @@ private fun collectObjects(body: String): List<JSONObject> {
 
 private fun string(obj: JSONObject, key: String): String? = obj.opt(key)?.takeUnless { it == JSONObject.NULL }?.toString()?.takeIf(String::isNotBlank)
 private fun int(obj: JSONObject, key: String): Int? = when (val value = obj.opt(key)) { is Number -> value.toInt(); is String -> value.toDoubleOrNull()?.toInt(); else -> null }
-private fun stringSet(value: Any?): Set<String> = when (value) {
-    is JSONArray -> (0 until value.length()).mapNotNull { value.opt(it)?.toString()?.lowercase() }.toSet()
-    is String -> value.split(',').map { it.trim().lowercase() }.filter(String::isNotBlank).toSet()
-    else -> emptySet()
+private fun stringSet(value: Any?): Set<String> = buildSet {
+    fun collect(item: Any?) {
+        when (item) {
+            is JSONArray -> for (index in 0 until item.length()) collect(item.opt(index))
+            is JSONObject -> item.keys().forEachRemaining { collect(item.opt(it)) }
+            is String -> item.split(',').map { it.trim().lowercase() }
+                .filter(String::isNotBlank).forEach(::add)
+        }
+    }
+    collect(value)
 }
 private fun normalized(value: String) = Normalizer.normalize(value.lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "").replace(Regex("[^a-z0-9]+"), " ").trim()
 private fun titleSimilarity(a: String, b: String): Double { val aa=a.split(' ').filter(String::isNotBlank).toSet(); val bb=b.split(' ').filter(String::isNotBlank).toSet(); return if (aa.isEmpty() || bb.isEmpty()) 0.0 else aa.intersect(bb).size.toDouble()/aa.union(bb).size }
+private fun parseProviderInstant(value: String): Instant? = runCatching { Instant.parse(value) }.getOrNull()

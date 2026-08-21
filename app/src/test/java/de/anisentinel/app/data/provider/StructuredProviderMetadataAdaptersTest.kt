@@ -42,6 +42,32 @@ class StructuredProviderMetadataAdaptersTest {
         assertTrue(result is ProviderMetadataProbeResult.NotAvailableYet)
     }
 
+    @Test fun adnFuturePlaceholderIsNotAvailabilityEvidence() {
+        val result = AdnMetadataAdapter().parseEpisodes(
+            """{"videos":[{"id":4242,"season":1,"shortNumber":6,"languages":["vostde"],"available":false,"availableAt":"2026-08-17T10:00:00Z"}]}""",
+            request, adnIdentity, now
+        )
+        assertTrue(result is ProviderMetadataProbeResult.NotAvailableYet)
+    }
+
+    @Test fun adnMapsTitleWideSeasonTwoNumbersToLocalEpisodes() {
+        val body = """{"videos":[
+            {"id":30670,"season":2,"shortNumber":13,"languages":["vostde"],"available":true},
+            {"id":30676,"season":2,"shortNumber":19,"languages":["vostde"],"available":true},
+            {"id":30677,"season":2,"shortNumber":20,"languages":["vostde"],"available":false,"availableAt":"2026-08-21T16:30:00Z"}
+        ]}"""
+        val published = AdnMetadataAdapter().parseEpisodes(
+            body, request.copy(seasonNumber = 2, episodeNumber = 7), adnIdentity, now
+        ) as ProviderMetadataProbeResult.Available
+        assertEquals("30676", published.identity.episodeId)
+        assertEquals(7, published.availability.episodeNumber)
+
+        val upcoming = AdnMetadataAdapter().parseEpisodes(
+            body, request.copy(seasonNumber = 2, episodeNumber = 8), adnIdentity, now
+        )
+        assertTrue(upcoming is ProviderMetadataProbeResult.NotAvailableYet)
+    }
+
     @Test fun adnRejectsNonGermanMarketBeforeNetwork() = runBlocking {
         var called = false
         val adapter = AdnMetadataAdapter(ProviderMetadataTransport { _, _ -> called = true; MetadataHttpResponse(200, "{}", "x") }, Clock.fixed(now, ZoneOffset.UTC))

@@ -17,12 +17,18 @@ class FavoriteReleaseScheduler(
 ) {
     suspend fun reconcileAll() {
         val now = clock.instant().epochSecond
-        val desired = dao.activeFavorites().flatMap { favorite ->
-            dao.futureFavoriteReleases(favorite.animeId, favorite.languagePreference, now - 7 * 86_400)
-                .filterNot { de.anisentinel.app.domain.watcher.AvailabilityWatchStrategy.isTerminal(it.releaseStatus) }
-                .filterNot { it.isHistoricalImport }
-                .mapNotNull { release -> release.expectedAt?.let { release to favorite.languagePreference } }
-        }.associateBy { it.first.sourceReleaseId }
+        val desiredRows = mutableListOf<Pair<de.anisentinel.app.data.local.EpisodeReleaseEntity, String>>()
+        dao.activeFavorites().forEach { favorite ->
+            val selection = ReleaseWatchSelectionPolicy.select(
+                dao.futureFavoriteReleases(favorite.animeId, favorite.languagePreference, now - 7 * 86_400), now
+            )
+            selection.staleReleaseIds.forEach { releaseId ->
+                dao.updateReleaseStatus(releaseId, "STALE_UNCONFIRMED")
+                cancelAllReleaseWatchScheduling(releaseId)
+            }
+            desiredRows += selection.active.map { it to favorite.languagePreference }
+        }
+        val desired = desiredRows.associateBy { it.first.sourceReleaseId }
         val scheduled = dao.scheduledReleaseNotifications()
         // One-time V17 cleanup: remove legacy WorkManager Due timers. V18 uses only Exact Alarm
         // for the time-critical Due event; WorkManager remains limited to recovery and retries.
@@ -34,11 +40,26 @@ class FavoriteReleaseScheduler(
             cancelAlarm(stale.releaseId)
             dao.deleteScheduledReleaseNotification(stale.releaseId)
         }
-        desired.values.forEach { (release, language) ->
+        desired.values.sortedBy { it.first.expectedAt }.forEachIndexed { index, (release, language) ->
             val eventAt = requireNotNull(release.expectedAt)
             val workName = alarmName(release.sourceReleaseId)
-            scheduleAlarm(release.sourceReleaseId, eventAt)
-            scheduleFallbackAlarm(release.sourceReleaseId, eventAt + FALLBACK_DELAY_SECONDS)
+            if (eventAt > now) {
+                scheduleAlarm(release.sourceReleaseId, eventAt)
+            } else {
+                // Never register an exact alarm in the past: Android dispatches all such alarms
+                // immediately after process/package restart and can stall the foreground UI.
+                alarmIntent(release.sourceReleaseId, PendingIntent.FLAG_NO_CREATE)?.let { due ->
+                    context.getSystemService(AlarmManager::class.java).cancel(due)
+                    due.cancel()
+                }
+                // Cancel one-time work left by an older build before registering the new,
+                // deliberately sparse catch-up slot.
+                cancelAvailabilityCheck(release.sourceReleaseId)
+                scheduleAvailabilityCheck(release.sourceReleaseId, now + 10L + index * 60L)
+            }
+            // V25.4: no separate T+10 gate. The due check always tries the direct provider first;
+            // AniWorld is selected inside the pipeline only after a technical/unsupported result.
+            cancelFallbackAlarm(release.sourceReleaseId)
             dao.upsertScheduledReleaseNotifications(listOf(ScheduledReleaseNotificationEntity(
                 release.sourceReleaseId, release.animeId, eventAt, language, workName, now
             )))
@@ -137,7 +158,6 @@ class FavoriteReleaseScheduler(
         const val ACTION_RELEASE_DUE = "de.anisentinel.app.action.RELEASE_DUE"
         const val ACTION_RELEASE_FALLBACK = "de.anisentinel.app.action.RELEASE_FALLBACK"
         const val ACTION_RELEASE_CHECK = "de.anisentinel.app.action.RELEASE_CHECK"
-        const val FALLBACK_DELAY_SECONDS = 10 * 60L
         private const val FALLBACK_REQUEST_MASK = 0x4f1bbc
         private const val CHECK_REQUEST_MASK = 0x21a770
         private const val LEGACY_WORK_PREFIX = "anisentinel.favorite-release."

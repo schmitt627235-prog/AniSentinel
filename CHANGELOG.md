@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.25.5 – Release-Lifecycle, Staffelprovider und Anime-Katalog – 2026-08-21
+
+- Alte unbestätigte Releases bleiben nicht mehr sieben Tage als enge aktive Provider-Wächter bestehen. Ein Nachfolger beendet den alten engen Watcher nach einer kurzen Karenz; spätestens nach 24 Stunden wird er `STALE_UNCONFIRMED`.
+- `STALE_UNCONFIRMED` erfindet keine Verfügbarkeit, sendet keine technische Fehlermeldung und bleibt für späteren Historien-Backfill erhalten.
+- Technische Providerfehler werden persistent providerweit gezählt. Eine sichtbare Meldung ist erst nach mindestens drei aufeinanderfolgenden Fehlern über mindestens zehn Minuten möglich; ein sechsstündiger Provider-Cooldown verhindert Meldungsfluten.
+- `AVAILABLE` und `NOT_AVAILABLE_YET` setzen den technischen Fehlerzustand zurück.
+- Kanonische Anime-Staffeln, Provider-Staffel-Mappings und manuelle Providerpräferenzen werden getrennt in Room 26 gespeichert.
+- Providerwahl ist pro Staffel persistent. Ohne Nutzerauswahl wird Crunchyroll nur bevorzugt, wenn die konkrete Staffel im deutschen Mapping bestätigt ist.
+- JustWatch-Aktualisierungen überschreiben manuelle Providerwahlen nicht. Checker, Staffelzuordnung und Providerlink verwenden dieselbe effektive Auswahl.
+- Entdecken ist auf eindeutig erkannte Anime, Anime-Filme und belegte Live-Action-Adaptionen begrenzt. Gewöhnliche Filme und Serien aus dem breiteren JustWatch-Katalog werden ausgeblendet.
+- Genre- und Anbieterfilter im Entdecken-Bereich werden nur aus dem zulässigen Anime-Katalog gebildet.
+- JustWatch-Katalogabruf und titelweise Providerprüfungen verwenden getrennte, rate-limitierte Instanzen; eine Providerwarteschlange blockiert Entdecken nicht mehr.
+- Ein erfolgreicher Katalogabruf setzt den UI-Fehlerzustand nun korrekt auf `null`; Genres und Provideranreicherung laufen nachgelagert und können den Katalogerfolg nicht mehr verfälschen.
+- Regressionstests decken Release-Lifecycle, Providerfehler, Staffelwahl und die Anime-Kataloggrenze ab.
+
+## v0.25.4 – Provider-first Verfügbarkeitsprüfung – 2026-08-16
+
+- JustWatch Deutschland dient ausschließlich als Titel- und Anbieterresolver; konkrete Episoden werden direkt beim ausgewählten Anbieter geprüft.
+- Öffentliche Direktadapter für Crunchyroll, ADN, Netflix, Disney+ und ANIVERSE ergänzen den AniWorld-Fallback.
+- Provider-, Staffel- und Episodenidentitäten sowie belegte Ziel-URLs werden stabil in Room wiederverwendet.
+- `NOT_AVAILABLE_YET` bleibt still; technische Providerfehler und bestätigte Verfügbarkeit verwenden getrennte Statussemantik.
+- Historische Providerimporte erzeugen keine Alarme, Benachrichtigungen oder künstlichen Fälligkeiten.
+
 ## v0.25.3 – Ergebnisbenachrichtigungen und prüfbare Release-Statistik – 2026-08-16
 
 - Fälligkeit und Start einer Providerprüfung laufen ohne Nutzerbenachrichtigung.

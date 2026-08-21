@@ -223,6 +223,7 @@
     <string name="release_history_source_count">%1$s · %2$d gespeicherte Termine</string>
     <string name="open_source">Quelle öffnen</string>
     <string name="episode_available_at">Verfügbar bei %1$s</string>
+    <string name="episode_available_inferred_from_later">Aus der bestätigten Folge %1$d abgeleitet</string>
     <string name="episode_not_confirmed_checked">Bei der letzten Episodenprüfung noch nicht bestätigt</string>
     <string name="series_available_episode_unchecked">Serie/Staffel bei %1$s · diese Folge noch nicht einzeln bestätigt</string>
     <string name="settings_group_app">App</string>
@@ -367,6 +368,7 @@
     <string name="current_season_explanation">Aktuell laufende Titel aus echten AniWorld-Releasezyklen. JustWatch ergänzt nur optionale Metadaten.</string>
     <string name="current_season_count">Sommer 2026 · %1$d Titel</string>
     <string name="season_episode">Staffel %1$d · Folge %2$d</string>
+    <string name="season_number">Staffel %1$d</string>
     <string name="stats_today">Releases heute</string>
     <string name="stats_week">Releases diese Woche</string>
     <string name="stats_sub">GER SUB gesamt</string>
@@ -481,4 +483,7 @@
     <string name="postponement_checked_at">Zuletzt geprüft: %1$s</string>
     <string name="postponement_open_original">Originalmeldung öffnen</string>
     <string name="postponement_not_found">Verschiebungsmeldung nicht mehr verfügbar.</string>
+    <string name="provider_for_season">Anbieter für Staffel %1$d</string>
+    <string name="provider_automatic">Automatisch auswählen</string>
+    <string name="no_confirmed_dach_provider">Aktuell kein bestätigter DACH-Anbieter für diese Staffel.</string>
 </resources>

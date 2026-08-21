@@ -1,6 +1,7 @@
 package de.anisentinel.app.ui
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import de.anisentinel.app.AniSentinelApplication
@@ -87,7 +88,8 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
     val state = combine(data, filters, operation) { data, filters, op ->
         val releaseLanguages = data.releases.groupBy { it.animeId }.mapValues { (_, rows) -> rows.mapNotNull { it.releaseLanguage }.toSet() }
         val runningAnimeIds = data.releases.mapTo(mutableSetOf()) { it.animeId }
-        val filtered = data.catalog.filter { row ->
+        val discoverCatalog = data.catalog.filter { DiscoverCatalogPolicy.isVisible(it, runningAnimeIds) }
+        val filtered = discoverCatalog.filter { row ->
             (filters.genre == null || filters.genre in row.csvGenres()) &&
                 (filters.provider == null || filters.provider in row.csvProviders()) &&
                 when (filters.type) {
@@ -110,12 +112,12 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
         }
         DiscoverUiState(
             loading = op.loading,
-            genres = data.genres.filter { genre -> data.catalog.any { genre.genreId in it.csvGenres() } },
+            genres = data.genres.filter { genre -> discoverCatalog.any { genre.genreId in it.csvGenres() } },
             selectedGenre = filters.genre,
             typeFilter = filters.type,
             sort = filters.sort,
             providerFilter = filters.provider,
-            providers = StreamingProviderPolicy.visible(data.catalog.flatMap { it.csvProviders() }),
+            providers = StreamingProviderPolicy.visible(discoverCatalog.flatMap { it.csvProviders() }),
             titles = sorted.mapNotNull { row -> row.internalAnimeId?.let { row.toCatalogItem(it) } }
                 .distinctBy { it.stableKey },
             error = op.error,
@@ -130,11 +132,33 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
         refreshJob = viewModelScope.launch {
             operation.value = Operation(loading = true)
             val completed = try {
-                withTimeoutOrNull(30_000) {
-                    val genres = repository.refreshGenres()
+                withTimeoutOrNull(25_000) {
                     val catalog = repository.search(query = null, genreIds = setOf("ani"))
-                    val visibleIds = state.value.titles.take(8).mapTo(mutableSetOf()) { it.id }
-                    if (visibleIds.isNotEmpty()) {
+                    Log.i("AniSentinel-Discover", "catalog=$catalog")
+                    when (catalog) {
+                        is JustWatchCatalogResult.Success -> "OK"
+                        is JustWatchCatalogResult.Failed -> catalog.code
+                        JustWatchCatalogResult.SourceNotConfigured -> "SOURCE_NOT_CONFIGURED"
+                    }
+                }
+            } catch (_: Exception) { null }
+            operation.value = Operation(
+                loading = false,
+                error = when (completed) {
+                    "OK" -> null
+                    null -> "REFRESH_FAILED"
+                    else -> completed
+                }
+            )
+            if (completed == "OK") {
+                // Facets are useful but secondary. A slow genre request must not delay
+                // or invalidate a successful catalogue refresh.
+                withTimeoutOrNull(10_000) { runCatching { repository.refreshGenres() } }
+                val visibleIds = state.value.titles.take(8).mapTo(mutableSetOf()) { it.id }
+                if (visibleIds.isNotEmpty()) {
+                    // Provider enrichment is best effort. It must not turn a successful
+                    // JustWatch catalogue refresh into a false refresh error.
+                    withTimeoutOrNull(8_000) {
                         runCatching {
                             container.providerPipelineRepository.syncTitleProviders(
                                 animeIds = visibleIds,
@@ -142,15 +166,8 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
                             )
                         }
                     }
-                    (genres as? JustWatchCatalogResult.Failed)?.code
-                        ?: (catalog as? JustWatchCatalogResult.Failed)?.code
-                        ?: "OK"
                 }
-            } catch (_: Exception) { null }
-            operation.value = Operation(
-                loading = false,
-                error = completed?.takeUnless { it == "OK" } ?: "REFRESH_FAILED"
-            )
+            }
         }
     }
     fun selectGenre(id: String?) { selectedGenre.value = id }
@@ -212,8 +229,8 @@ class GlobalSearchViewModel(application: Application) : AndroidViewModel(applica
     }
 }
 
-private fun JustWatchCatalogTitleEntity.csvGenres() = genres.split(',').filter(String::isNotBlank).toSet()
-private fun JustWatchCatalogTitleEntity.csvProviders() = providers.split(',').filter(String::isNotBlank)
+internal fun JustWatchCatalogTitleEntity.csvGenres() = genres.split(',').filter(String::isNotBlank).toSet()
+internal fun JustWatchCatalogTitleEntity.csvProviders() = providers.split(',').filter(String::isNotBlank)
 private fun JustWatchCatalogTitleEntity.toCatalogItem(id: String) = CatalogAnimeItem(
     stableKey = justWatchId,
     id = id,

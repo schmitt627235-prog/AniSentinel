@@ -38,6 +38,18 @@ class AdnPublicHistoryParserTest {
         assertTrue(parsed.observedDateFields.isEmpty())
     }
 
+    @Test fun normalizesAdnTitleWideNumbersPerSeason() {
+        val parsed = AdnPublicHistoryParser.parse("""
+            {"videos":[
+              {"id":"30670","shortNumber":13,"season":2,"languages":["vostde"]},
+              {"id":"30676","shortNumber":19,"season":2,"languages":["vostde"]},
+              {"id":"30677","shortNumber":20,"season":2,"languages":["vostde"]}
+            ]}
+        """.trimIndent())
+        assertEquals(listOf(1, 7, 8), parsed.episodes.map { it.episodeNumber })
+        assertEquals(listOf("30670", "30676", "30677"), parsed.episodes.map { it.episodeId })
+    }
+
     @Test fun providerEpisodeSourceWinsAndEqualPriorityConflictsAreNotSilent() {
         assertTrue(HistoricalSourcePolicy.conflicts(100, 200))
         assertEquals(300, HistoricalSourcePolicy.PROVIDER_EPISODE)

@@ -151,13 +151,46 @@ interface AniSentinelDao {
     @Query("SELECT * FROM provider_metadata_identities WHERE animeId = :animeId ORDER BY lastCheckedAt DESC")
     suspend fun providerMetadataIdentities(animeId: String): List<ProviderMetadataIdentityEntity>
 
+    @Query("SELECT * FROM anime_seasons WHERE animeId = :animeId ORDER BY canonicalSeasonNumber")
+    fun observeAnimeSeasons(animeId: String): Flow<List<AnimeSeasonEntity>>
+
+    @Query("SELECT * FROM provider_season_mappings WHERE animeId = :animeId ORDER BY canonicalSeasonNumber, provider")
+    fun observeProviderSeasonMappings(animeId: String): Flow<List<ProviderSeasonMappingEntity>>
+
+    @Query("SELECT * FROM provider_season_mappings WHERE animeId = :animeId AND canonicalSeasonNumber = :seasonNumber AND region = 'DE' AND available = 1 ORDER BY provider")
+    suspend fun availableProviderSeasonMappings(animeId: String, seasonNumber: Int): List<ProviderSeasonMappingEntity>
+
+    @Query("SELECT * FROM provider_season_mappings WHERE animeId = :animeId AND canonicalSeasonNumber = :seasonNumber AND region = 'DE' ORDER BY provider")
+    suspend fun providerSeasonMappings(animeId: String, seasonNumber: Int): List<ProviderSeasonMappingEntity>
+
+    @Query("SELECT * FROM provider_preferences WHERE animeId = :animeId ORDER BY seasonNumber")
+    fun observeProviderPreferences(animeId: String): Flow<List<ProviderPreferenceEntity>>
+
+    @Query("SELECT * FROM provider_preferences WHERE animeId = :animeId AND seasonNumber IN (0, :seasonNumber) ORDER BY seasonNumber DESC")
+    suspend fun providerPreferences(animeId: String, seasonNumber: Int): List<ProviderPreferenceEntity>
+
+    @Upsert suspend fun upsertAnimeSeason(row: AnimeSeasonEntity)
+    @Upsert suspend fun upsertProviderSeasonMapping(row: ProviderSeasonMappingEntity)
+    @Upsert suspend fun upsertProviderPreference(row: ProviderPreferenceEntity)
+
+    @Query("DELETE FROM provider_preferences WHERE animeId = :animeId AND seasonNumber = :seasonNumber")
+    suspend fun deleteProviderPreference(animeId: String, seasonNumber: Int)
+
+    @Query("SELECT * FROM provider_failure_states WHERE providerKey = :providerKey LIMIT 1")
+    suspend fun providerFailureState(providerKey: String): ProviderFailureStateEntity?
+
+    @Upsert suspend fun upsertProviderFailureState(row: ProviderFailureStateEntity)
+
+    @Query("DELETE FROM provider_failure_states WHERE providerKey = :providerKey")
+    suspend fun deleteProviderFailureState(providerKey: String)
+
     @Query("SELECT * FROM episode_releases WHERE sourceReleaseId = :releaseId LIMIT 1")
     suspend fun release(releaseId: String): EpisodeReleaseEntity?
 
     @Query("SELECT * FROM episode_releases WHERE animeId = :animeId AND isHistoricalImport = 0 AND expectedAt IS NOT NULL AND expectedAt >= :fromEpochSeconds AND ((:languagePreference = 'BOTH') OR (:languagePreference = 'SUB' AND releaseLanguage = 'GER_SUB') OR (:languagePreference = 'DUB' AND releaseLanguage = 'GER_DUB')) ORDER BY expectedAt")
     suspend fun futureFavoriteReleases(animeId: String, languagePreference: String, fromEpochSeconds: Long): List<EpisodeReleaseEntity>
 
-    @Query("SELECT er.* FROM episode_releases er INNER JOIN favorites f ON f.animeId = er.animeId WHERE f.enabled = 1 AND er.isHistoricalImport = 0 AND er.expectedAt IS NOT NULL AND er.expectedAt <= :nowEpochSeconds AND er.expectedAt >= :oldestEpochSeconds AND ((f.languagePreference = 'BOTH') OR (f.languagePreference = 'SUB' AND er.releaseLanguage = 'GER_SUB') OR (f.languagePreference = 'DUB' AND er.releaseLanguage = 'GER_DUB')) ORDER BY er.expectedAt")
+    @Query("SELECT er.* FROM episode_releases er INNER JOIN favorites f ON f.animeId = er.animeId WHERE f.enabled = 1 AND er.isHistoricalImport = 0 AND er.expectedAt IS NOT NULL AND er.expectedAt <= :nowEpochSeconds AND er.expectedAt >= :oldestEpochSeconds AND er.releaseStatus NOT IN ('AVAILABLE', 'POSTPONED', 'DELAYED', 'DELAYED_CONFIRMED', 'STALE_UNCONFIRMED') AND er.releaseStatus NOT LIKE 'AVAILABLE_%' AND ((f.languagePreference = 'BOTH') OR (f.languagePreference = 'SUB' AND er.releaseLanguage = 'GER_SUB') OR (f.languagePreference = 'DUB' AND er.releaseLanguage = 'GER_DUB')) ORDER BY er.expectedAt")
     suspend fun dueFavoriteReleases(nowEpochSeconds: Long, oldestEpochSeconds: Long): List<EpisodeReleaseEntity>
 
     @Query("SELECT COUNT(*) FROM favorites WHERE animeId = :animeId")
@@ -415,6 +448,9 @@ interface AniSentinelDao {
 
     @Query("SELECT * FROM episode_releases WHERE animeId = :animeId ORDER BY expectedAt DESC")
     fun observeEpisodeReleasesForAnime(animeId: String): Flow<List<EpisodeReleaseEntity>>
+
+    @Query("SELECT * FROM episode_releases WHERE animeId = :animeId ORDER BY expectedAt DESC")
+    suspend fun episodeReleasesForAnime(animeId: String): List<EpisodeReleaseEntity>
 
     @Query("""
         SELECT * FROM episode_releases

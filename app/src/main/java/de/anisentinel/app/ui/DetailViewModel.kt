@@ -47,6 +47,9 @@ data class DetailUiState(
     ,val justWatchGenreLabels: Map<String, String> = emptyMap()
     ,val metadataRefreshing: Boolean = false
     ,val metadataRefreshError: String? = null
+    ,val canonicalSeasons: List<de.anisentinel.app.data.local.AnimeSeasonEntity> = emptyList()
+    ,val providerSeasonMappings: List<de.anisentinel.app.data.local.ProviderSeasonMappingEntity> = emptyList()
+    ,val providerPreferences: List<de.anisentinel.app.data.local.ProviderPreferenceEntity> = emptyList()
 )
 
 class DetailViewModel(
@@ -97,6 +100,21 @@ class DetailViewModel(
         viewModelScope.launch {
             container.database.aniSentinelDao().observeActivePostponementsForAnime(animeId).collect { rows ->
                 _state.value = _state.value.copy(postponements = rows)
+            }
+        }
+        viewModelScope.launch {
+            container.database.aniSentinelDao().observeAnimeSeasons(animeId).collect { rows ->
+                _state.value = _state.value.copy(canonicalSeasons = rows)
+            }
+        }
+        viewModelScope.launch {
+            container.database.aniSentinelDao().observeProviderSeasonMappings(animeId).collect { rows ->
+                _state.value = _state.value.copy(providerSeasonMappings = rows)
+            }
+        }
+        viewModelScope.launch {
+            container.database.aniSentinelDao().observeProviderPreferences(animeId).collect { rows ->
+                _state.value = _state.value.copy(providerPreferences = rows)
             }
         }
         viewModelScope.launch {
@@ -238,6 +256,23 @@ class DetailViewModel(
         }
     }
 
+    fun refreshSeasonAvailability(seasonNumber: Int) {
+        if (_state.value.providerChecking) return
+        viewModelScope.launch {
+            _state.value = _state.value.copy(providerChecking = true)
+            try {
+                val now = java.time.Instant.now().epochSecond
+                _state.value.releases
+                    .filterNot { it.isHistoricalImport || it.sourceReleaseId.startsWith("adn-history:") }
+                    .filter { (it.seasonNumber ?: 1) == seasonNumber && (it.expectedAt ?: Long.MAX_VALUE) <= now }
+                    .maxByOrNull { it.expectedAt ?: Long.MIN_VALUE }
+                    ?.let { container.providerPipelineRepository.diagnoseHistoricalEpisode(it.sourceReleaseId) }
+            } finally {
+                _state.value = _state.value.copy(providerChecking = false)
+            }
+        }
+    }
+
     fun importCrunchyrollHistory(seriesUrl: String) {
         if (_state.value.historyImportRunning) return
         viewModelScope.launch {
@@ -304,6 +339,22 @@ class DetailViewModel(
     fun setLanguage(language: LanguagePreference) {
         _state.value = _state.value.copy(language = language)
         updateFavoritePreferences()
+    }
+
+    fun setProviderPreference(seasonNumber: Int, provider: String) {
+        viewModelScope.launch {
+            container.database.aniSentinelDao().upsertProviderPreference(
+                de.anisentinel.app.data.local.ProviderPreferenceEntity(
+                    animeId, seasonNumber, provider, java.time.Instant.now().epochSecond
+                )
+            )
+        }
+    }
+
+    fun clearProviderPreference(seasonNumber: Int) {
+        viewModelScope.launch {
+            container.database.aniSentinelDao().deleteProviderPreference(animeId, seasonNumber)
+        }
     }
 
     fun cycleWatchProfile() {

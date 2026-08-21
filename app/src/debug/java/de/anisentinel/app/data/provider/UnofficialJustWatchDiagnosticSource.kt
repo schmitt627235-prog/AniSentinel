@@ -147,8 +147,10 @@ class UnofficialJustWatchDiagnosticSource : JustWatchPartnerSource, JustWatchCat
             }
             JustWatchCatalogResult.Success(genres = genres)
         } catch (e: HttpStatusException) {
+            Log.w(TAG, "genres HTTP ${e.status}: ${e.message}")
             JustWatchCatalogResult.Failed("HTTP_${e.status}", e.status == 429 || e.status >= 500)
         } catch (e: Exception) {
+            Log.w(TAG, "genres request failed", e)
             JustWatchCatalogResult.Failed("${e::class.simpleName}:${e.message.orEmpty().take(80)}", true)
         }
     }
@@ -179,8 +181,10 @@ class UnofficialJustWatchDiagnosticSource : JustWatchPartnerSource, JustWatchCat
                 }
             JustWatchCatalogResult.Success(titles = titles)
         } catch (e: HttpStatusException) {
+            Log.w(TAG, "catalog HTTP ${e.status}: ${e.message}")
             JustWatchCatalogResult.Failed("HTTP_${e.status}", e.status == 429 || e.status >= 500)
         } catch (e: Exception) {
+            Log.w(TAG, "catalog request failed", e)
             JustWatchCatalogResult.Failed("${e::class.simpleName}:${e.message.orEmpty().take(80)}", true)
         }
     }

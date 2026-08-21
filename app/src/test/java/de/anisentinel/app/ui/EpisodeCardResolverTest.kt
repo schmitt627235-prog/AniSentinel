@@ -12,6 +12,13 @@ class EpisodeCardResolverTest {
         assertEquals(listOf(1, 2, 3, 4, 5, 6, 7), EpisodeCardResolver.visibleEpisodeNumbers(7, rows))
     }
 
+    @Test fun currentSeasonCountDoesNotInventProviderWideEpisodeNumbers() {
+        assertEquals(
+            listOf(1, 2, 3, 4, 5, 6, 7),
+            EpisodeCardResolver.visibleEpisodeNumbers(7, listOf(release("aniworld:s2:e7")))
+        )
+    }
+
     @Test fun availabilityCheckOnlyForNewestUnconfirmedDueRelease() {
         assertTrue(AvailabilityActionPolicy.showCheck("due", setOf("due"), false))
         assertFalse(AvailabilityActionPolicy.showCheck("due", setOf("due"), true))
