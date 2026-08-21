@@ -1,6 +1,6 @@
 # AniSentinel
 
-Aktueller Diagnose-/Teststand: **v0.25.5**. JustWatch Deutschland löst Titel und Anbieter auf; die konkrete Staffel, Episode und deutsche Sprachfassung werden anschließend direkt über öffentliche Metadaten des ausgewählten Providers geprüft. AniWorld bleibt der letzte technische Fallback. Kurzzeitige technische Providerfehler bleiben still und werden erst nach einem persistenten, providerweit deduplizierten Fehlerzustand benachrichtigt.
+Aktueller Diagnose-/Teststand: **v0.25.6**. JustWatch Deutschland löst Titel und Anbieter auf; die konkrete Staffel, Episode und deutsche Sprachfassung werden anschließend direkt über öffentliche Metadaten des ausgewählten Providers geprüft. Provider können als animeweite Vorgabe und als gezielte Staffel-Ausnahme gewählt werden, jedoch nur nach bestätigtem deutschem Staffel-Mapping. Ungeprüfte alte Release-Zeilen erzeugen keine Phantomstaffeln. AniWorld bleibt der letzte technische Fallback. Kurzzeitige technische Providerfehler bleiben still und werden erst nach einem persistenten, providerweit deduplizierten Fehlerzustand benachrichtigt.
 
 Der Bereich **Entdecken** zeigt aus dem deutschen JustWatch-Datenbestand nur sicher als Anime erkannte Serien und Filme sowie ausdrücklich belegte Live-Action-Adaptionen. Der allgemeine JustWatch-Film- und Serienkatalog wird dort nicht angeboten.
 

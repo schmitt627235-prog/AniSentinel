@@ -484,6 +484,10 @@
     <string name="postponement_open_original">Originalmeldung öffnen</string>
     <string name="postponement_not_found">Verschiebungsmeldung nicht mehr verfügbar.</string>
     <string name="provider_for_season">Anbieter für Staffel %1$d</string>
+    <string name="preferred_provider_for_anime">Bevorzugter Anbieter für diesen Anime</string>
+    <string name="anime_provider_preference_hint">Gilt für jede Staffel, in der dieser Anbieter bestätigt verfügbar ist.</string>
+    <string name="use_anime_provider_preference">Anime-Vorgabe verwenden</string>
+    <string name="provider_preference_no_longer_available">Die gespeicherte Auswahl %1$s ist für diese Staffel nicht mehr verfügbar. AniSentinel verwendet automatisch einen bestätigten Anbieter.</string>
     <string name="provider_automatic">Automatisch auswählen</string>
     <string name="no_confirmed_dach_provider">Aktuell kein bestätigter DACH-Anbieter für diese Staffel.</string>
 </resources>

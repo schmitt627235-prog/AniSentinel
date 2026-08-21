@@ -19,8 +19,9 @@ object ProviderSelectionPolicy {
         }.map { normalize(it.provider) }.toSet()
         fun reference(provider: String) = references.firstOrNull { normalize(it.provider) == normalize(provider) }
 
-        preferences.firstOrNull { it.seasonNumber == seasonNumber }
-            ?.let { preference -> reference(preference.provider)?.let { return Result(listOf(it), "USER_SEASON") } }
+        preferences.firstOrNull {
+            it.seasonNumber == seasonNumber && normalize(it.provider) in availableProviders
+        }?.let { preference -> reference(preference.provider)?.let { return Result(listOf(it), "USER_SEASON") } }
         preferences.firstOrNull { it.seasonNumber == 0 && normalize(it.provider) in availableProviders }
             ?.let { preference -> reference(preference.provider)?.let { return Result(listOf(it), "USER_ANIME") } }
         references.firstOrNull {
@@ -31,7 +32,10 @@ object ProviderSelectionPolicy {
 
         // No provider-season mapping exists yet: probe references once to discover the mapping.
         return if (mappings.none { it.canonicalSeasonNumber == seasonNumber }) {
-            Result(references, "DISCOVERY")
+            Result(
+                references.sortedBy { if (normalize(it.provider) == "crunchyroll") 0 else 1 },
+                "DISCOVERY"
+            )
         } else Result(emptyList(), "NO_CONFIRMED_DACH_PROVIDER")
     }
 
