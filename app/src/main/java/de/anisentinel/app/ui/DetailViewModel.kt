@@ -60,6 +60,7 @@ class DetailViewModel(
     private val container = (application as AniSentinelApplication).container
     private var anime: Anime? = null
     private var automaticCrunchyrollHistoryAttempted = false
+    private var historicalSeasonMappingsReconciled = false
     private val _state = MutableStateFlow(
         DetailUiState(anime = anime, loading = anime == null)
     )
@@ -132,6 +133,10 @@ class DetailViewModel(
         viewModelScope.launch {
             container.database.aniSentinelDao().observeEpisodeReleasesForAnime(animeId).collect { rows ->
                 _state.value = _state.value.copy(releases = rows)
+                if (!historicalSeasonMappingsReconciled) {
+                    historicalSeasonMappingsReconciled = true
+                    reconcileHistoricalSeasonMappings(rows)
+                }
             }
         }
         viewModelScope.launch {
@@ -180,9 +185,17 @@ class DetailViewModel(
                     automaticCrunchyrollHistoryAttempted = true
                     viewModelScope.launch {
                         _state.value = _state.value.copy(historyImportRunning = true, historyImportResult = null)
-                        val result = container.crunchyrollHistoricalReleaseImporter.importFromProviderUrl(
-                            animeId, currentAnime.title, offer.offerUrl!!
+                        val directResult = container.crunchyrollHistoricalReleaseImporter.importFromProviderUrl(
+                            animeId, currentAnime.title, offer.offerUrl!!,
+                            titleAliases = verifiedCatalogAliases()
                         )
+                        val result = if (directResult is de.anisentinel.app.data.provider.HistoricalImportResult.Failed) {
+                            container.crunchyrollHistoricalReleaseImporter.importByTitle(
+                                animeId,
+                                currentAnime.title,
+                                titleAliases = verifiedCatalogAliases()
+                            )
+                        } else directResult
                         _state.value = _state.value.copy(
                             historyImportRunning = false,
                             historyImportResult = when (result) {
@@ -199,6 +212,56 @@ class DetailViewModel(
             container.settingsRepository.settings.collect {
                 _state.value = _state.value.copy(watchProfileId = it.watchProfileId)
             }
+        }
+    }
+
+    private suspend fun reconcileHistoricalSeasonMappings(
+        releases: List<de.anisentinel.app.data.local.EpisodeReleaseEntity>
+    ) {
+        val confirmed = releases.filter {
+            it.isHistoricalImport && !it.provider.isNullOrBlank() &&
+                it.metadataSource != "ANIWORLD_CALENDAR" &&
+                (!it.providerUrl.isNullOrBlank() || !it.sourceUrl.isNullOrBlank())
+        }.groupBy { release ->
+            val provider = when {
+                release.provider.equals("ADN", true) ||
+                    release.provider.orEmpty().contains("Animation Digital Network", true) -> "ADN"
+                release.provider.orEmpty().contains("Crunchyroll", true) -> "Crunchyroll"
+                else -> release.provider.orEmpty()
+            }
+            (release.seasonNumber ?: 1) to provider
+        }
+        val dao = container.database.aniSentinelDao()
+        confirmed.forEach { (key, rows) ->
+            val (seasonNumber, provider) = key
+            if (seasonNumber <= 0 || provider.isBlank()) return@forEach
+            val evidence = rows.maxByOrNull { it.fetchedAt } ?: return@forEach
+            val providerSeriesId = when (provider) {
+                "ADN" -> Regex("/show/([A-Za-z0-9_-]+)")
+                    .find(evidence.sourceUrl.orEmpty())?.groupValues?.getOrNull(1)
+                "Crunchyroll" -> de.anisentinel.app.data.provider.CrunchyrollPublicWebAdapter
+                    .crunchyrollSeriesId(evidence.sourceUrl.orEmpty())
+                else -> null
+            }
+            dao.upsertAnimeSeason(
+                de.anisentinel.app.data.local.AnimeSeasonEntity(
+                    animeId, seasonNumber, evidence.metadataSource, evidence.fetchedAt
+                )
+            )
+            dao.upsertProviderSeasonMapping(
+                de.anisentinel.app.data.local.ProviderSeasonMappingEntity(
+                    animeId = animeId,
+                    canonicalSeasonNumber = seasonNumber,
+                    provider = provider,
+                    providerSeasonNumber = seasonNumber,
+                    providerSeriesId = providerSeriesId,
+                    providerSeasonId = null,
+                    providerSeriesUrl = evidence.sourceUrl,
+                    region = "DE",
+                    available = true,
+                    lastConfirmedAt = evidence.fetchedAt
+                )
+            )
         }
     }
 
@@ -245,7 +308,7 @@ class DetailViewModel(
                     .sortedByDescending { it.expectedAt ?: Long.MIN_VALUE }
                     .take(2)
                     .forEach { release ->
-                        container.providerPipelineRepository.diagnoseHistoricalEpisode(release.sourceReleaseId)
+                        container.providerPipelineRepository.checkEpisode(release.sourceReleaseId)
                     }
                 _state.value = _state.value.copy(
                     metadataRefreshError = (metadata as? de.anisentinel.app.domain.provider.JustWatchCatalogResult.Failed)?.code
@@ -266,7 +329,7 @@ class DetailViewModel(
                     .filterNot { it.isHistoricalImport || it.sourceReleaseId.startsWith("adn-history:") }
                     .filter { (it.seasonNumber ?: 1) == seasonNumber && (it.expectedAt ?: Long.MAX_VALUE) <= now }
                     .maxByOrNull { it.expectedAt ?: Long.MIN_VALUE }
-                    ?.let { container.providerPipelineRepository.diagnoseHistoricalEpisode(it.sourceReleaseId) }
+                    ?.let { container.providerPipelineRepository.checkEpisode(it.sourceReleaseId) }
             } finally {
                 _state.value = _state.value.copy(providerChecking = false)
             }
@@ -277,7 +340,16 @@ class DetailViewModel(
         if (_state.value.historyImportRunning) return
         viewModelScope.launch {
             _state.value = _state.value.copy(historyImportRunning = true, historyImportResult = null)
-            val result = container.crunchyrollHistoricalReleaseImporter.import(animeId, seriesUrl)
+            val currentAnime = anime
+            val aliases = verifiedCatalogAliases()
+            // Stored provider URLs can originate from stale JustWatch redirects. They
+            // establish the provider only; Crunchyroll identity is resolved from the
+            // verified AniWorld/JustWatch title aliases.
+            val result = if (currentAnime != null) {
+                container.crunchyrollHistoricalReleaseImporter.importByTitle(
+                    animeId, currentAnime.title, titleAliases = aliases
+                )
+            } else de.anisentinel.app.data.provider.HistoricalImportResult.Failed("ANIME_NOT_LOADED")
             _state.value = _state.value.copy(
                 historyImportRunning = false,
                 historyImportResult = when (result) {
@@ -342,19 +414,36 @@ class DetailViewModel(
     }
 
     fun setProviderPreference(seasonNumber: Int, provider: String) {
-        val isConfirmed = _state.value.providerSeasonMappings.any { mapping ->
+        val isMapped = _state.value.providerSeasonMappings.any { mapping ->
             mapping.region == "DE" && mapping.available &&
-                mapping.provider.equals(provider, ignoreCase = true) &&
+                ProviderPreferenceUiPolicy.canonicalName(mapping.provider).equals(provider, ignoreCase = true) &&
                 (seasonNumber == 0 || mapping.canonicalSeasonNumber == seasonNumber)
         }
-        if (!isConfirmed) return
+        val directReference = _state.value.providerReferences
+            .filter { ProviderPreferenceUiPolicy.canonicalName(it.provider).equals(provider, true) }
+            .sortedBy { reference ->
+                if (provider.equals("Crunchyroll", true) && reference.provider.contains("Amazon", true)) 1 else 0
+            }
+            .firstOrNull()
+        if (!isMapped && (seasonNumber != 0 || directReference == null)) return
         viewModelScope.launch {
             container.database.aniSentinelDao().upsertProviderPreference(
                 de.anisentinel.app.data.local.ProviderPreferenceEntity(
                     animeId, seasonNumber, provider, java.time.Instant.now().epochSecond
                 )
             )
+            val currentAnime = anime
+            if (seasonNumber == 0 && provider.equals("Crunchyroll", true) &&
+                currentAnime != null && directReference?.seriesUrl != null) {
+                importCrunchyrollHistory(directReference.seriesUrl)
+            }
         }
+    }
+
+    private suspend fun verifiedCatalogAliases(): Set<String> {
+        val dao = container.database.aniSentinelDao()
+        return (dao.justWatchMatches(animeId).filter { it.status == "MATCHED" }.map { it.title } +
+            listOfNotNull(dao.justWatchCatalogTitleForAnime(animeId)?.title)).filter(String::isNotBlank).toSet()
     }
 
     fun clearProviderPreference(seasonNumber: Int) {

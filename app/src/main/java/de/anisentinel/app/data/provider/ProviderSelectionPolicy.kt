@@ -17,12 +17,19 @@ object ProviderSelectionPolicy {
         val availableProviders = mappings.filter {
             it.canonicalSeasonNumber == seasonNumber && it.region == "DE" && it.available
         }.map { normalize(it.provider) }.toSet()
-        fun reference(provider: String) = references.firstOrNull { normalize(it.provider) == normalize(provider) }
+        fun reference(provider: String) = references.firstOrNull { it.provider.equals(provider, true) }
+            ?: references.firstOrNull {
+                normalize(it.provider) == normalize(provider) &&
+                    !(provider.equals("Crunchyroll", true) && it.provider.contains("Amazon", true))
+            }
+            ?: references.firstOrNull { normalize(it.provider) == normalize(provider) }
 
         preferences.firstOrNull {
             it.seasonNumber == seasonNumber && normalize(it.provider) in availableProviders
         }?.let { preference -> reference(preference.provider)?.let { return Result(listOf(it), "USER_SEASON") } }
-        preferences.firstOrNull { it.seasonNumber == 0 && normalize(it.provider) in availableProviders }
+        // An anime-wide choice may come from a confirmed German JustWatch provider
+        // reference before its complete provider catalogue has finished importing.
+        preferences.firstOrNull { it.seasonNumber == 0 }
             ?.let { preference -> reference(preference.provider)?.let { return Result(listOf(it), "USER_ANIME") } }
         references.firstOrNull {
             normalize(it.provider) == "crunchyroll" && normalize(it.provider) in availableProviders
@@ -42,4 +49,6 @@ object ProviderSelectionPolicy {
     private fun normalize(value: String) = value.lowercase()
         .replace(" amazon channel", "")
         .replace(Regex("[^a-z0-9]+"), "")
+        .replace("standardwithads", "")
+        .replace("withads", "")
 }

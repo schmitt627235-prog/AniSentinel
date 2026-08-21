@@ -28,6 +28,39 @@ class PublicProviderEpisodeAdaptersTest {
         val html = """<html><body><h1>Example</h1><p>Anime 2026</p></body></html>"""
         val result = NetflixPublicEpisodeAdapter(transport(html, "https://www.netflix.com/title/82760630"), clock)
             .probe(subRequest.copy(providerUrl = "https://www.netflix.com/title/82760630"), null)
+        assertTrue(result is ProviderMetadataProbeResult.CheckFailed)
+        assertEquals(
+            "NETFLIX_PUBLIC_EPISODE_INDEX_NOT_PARSEABLE",
+            (result as ProviderMetadataProbeResult.CheckFailed).code
+        )
+    }
+
+    @Test fun netflixStructuredMetadataConfirmsChainsmokerStyleSeasonOneEpisodeEight() = runBlocking {
+        val html = """<html><body><script type="application/ld+json">
+            {"videoId":"81726354","seasonNumber":1,"episodeNumber":8,
+             "episodeUrl":"https://www.netflix.com/watch/81726354",
+             "audio":"Japanisch","subtitles":"Deutsche Untertitel"}
+        </script></body></html>"""
+        val request = subRequest.copy(title = "Chainsmoker Cat", seasonNumber = 1, episodeNumber = 8)
+        val result = NetflixPublicEpisodeAdapter(
+            transport(html, "https://www.netflix.com/title/81720000"), clock
+        ).probe(request.copy(providerUrl = "https://www.netflix.com/title/81720000"), null)
+
+        assertTrue(result is ProviderMetadataProbeResult.Available)
+        result as ProviderMetadataProbeResult.Available
+        assertEquals("81726354", result.identity.episodeId)
+        assertEquals("https://www.netflix.com/watch/81726354", result.availability.episodeUrl)
+    }
+
+    @Test fun parsedStructuredCatalogueCanConcludeEpisodeNotAvailable() = runBlocking {
+        val html = """<script type="application/json">
+            {"videoId":"81726357","seasonNumber":1,"episodeNumber":7,"subtitles":"Deutsche Untertitel"}
+        </script>"""
+        val request = subRequest.copy(seasonNumber = 1, episodeNumber = 8)
+        val result = NetflixPublicEpisodeAdapter(
+            transport(html, "https://www.netflix.com/title/81720000"), clock
+        ).probe(request.copy(providerUrl = "https://www.netflix.com/title/81720000"), null)
+
         assertTrue(result is ProviderMetadataProbeResult.NotAvailableYet)
     }
 

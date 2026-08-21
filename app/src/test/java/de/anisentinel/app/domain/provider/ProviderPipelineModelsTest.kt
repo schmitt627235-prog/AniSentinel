@@ -35,6 +35,15 @@ class ProviderPipelineModelsTest {
         assertNull(StreamingProviderPolicy.confirmedDisplayProvider(listOf("Amazon DVD / Blu-ray", "Buecher")))
     }
 
+    @Test fun crunchyrollAmazonChannelIsCollapsedButAniverseChannelRemainsDistinct() {
+        assertEquals(
+            listOf("ANIVERSE Amazon Channel", "Crunchyroll"),
+            StreamingProviderPolicy.visible(
+                listOf("Crunchyroll", "Crunchyroll Amazon Channel", "ANIVERSE Amazon Channel")
+            )
+        )
+    }
+
     @Test fun providerMarketIsStrictlyGermanForTheAppCatalog() {
         assertTrue(ProviderMarketPolicy.isAppMarket("DE"))
         assertFalse(ProviderMarketPolicy.isAppMarket("FR"))

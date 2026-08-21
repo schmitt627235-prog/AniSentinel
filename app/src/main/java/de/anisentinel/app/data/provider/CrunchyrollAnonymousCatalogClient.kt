@@ -7,6 +7,11 @@ import java.time.Clock
 import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -23,7 +28,8 @@ data class CrunchyrollCatalogEpisode(
     val subtitleLocales: Set<String>,
     val availableAt: Instant?,
     val availabilityStatus: String?,
-    val episodeUrl: String
+    val episodeUrl: String,
+    val seasonTitle: String? = null
 ) {
     val releaseLanguages: Set<String> = buildSet {
         // Crunchyroll exposes one episode object per audio version. German subtitles
@@ -122,9 +128,9 @@ class CrunchyrollAnonymousCatalogClient(
         val query = title?.takeIf(String::isNotBlank) ?: return null
         val encoded = URLEncoder.encode(query, Charsets.UTF_8.name())
         val response = transport.get("https://www.crunchyroll.com/content/v2/discover/search?q=$encoded&n=20&type=series&locale=de-DE")
-        if (response.status !in 200..299) return null
+        check(response.status in 200..299) { "CRUNCHYROLL_CATALOG_HTTP_${response.status}" }
         val wanted = normalizedCatalogTitle(query)
-        return collectJsonObjects(response.body)
+        return directSearchResults(response.body)
             .filter { it.optString("type").equals("series", true) || it.has("series_metadata") || it.has("series_id") }
             .mapNotNull { obj ->
                 val metadata = obj.optJSONObject("series_metadata")
@@ -145,14 +151,40 @@ class CrunchyrollAnonymousCatalogClient(
         // incorrectly shown as unconfirmed across the whole app.
         val seasonsUrl = "https://www.crunchyroll.com/content/v2/cms/series/$seriesId/seasons?locale=de-DE"
         val seasons = loadAllPages(seasonsUrl)
-        val episodes = mutableListOf<CrunchyrollCatalogEpisode>()
+        val seasonTitles = linkedMapOf<String, String?>()
+        val seasonOrder = linkedMapOf<String, Int>()
+        data class SeasonDescriptor(val id: String, val number: Int, val title: String?)
+        val descriptors = mutableListOf<SeasonDescriptor>()
         for (index in 0 until seasons.length()) {
             val season = seasons.optJSONObject(index) ?: continue
             val seasonId = season.optString("id").takeIf(String::isNotBlank) ?: continue
             val seasonNumber = season.optInt("season_number", season.optInt("season_sequence_number", 0))
-            val rows = loadAllPages("https://www.crunchyroll.com/content/v2/cms/seasons/$seasonId/episodes?locale=de-DE")
-            for (rowIndex in 0 until rows.length()) parseEpisode(rows.optJSONObject(rowIndex), seriesId, seasonId, seasonNumber)?.let(episodes::add)
+            seasonTitles[seasonId] = season.optString("title").takeIf(String::isNotBlank)
+            seasonOrder[seasonId] = season.optInt("season_sequence_number", index + 1)
+            descriptors += SeasonDescriptor(seasonId, seasonNumber, seasonTitles[seasonId])
         }
+        // Long-running titles can expose dozens of language/arc season objects. A small,
+        // bounded parallelism keeps refresh finite without creating an unbounded crawl.
+        val semaphore = Semaphore(4)
+        val rawEpisodes = coroutineScope {
+            descriptors.map { descriptor -> async {
+                semaphore.withPermit {
+                    val rows = loadAllPages(
+                        "https://www.crunchyroll.com/content/v2/cms/seasons/${descriptor.id}/episodes?locale=de-DE"
+                    )
+                    (0 until rows.length()).mapNotNull { rowIndex ->
+                        parseEpisode(rows.optJSONObject(rowIndex), seriesId, descriptor.id, descriptor.number, descriptor.title)
+                    }
+                }
+            } }.awaitAll().flatten()
+        }
+        val contentSeasonById = CrunchyrollSeasonStructure.contentSeasonNumbers(seasonTitles, seasonOrder)
+        val episodes = rawEpisodes.map { episode ->
+            episode.copy(
+                seasonNumber = contentSeasonById[episode.seasonId] ?: episode.seasonNumber,
+                seasonTitle = CrunchyrollSeasonStructure.displayTitle(episode.seasonTitle)
+            )
+        }.filter(CrunchyrollSeasonStructure::containsDeclaredEpisode)
         return CrunchyrollCatalogSeries(seriesId, CrunchyrollPublicWebAdapter.canonicalSeriesUrl(seriesId), episodes.distinctBy {
             listOf(it.seasonId, it.episodeId, it.audioLocale)
         })
@@ -162,18 +194,25 @@ class CrunchyrollAnonymousCatalogClient(
     private suspend fun loadAllPages(baseUrl: String): org.json.JSONArray {
         val result = org.json.JSONArray()
         var offset = 0
+        val pageFingerprints = mutableSetOf<String>()
         repeat(20) {
             val response = transport.get("$baseUrl&n=100&start=$offset")
             check(response.status in 200..299) { "CRUNCHYROLL_CATALOG_HTTP_${response.status}" }
             val page = dataArray(response.body)
+            val fingerprint = (0 until page.length()).joinToString("|") { index ->
+                page.optJSONObject(index)?.optString("id").orEmpty()
+            }
+            if (fingerprint.isNotBlank() && !pageFingerprints.add(fingerprint)) return result
             for (index in 0 until page.length()) result.put(page.opt(index))
-            if (page.length() == 0) return result
+            if (page.length() < 100) return result
             offset += page.length()
         }
         return result
     }
 
-    private fun parseEpisode(obj: JSONObject?, seriesId: String, seasonId: String, fallbackSeason: Int): CrunchyrollCatalogEpisode? {
+    private fun parseEpisode(
+        obj: JSONObject?, seriesId: String, seasonId: String, fallbackSeason: Int, seasonTitle: String?
+    ): CrunchyrollCatalogEpisode? {
         obj ?: return null
         val episodeId = obj.optString("id").takeIf(String::isNotBlank) ?: return null
         val episodeNumber = number(obj.opt("episode_number")) ?: number(obj.opt("episode")) ?: return null
@@ -185,7 +224,7 @@ class CrunchyrollAnonymousCatalogClient(
             obj.optString("title").takeIf(String::isNotBlank),
             obj.optString("audio_locale").takeIf(String::isNotBlank), subtitles,
             providerAvailableAt(obj), obj.optString("availability_status").takeIf(String::isNotBlank),
-            "https://www.crunchyroll.com/watch/$episodeId"
+            "https://www.crunchyroll.com/watch/$episodeId", seasonTitle
         )
     }
 
@@ -194,6 +233,58 @@ class CrunchyrollAnonymousCatalogClient(
     ).firstNotNullOfOrNull { key ->
         obj.optString(key).takeIf { it.isNotBlank() && !it.startsWith("9998-") && !it.startsWith("9999-") }
             ?.let { runCatching { Instant.parse(it) }.getOrNull() }
+    }
+}
+
+/** Collapses Crunchyroll audio/dub season variants into content seasons. */
+object CrunchyrollSeasonStructure {
+    private val declaredEpisodeRange = Regex(
+        "\\((\\d+)\\s*[-–—]\\s*(\\d+|current)\\)",
+        RegexOption.IGNORE_CASE
+    )
+    private val variantSuffix = Regex(
+        "\\s*[\\[(](?:[^)\\]]*?(?:dub|sub|audio|synchro|untertitel|deutsch|german|english|french|spanish|italian|portuguese|hindi|arabic)[^)\\]]*)[)\\]]\\s*$",
+        RegexOption.IGNORE_CASE
+    )
+    private val trailingVariant = Regex(
+        "\\s*[-â€“â€”]\\s*(?:german|deutsch|english|french|spanish|italian|portuguese|hindi|arabic)(?:\\s+(?:dub|audio|synchro|sub))?\\s*$",
+        RegexOption.IGNORE_CASE
+    )
+
+    fun displayTitle(title: String?): String? = title?.let { value ->
+        var clean = value.trim()
+        do {
+            val previous = clean
+            clean = clean.replace(variantSuffix, "").replace(trailingVariant, "").trim()
+        } while (clean != previous)
+        clean.takeIf(String::isNotBlank)
+    }
+
+    /**
+     * Crunchyroll occasionally places recap/special rows with small local numbers in a
+     * content arc whose public label declares a global episode range. Those rows must
+     * not shift the local numbering of the real arc episodes.
+     */
+    fun containsDeclaredEpisode(episode: CrunchyrollCatalogEpisode): Boolean {
+        val match = episode.seasonTitle?.let(declaredEpisodeRange::find) ?: return true
+        val first = match.groupValues[1].toInt()
+        val last = match.groupValues[2].toIntOrNull()
+        return episode.episodeNumber >= first && (last == null || episode.episodeNumber <= last)
+    }
+
+    fun contentSeasonNumbers(
+        titlesBySeasonId: Map<String, String?>,
+        orderBySeasonId: Map<String, Int>
+    ): Map<String, Int> {
+        val ordered = titlesBySeasonId.keys.sortedWith(
+            compareBy<String> { orderBySeasonId[it] ?: Int.MAX_VALUE }.thenBy { it }
+        )
+        val numberByKey = linkedMapOf<String, Int>()
+        return ordered.associateWith { id ->
+            val clean = displayTitle(titlesBySeasonId[id]) ?: "season:${orderBySeasonId[id] ?: id}"
+            val key = normalizedCatalogTitle(clean)
+            numberByKey.getOrPut(key) { numberByKey.size + 1 }
+        }
     }
 }
 
@@ -209,16 +300,24 @@ private fun number(value: Any?): Int? = when (value) {
 private fun dataArray(body: String): JSONArray = JSONObject(body).optJSONArray("data") ?: JSONArray()
 private fun firstDataObject(body: String): JSONObject? = dataArray(body).optJSONObject(0)
 
-private fun collectJsonObjects(body: String): List<JSONObject> {
-    val root: Any = if (body.trimStart().startsWith("[")) JSONArray(body) else JSONObject(body)
+/**
+ * Crunchyroll search responses contain result groups whose direct `items` are the
+ * actual hits. Recursively walking the document is unsafe: recommendation and
+ * metadata objects can contain unrelated series IDs and titles.
+ */
+private fun directSearchResults(body: String): List<JSONObject> {
+    val data = runCatching { JSONObject(body).optJSONArray("data") }.getOrNull() ?: return emptyList()
     val result = mutableListOf<JSONObject>()
-    fun visit(value: Any?) {
-        when (value) {
-            is JSONObject -> { result += value; value.keys().forEachRemaining { visit(value.opt(it)) } }
-            is JSONArray -> for (index in 0 until value.length()) visit(value.opt(index))
+    for (index in 0 until data.length()) {
+        val group = data.optJSONObject(index) ?: continue
+        val items = group.optJSONArray("items")
+        if (items != null) {
+            for (itemIndex in 0 until items.length()) items.optJSONObject(itemIndex)?.let(result::add)
+        } else if (group.optString("type").equals("series", true)) {
+            // Kept for the documented flat response variant.
+            result += group
         }
     }
-    visit(root)
     return result
 }
 

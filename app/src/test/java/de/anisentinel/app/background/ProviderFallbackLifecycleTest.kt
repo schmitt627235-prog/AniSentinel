@@ -12,13 +12,18 @@ class ProviderFallbackLifecycleTest {
         assertFalse(shouldUseAniWorldFallback(true, false, true, true))
     }
 
-    @Test fun parsedNotAvailableYetNeverUsesTechnicalFallback() {
-        assertFalse(shouldUseAniWorldFallback(false, true, false, true))
+    @Test fun parsedNotAvailableYetStillUsesSafetyFallbackAtTPlusTen() {
+        assertTrue(shouldUseAniWorldFallback(false, true, false, true))
     }
 
     @Test fun technicalFailureUsesFallbackOnlyAtTPlusTen() {
         assertFalse(shouldUseAniWorldFallback(false, false, true, false))
         assertTrue(shouldUseAniWorldFallback(false, false, true, true))
+    }
+
+    @Test fun fallbackDoesNotRunBeforeTPlusTenRegardlessOfDirectResult() {
+        assertFalse(shouldUseAniWorldFallback(false, true, false, false))
+        assertFalse(shouldUseAniWorldFallback(false, false, true, false))
     }
 
     @Test fun fallbackRaceGuardRecognizesPersistedDirectAvailability() {

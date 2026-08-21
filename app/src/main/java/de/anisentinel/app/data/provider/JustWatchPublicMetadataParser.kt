@@ -22,8 +22,10 @@ object JustWatchPublicMetadataParser {
         val title = candidates.firstOrNull { row ->
             row.optString("@type") in setOf("TVSeries", "Movie", "CreativeWork", "TVSeason")
         } ?: candidates.firstOrNull()
-        val description = MetadataTextNormalizer.decode(title?.optString("description"))
-            ?: MetadataTextNormalizer.decode(document.selectFirst("meta[name=description]")?.attr("content"))
+        val description = listOfNotNull(
+            MetadataTextNormalizer.decode(title?.optString("description")),
+            MetadataTextNormalizer.decode(document.selectFirst("meta[name=description]")?.attr("content"))
+        ).firstOrNull(::isEditorialSynopsis)
         val genres = MetadataTextNormalizer.normalizeGenres(title?.values("genre").orEmpty()).toSet()
         val studios = buildSet {
             addAll(title?.names("productionCompany").orEmpty())
@@ -31,6 +33,15 @@ object JustWatchPublicMetadataParser {
             addAll(title?.names("productionStudio").orEmpty())
         }
         return JustWatchPublicMetadata(description, genres, studios.mapNotNull(MetadataTextNormalizer::decode).toSet())
+    }
+
+    /** Rejects JustWatch SEO/availability copy; it is not an editorial plot synopsis. */
+    fun isEditorialSynopsis(value: String): Boolean {
+        val normalized = value.lowercase()
+        return listOf(
+            "im stream online", "auf netflix", "prime video", "disney+", "kostenlos option",
+            "streaming-anbieter", "jetzt streamen", "wo kann man", "online anschauen"
+        ).none(normalized::contains)
     }
 
     private fun jsonObjects(raw: String): List<JSONObject> = runCatching {

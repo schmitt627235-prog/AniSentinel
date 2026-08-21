@@ -1,6 +1,6 @@
 # AniSentinel
 
-Aktueller Diagnose-/Teststand: **v0.25.6**. JustWatch Deutschland löst Titel und Anbieter auf; die konkrete Staffel, Episode und deutsche Sprachfassung werden anschließend direkt über öffentliche Metadaten des ausgewählten Providers geprüft. Provider können als animeweite Vorgabe und als gezielte Staffel-Ausnahme gewählt werden, jedoch nur nach bestätigtem deutschem Staffel-Mapping. Ungeprüfte alte Release-Zeilen erzeugen keine Phantomstaffeln. AniWorld bleibt der letzte technische Fallback. Kurzzeitige technische Providerfehler bleiben still und werden erst nach einem persistenten, providerweit deduplizierten Fehlerzustand benachrichtigt.
+Aktueller Diagnose-/Teststand: **v0.25.8**. JustWatch Deutschland löst Titel und Direktanbieter auf. Für eine fällige Episode prüft AniSentinel jeden unterstützten bestätigten Direktanbieter auf die konkrete Staffel, Episode und Sprachfassung; die gewählte Anbieterpräferenz steuert Darstellung und Deep-Link. AniWorld wird ab zehn Minuten nach dem erwarteten Termin als paralleler Sicherheitsbeleg verwendet, während direkte Prüfungen weiterlaufen. Fachlich identische Episoden werden quellenübergreifend abgeglichen, damit ein gültiger Beleg jede widersprüchliche Verzögerungsanzeige beendet.
 
 Der Bereich **Entdecken** zeigt aus dem deutschen JustWatch-Datenbestand nur sicher als Anime erkannte Serien und Filme sowie ausdrücklich belegte Live-Action-Adaptionen. Der allgemeine JustWatch-Film- und Serienkatalog wird dort nicht angeboten.
 
@@ -25,7 +25,7 @@ AniSentinel ist eine native Android-App für deutsche Anime-Releasetermine. Sie 
 - reale JustWatch-DE-Titelmetadaten für Handlung und Genres sowie Studioangaben, sofern die öffentliche Quelle sie eindeutig liefert
 - Pull-to-Refresh in den datenabhängigen Hauptansichten; bestehende Room-Daten bleiben bei Netzwerkfehlern sichtbar
 - kanonische Anime-Staffeln getrennt von providerabhängigen Staffelnummern
-- persistente Providerwahl pro Staffel; Crunchyroll wird ohne manuelle Wahl nur bei bestätigter DACH-Staffel bevorzugt
+- persistente Providerwahl pro Anime und Staffel; die Episodenansicht übernimmt die reale Staffel-/Saga-Struktur des gewählten Direktanbieters
 
 ### Release-Lifecycle und Providerwahl
 
@@ -81,7 +81,7 @@ Crunchyroll/Netflix/Disney+/ADN/ANIVERSE → konkrete Episode und Sprache
 technischer CHECK_FAILED oder UNSUPPORTED → kontrollierter AniWorld-Fallback
 ```
 
-Ein direkt bestätigtes `AVAILABLE` wird sofort gespeichert und kann genau eine Benachrichtigung auslösen. Danach beendet AniSentinel AUTO-Überwachung, Provider-Retries und den Fallback. `NOT_AVAILABLE_YET` bedeutet eine erfolgreich ausgewertete Providerseite ohne Zielrelease und startet deshalb keinen technischen Fallback. Ein separater T+10-Alarm existiert nicht mehr. Bei einem Alarm-Rennen wird Room unmittelbar vor einem Fallback erneut geprüft.
+Ein direkt bestätigtes `AVAILABLE` wird sofort gespeichert und kann genau eine Benachrichtigung auslösen. `NOT_AVAILABLE_YET` bedeutet eine technisch erfolgreich ausgewertete Providerantwort ohne Zielrelease; `CHECK_FAILED` bezeichnet ausschließlich technische oder parserseitige Fehler. Ab T+10 läuft AniWorld als unabhängiger Sicherheitsfallback, unabhängig davon, ob der direkte Weg negativ oder technisch fehlgeschlagen ist. Nach einer AniWorld-Bestätigung werden direkte Providerprüfungen weitergeführt, damit der stärkere Direktbeleg später samt Episodenlink gespeichert werden kann.
 
 ### Watch-Profile
 

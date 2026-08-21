@@ -92,13 +92,20 @@ class FavoriteHistoryBackfillWorker(context: Context, params: WorkerParameters) 
 
         if (references.any { isCrunchyroll(it.provider) } || identities.any { it.provider.contains("CRUNCHYROLL") }) {
             providers += "Crunchyroll"
+            val titleAliases = (dao.justWatchMatches(animeId)
+                .filter { it.status == "MATCHED" }.map { it.title } +
+                listOfNotNull(dao.justWatchCatalogTitleForAnime(animeId)?.title)).toSet()
             val knownUrl = identities.firstOrNull { it.provider.contains("CRUNCHYROLL") }?.sourceUrl
                 ?: references.firstOrNull { isCrunchyroll(it.provider) && it.seriesUrl?.contains("crunchyroll.com") == true }?.seriesUrl
             val firstResult = if (knownUrl != null) container.crunchyrollHistoricalReleaseImporter.importFromProviderUrl(
-                animeId, anime.titleGerman, knownUrl
-            ) else container.crunchyrollHistoricalReleaseImporter.importByTitle(animeId, anime.titleGerman)
+                animeId, anime.titleGerman, knownUrl, titleAliases = titleAliases
+            ) else container.crunchyrollHistoricalReleaseImporter.importByTitle(
+                animeId, anime.titleGerman, titleAliases = titleAliases
+            )
             val result = if (firstResult is HistoricalImportResult.Failed && knownUrl != null) {
-                container.crunchyrollHistoricalReleaseImporter.importByTitle(animeId, anime.titleGerman)
+                container.crunchyrollHistoricalReleaseImporter.importByTitle(
+                    animeId, anime.titleGerman, titleAliases = titleAliases
+                )
             } else firstResult
             when (result) {
                 is HistoricalImportResult.Success -> imported += result.inserted + result.enriched

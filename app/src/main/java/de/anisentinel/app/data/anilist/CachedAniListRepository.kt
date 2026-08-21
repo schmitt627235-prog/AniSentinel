@@ -24,7 +24,8 @@ class CachedAniListRepository(
         val providers = references.groupBy { it.animeId }
         entities.map { entity ->
             entity.toDomain().copy(
-                provider = providers[entity.id]?.map { it.provider }?.distinct()?.joinToString(" · ").orEmpty()
+                provider = de.anisentinel.app.domain.provider.StreamingProviderPolicy
+                    .visible(providers[entity.id].orEmpty().map { it.provider }).joinToString(" · ")
             )
         }
     }
@@ -36,7 +37,8 @@ class CachedAniListRepository(
         val providers = references.groupBy { it.animeId }
         entities.map { entity ->
             entity.toDomain().copy(
-                provider = providers[entity.id]?.map { it.provider }?.distinct()?.joinToString(" · ").orEmpty()
+                provider = de.anisentinel.app.domain.provider.StreamingProviderPolicy
+                    .visible(providers[entity.id].orEmpty().map { it.provider }).joinToString(" · ")
             )
         }
     }

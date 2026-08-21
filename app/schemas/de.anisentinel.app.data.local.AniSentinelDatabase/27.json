@@ -1,0 +1,2630 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 27,
+    "identityHash": "15f7eb783381fd35deb410c1eb5ee2fe",
+    "entities": [
+      {
+        "tableName": "anime",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `anilistId` INTEGER, `anisearchId` TEXT, `titleGerman` TEXT NOT NULL, `titleEnglish` TEXT, `titleRomaji` TEXT, `titleNative` TEXT, `description` TEXT NOT NULL, `coverUrl` TEXT, `bannerUrl` TEXT, `season` TEXT, `seasonYear` INTEGER, `totalEpisodes` INTEGER, `updatedAt` INTEGER NOT NULL, `nextAiringAt` INTEGER, `nextEpisode` INTEGER, `sourceUpdatedAt` INTEGER, `cachedAt` INTEGER, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "anilistId",
+            "columnName": "anilistId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "anisearchId",
+            "columnName": "anisearchId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "titleGerman",
+            "columnName": "titleGerman",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "titleEnglish",
+            "columnName": "titleEnglish",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "titleRomaji",
+            "columnName": "titleRomaji",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "titleNative",
+            "columnName": "titleNative",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "coverUrl",
+            "columnName": "coverUrl",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "bannerUrl",
+            "columnName": "bannerUrl",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "season",
+            "columnName": "season",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "seasonYear",
+            "columnName": "seasonYear",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "totalEpisodes",
+            "columnName": "totalEpisodes",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nextAiringAt",
+            "columnName": "nextAiringAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "nextEpisode",
+            "columnName": "nextEpisode",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "sourceUpdatedAt",
+            "columnName": "sourceUpdatedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "cachedAt",
+            "columnName": "cachedAt",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "favorites",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`animeId` TEXT NOT NULL, `enabled` INTEGER NOT NULL, `languagePreference` TEXT NOT NULL, `monitoringProfileId` TEXT, `notifyAvailable` INTEGER NOT NULL, `notifyDelayed` INTEGER NOT NULL, `notifyPostponed` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`animeId`), FOREIGN KEY(`animeId`) REFERENCES `anime`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "animeId",
+            "columnName": "animeId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "enabled",
+            "columnName": "enabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "languagePreference",
+            "columnName": "languagePreference",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "monitoringProfileId",
+            "columnName": "monitoringProfileId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "notifyAvailable",
+            "columnName": "notifyAvailable",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notifyDelayed",
+            "columnName": "notifyDelayed",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notifyPostponed",
+            "columnName": "notifyPostponed",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "animeId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_favorites_animeId",
+            "unique": false,
+            "columnNames": [
+              "animeId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_favorites_animeId` ON `${TABLE_NAME}` (`animeId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "anime",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "animeId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "favorite_history_backfills",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`animeId` TEXT NOT NULL, `status` TEXT NOT NULL, `requestedAt` INTEGER NOT NULL, `lastAttemptAt` INTEGER, `completedAt` INTEGER, `nextAttemptAt` INTEGER, `provider` TEXT, `importedReleaseCount` INTEGER NOT NULL, `resultCode` TEXT, PRIMARY KEY(`animeId`), FOREIGN KEY(`animeId`) REFERENCES `favorites`(`animeId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "animeId",
+            "columnName": "animeId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "requestedAt",
+            "columnName": "requestedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastAttemptAt",
+            "columnName": "lastAttemptAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "completedAt",
+            "columnName": "completedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "nextAttemptAt",
+            "columnName": "nextAttemptAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "provider",
+            "columnName": "provider",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "importedReleaseCount",
+            "columnName": "importedReleaseCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "resultCode",
+            "columnName": "resultCode",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "animeId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_favorite_history_backfills_status",
+            "unique": false,
+            "columnNames": [
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_favorite_history_backfills_status` ON `${TABLE_NAME}` (`status`)"
+          },
+          {
+            "name": "index_favorite_history_backfills_nextAttemptAt",
+            "unique": false,
+            "columnNames": [
+              "nextAttemptAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_favorite_history_backfills_nextAttemptAt` ON `${TABLE_NAME}` (`nextAttemptAt`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "favorites",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "animeId"
+            ],
+            "referencedColumns": [
+              "animeId"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "episodes",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`animeId` TEXT NOT NULL, `seasonNumber` INTEGER NOT NULL, `episodeNumber` INTEGER NOT NULL, `title` TEXT, `expectedReleaseAt` INTEGER NOT NULL, `lastUnavailableAt` INTEGER, `firstAvailableAt` INTEGER, `providerEpisodeId` TEXT, `providerEpisodeUrl` TEXT, `status` TEXT NOT NULL, `confidence` REAL NOT NULL, PRIMARY KEY(`animeId`, `seasonNumber`, `episodeNumber`))",
+        "fields": [
+          {
+            "fieldPath": "animeId",
+            "columnName": "animeId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seasonNumber",
+            "columnName": "seasonNumber",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "episodeNumber",
+            "columnName": "episodeNumber",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "expectedReleaseAt",
+            "columnName": "expectedReleaseAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastUnavailableAt",
+            "columnName": "lastUnavailableAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "firstAvailableAt",
+            "columnName": "firstAvailableAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "providerEpisodeId",
+            "columnName": "providerEpisodeId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "providerEpisodeUrl",
+            "columnName": "providerEpisodeUrl",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence",
+            "columnName": "confidence",
+            "affinity": "REAL",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "animeId",
+            "seasonNumber",
+            "episodeNumber"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_episodes_animeId",
+            "unique": false,
+            "columnNames": [
+              "animeId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_episodes_animeId` ON `${TABLE_NAME}` (`animeId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "watch_profiles",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `isDefault` INTEGER NOT NULL, `stopAfterMinutes` INTEGER NOT NULL, `liveMonitoringAllowed` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isDefault",
+            "columnName": "isDefault",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "stopAfterMinutes",
+            "columnName": "stopAfterMinutes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "liveMonitoringAllowed",
+            "columnName": "liveMonitoringAllowed",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "watch_phases",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`profileId` TEXT NOT NULL, `startOffsetSeconds` INTEGER NOT NULL, `endOffsetSeconds` INTEGER, `intervalSeconds` INTEGER NOT NULL, PRIMARY KEY(`profileId`, `startOffsetSeconds`))",
+        "fields": [
+          {
+            "fieldPath": "profileId",
+            "columnName": "profileId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startOffsetSeconds",
+            "columnName": "startOffsetSeconds",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endOffsetSeconds",
+            "columnName": "endOffsetSeconds",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "intervalSeconds",
+            "columnName": "intervalSeconds",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "profileId",
+            "startOffsetSeconds"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_watch_phases_profileId",
+            "unique": false,
+            "columnNames": [
+              "profileId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_watch_phases_profileId` ON `${TABLE_NAME}` (`profileId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "catalog_entries",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`catalogType` TEXT NOT NULL, `animeId` TEXT NOT NULL, `position` INTEGER NOT NULL, `fetchedAt` INTEGER NOT NULL, PRIMARY KEY(`catalogType`, `animeId`), FOREIGN KEY(`animeId`) REFERENCES `anime`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "catalogType",
+            "columnName": "catalogType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "animeId",
+            "columnName": "animeId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fetchedAt",
+            "columnName": "fetchedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "catalogType",
+            "animeId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_catalog_entries_animeId",
+            "unique": false,
+            "columnNames": [
+              "animeId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_entries_animeId` ON `${TABLE_NAME}` (`animeId`)"
+          },
+          {
+            "name": "index_catalog_entries_catalogType_position",
+            "unique": true,
+            "columnNames": [
+              "catalogType",
+              "position"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_catalog_entries_catalogType_position` ON `${TABLE_NAME}` (`catalogType`, `position`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "anime",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "animeId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "provider_references",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`animeId` TEXT NOT NULL, `provider` TEXT NOT NULL, `seriesUrl` TEXT, `source` TEXT NOT NULL, `sourceUrl` TEXT, `lastConfirmedAt` INTEGER, `providerMarket` TEXT, PRIMARY KEY(`animeId`, `provider`), FOREIGN KEY(`animeId`) REFERENCES `anime`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "animeId",
+            "columnName": "animeId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "provider",
+            "columnName": "provider",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seriesUrl",
+            "columnName": "seriesUrl",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceUrl",
+            "columnName": "sourceUrl",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lastConfirmedAt",
+            "columnName": "lastConfirmedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "providerMarket",
+            "columnName": "providerMarket",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "animeId",
+            "provider"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_provider_references_animeId",
+            "unique": false,
+            "columnNames": [
+              "animeId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_provider_references_animeId` ON `${TABLE_NAME}` (`animeId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "anime",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "animeId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "provider_availability",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`animeId` TEXT NOT NULL, `provider` TEXT NOT NULL, `episodeKey` INTEGER NOT NULL, `episodeNumber` INTEGER, `status` TEXT NOT NULL, `providerUrl` TEXT, `checkedAt` INTEGER NOT NULL, `firstAvailableAt` INTEGER, `errorReason` TEXT, `evidenceType` TEXT, `availabilityNotificationSentAt` INTEGER, PRIMARY KEY(`animeId`, `provider`, `episodeKey`), FOREIGN KEY(`animeId`) REFERENCES `anime`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "animeId",
+            "columnName": "animeId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "provider",
+            "columnName": "provider",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "episodeKey",
+            "columnName": "episodeKey",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "episodeNumber",
+            "columnName": "episodeNumber",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "providerUrl",
+            "columnName": "providerUrl",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "checkedAt",
+            "columnName": "checkedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "firstAvailableAt",
+            "columnName": "firstAvailableAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "errorReason",
+            "columnName": "errorReason",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "evidenceType",
+            "columnName": "evidenceType",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "availabilityNotificationSentAt",
+            "columnName": "availabilityNotificationSentAt",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "animeId",
+            "provider",
+            "episodeKey"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_provider_availability_animeId",
+            "unique": false,
+            "columnNames": [
+              "animeId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_provider_availability_animeId` ON `${TABLE_NAME}` (`animeId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "anime",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "animeId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "episode_releases",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`sourceReleaseId` TEXT NOT NULL, `animeId` TEXT NOT NULL, `episodeNumber` INTEGER, `episodeTitle` TEXT, `expectedAt` INTEGER, `provider` TEXT, `metadataSource` TEXT NOT NULL, `sourceUrl` TEXT, `providerUrl` TEXT, `fetchedAt` INTEGER NOT NULL, `seasonNumber` INTEGER, `listedAt` INTEGER, `adjustmentMinutes` INTEGER, `originalTimeWasEndOfDayMarker` INTEGER NOT NULL, `releaseStatus` TEXT NOT NULL, `releaseLanguage` TEXT, `isHistoricalImport` INTEGER NOT NULL, `historicalReleasedAt` INTEGER, `releaseTimePrecision` TEXT NOT NULL, `historicalSourcePriority` INTEGER NOT NULL, `historicalConflict` INTEGER NOT NULL, PRIMARY KEY(`sourceReleaseId`), FOREIGN KEY(`animeId`) REFERENCES `anime`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "sourceReleaseId",
+            "columnName": "sourceReleaseId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "animeId",
+            "columnName": "animeId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "episodeNumber",
+            "columnName": "episodeNumber",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "episodeTitle",
+            "columnName": "episodeTitle",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "expectedAt",
+            "columnName": "expectedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "provider",
+            "columnName": "provider",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "metadataSource",
+            "columnName": "metadataSource",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceUrl",
+            "columnName": "sourceUrl",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "providerUrl",
+            "columnName": "providerUrl",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "fetchedAt",
+            "columnName": "fetchedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seasonNumber",
+            "columnName": "seasonNumber",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "listedAt",
+            "columnName": "listedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "adjustmentMinutes",
+            "columnName": "adjustmentMinutes",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "originalTimeWasEndOfDayMarker",
+            "columnName": "originalTimeWasEndOfDayMarker",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "releaseStatus",
+            "columnName": "releaseStatus",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "releaseLanguage",
+            "columnName": "releaseLanguage",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isHistoricalImport",
+            "columnName": "isHistoricalImport",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "historicalReleasedAt",
+            "columnName": "historicalReleasedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "releaseTimePrecision",
+            "columnName": "releaseTimePrecision",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "historicalSourcePriority",
+            "columnName": "historicalSourcePriority",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "historicalConflict",
+            "columnName": "historicalConflict",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "sourceReleaseId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_episode_releases_animeId",
+            "unique": false,
+            "columnNames": [
+              "animeId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_episode_releases_animeId` ON `${TABLE_NAME}` (`animeId`)"
+          },
+          {
+            "name": "index_episode_releases_expectedAt",
+            "unique": false,
+            "columnNames": [
+              "expectedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_episode_releases_expectedAt` ON `${TABLE_NAME}` (`expectedAt`)"
+          },
+          {
+            "name": "index_episode_releases_isHistoricalImport",
+            "unique": false,
+            "columnNames": [
+              "isHistoricalImport"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_episode_releases_isHistoricalImport` ON `${TABLE_NAME}` (`isHistoricalImport`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "anime",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "animeId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "release_source_references",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`referenceId` TEXT NOT NULL, `releaseId` TEXT NOT NULL, `sourceKind` TEXT NOT NULL, `externalId` TEXT, `sourceUrl` TEXT, `fetchedAt` INTEGER NOT NULL, PRIMARY KEY(`referenceId`), FOREIGN KEY(`releaseId`) REFERENCES `episode_releases`(`sourceReleaseId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "referenceId",
+            "columnName": "referenceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "releaseId",
+            "columnName": "releaseId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceKind",
+            "columnName": "sourceKind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "externalId",
+            "columnName": "externalId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "sourceUrl",
+            "columnName": "sourceUrl",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "fetchedAt",
+            "columnName": "fetchedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "referenceId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_release_source_references_releaseId",
+            "unique": false,
+            "columnNames": [
+              "releaseId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_release_source_references_releaseId` ON `${TABLE_NAME}` (`releaseId`)"
+          },
+          {
+            "name": "index_release_source_references_sourceKind_externalId",
+            "unique": false,
+            "columnNames": [
+              "sourceKind",
+              "externalId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_release_source_references_sourceKind_externalId` ON `${TABLE_NAME}` (`sourceKind`, `externalId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "episode_releases",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "releaseId"
+            ],
+            "referencedColumns": [
+              "sourceReleaseId"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "release_schedule_history",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`historyId` TEXT NOT NULL, `releaseId` TEXT NOT NULL, `previousAt` INTEGER, `revisedAt` INTEGER NOT NULL, `changeSource` TEXT NOT NULL, `reason` TEXT, `releaseType` TEXT, `detectedAt` INTEGER NOT NULL, `sourceUrl` TEXT NOT NULL, `evidenceUrl` TEXT, PRIMARY KEY(`historyId`), FOREIGN KEY(`releaseId`) REFERENCES `episode_releases`(`sourceReleaseId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "historyId",
+            "columnName": "historyId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "releaseId",
+            "columnName": "releaseId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "previousAt",
+            "columnName": "previousAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "revisedAt",
+            "columnName": "revisedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "changeSource",
+            "columnName": "changeSource",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reason",
+            "columnName": "reason",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "releaseType",
+            "columnName": "releaseType",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "detectedAt",
+            "columnName": "detectedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceUrl",
+            "columnName": "sourceUrl",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "evidenceUrl",
+            "columnName": "evidenceUrl",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "historyId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_release_schedule_history_releaseId",
+            "unique": false,
+            "columnNames": [
+              "releaseId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_release_schedule_history_releaseId` ON `${TABLE_NAME}` (`releaseId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "episode_releases",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "releaseId"
+            ],
+            "referencedColumns": [
+              "sourceReleaseId"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "anime_external_ids",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`source` TEXT NOT NULL, `externalId` TEXT NOT NULL, `internalAnimeId` TEXT NOT NULL, `sourceUrl` TEXT, PRIMARY KEY(`source`, `externalId`), FOREIGN KEY(`internalAnimeId`) REFERENCES `anime`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "externalId",
+            "columnName": "externalId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "internalAnimeId",
+            "columnName": "internalAnimeId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceUrl",
+            "columnName": "sourceUrl",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "source",
+            "externalId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_anime_external_ids_internalAnimeId",
+            "unique": false,
+            "columnNames": [
+              "internalAnimeId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_anime_external_ids_internalAnimeId` ON `${TABLE_NAME}` (`internalAnimeId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "anime",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "internalAnimeId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "local_import_batches",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`importId` TEXT NOT NULL, `datasetId` TEXT NOT NULL, `contentHash` TEXT NOT NULL, `source` TEXT NOT NULL, `generatedAt` INTEGER NOT NULL, `importedAt` INTEGER NOT NULL, `rightsNotice` TEXT NOT NULL, `animeCount` INTEGER NOT NULL, `releaseCount` INTEGER NOT NULL, `earliestReleaseAt` INTEGER NOT NULL, `latestReleaseAt` INTEGER NOT NULL, PRIMARY KEY(`importId`))",
+        "fields": [
+          {
+            "fieldPath": "importId",
+            "columnName": "importId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "datasetId",
+            "columnName": "datasetId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "contentHash",
+            "columnName": "contentHash",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "generatedAt",
+            "columnName": "generatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "importedAt",
+            "columnName": "importedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rightsNotice",
+            "columnName": "rightsNotice",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "animeCount",
+            "columnName": "animeCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "releaseCount",
+            "columnName": "releaseCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "earliestReleaseAt",
+            "columnName": "earliestReleaseAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "latestReleaseAt",
+            "columnName": "latestReleaseAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "importId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_local_import_batches_datasetId",
+            "unique": true,
+            "columnNames": [
+              "datasetId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_local_import_batches_datasetId` ON `${TABLE_NAME}` (`datasetId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "justwatch_title_matches",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`matchId` TEXT NOT NULL, `animeId` TEXT NOT NULL, `justWatchId` TEXT, `tmdbId` TEXT, `title` TEXT NOT NULL, `releaseYear` INTEGER, `contentType` TEXT NOT NULL, `confidence` TEXT NOT NULL, `status` TEXT NOT NULL, `source` TEXT NOT NULL, `fetchedAt` INTEGER NOT NULL, `diagnosticMessage` TEXT, PRIMARY KEY(`matchId`), FOREIGN KEY(`animeId`) REFERENCES `anime`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "matchId",
+            "columnName": "matchId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "animeId",
+            "columnName": "animeId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "justWatchId",
+            "columnName": "justWatchId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "tmdbId",
+            "columnName": "tmdbId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "releaseYear",
+            "columnName": "releaseYear",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "contentType",
+            "columnName": "contentType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confidence",
+            "columnName": "confidence",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fetchedAt",
+            "columnName": "fetchedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "diagnosticMessage",
+            "columnName": "diagnosticMessage",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "matchId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_justwatch_title_matches_animeId",
+            "unique": false,
+            "columnNames": [
+              "animeId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_justwatch_title_matches_animeId` ON `${TABLE_NAME}` (`animeId`)"
+          },
+          {
+            "name": "index_justwatch_title_matches_justWatchId",
+            "unique": false,
+            "columnNames": [
+              "justWatchId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_justwatch_title_matches_justWatchId` ON `${TABLE_NAME}` (`justWatchId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "anime",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "animeId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "justwatch_offers",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`offerId` TEXT NOT NULL, `matchId` TEXT NOT NULL, `providerId` TEXT NOT NULL, `providerName` TEXT NOT NULL, `seasonNumber` INTEGER, `episodeNumber` INTEGER, `monetizationType` TEXT NOT NULL, `presentationType` TEXT, `audioLanguages` TEXT NOT NULL, `subtitleLanguages` TEXT NOT NULL, `offerUrl` TEXT, `fetchedAt` INTEGER NOT NULL, `source` TEXT NOT NULL, PRIMARY KEY(`offerId`), FOREIGN KEY(`matchId`) REFERENCES `justwatch_title_matches`(`matchId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "offerId",
+            "columnName": "offerId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "matchId",
+            "columnName": "matchId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "providerId",
+            "columnName": "providerId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "providerName",
+            "columnName": "providerName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seasonNumber",
+            "columnName": "seasonNumber",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "episodeNumber",
+            "columnName": "episodeNumber",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "monetizationType",
+            "columnName": "monetizationType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "presentationType",
+            "columnName": "presentationType",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "audioLanguages",
+            "columnName": "audioLanguages",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "subtitleLanguages",
+            "columnName": "subtitleLanguages",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "offerUrl",
+            "columnName": "offerUrl",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "fetchedAt",
+            "columnName": "fetchedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "offerId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_justwatch_offers_matchId",
+            "unique": false,
+            "columnNames": [
+              "matchId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_justwatch_offers_matchId` ON `${TABLE_NAME}` (`matchId`)"
+          },
+          {
+            "name": "index_justwatch_offers_providerId",
+            "unique": false,
+            "columnNames": [
+              "providerId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_justwatch_offers_providerId` ON `${TABLE_NAME}` (`providerId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "justwatch_title_matches",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "matchId"
+            ],
+            "referencedColumns": [
+              "matchId"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "episode_provider_availability",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`availabilityId` TEXT NOT NULL, `releaseId` TEXT NOT NULL, `providerId` TEXT NOT NULL, `providerName` TEXT NOT NULL, `seasonNumber` INTEGER, `episodeNumber` INTEGER, `status` TEXT NOT NULL, `germanSubAvailable` INTEGER, `germanDubAvailable` INTEGER, `monetizationType` TEXT, `firstAvailableAt` INTEGER, `lastUnavailableAt` INTEGER, `lastCheckedAt` INTEGER NOT NULL, `nextCheckAt` INTEGER, `checkAttempt` INTEGER NOT NULL, `providerUrl` TEXT, `evidenceType` TEXT NOT NULL, `evidenceUrl` TEXT, `errorCode` TEXT, `source` TEXT NOT NULL, `sourceAvailableAt` INTEGER, PRIMARY KEY(`availabilityId`), FOREIGN KEY(`releaseId`) REFERENCES `episode_releases`(`sourceReleaseId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "availabilityId",
+            "columnName": "availabilityId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "releaseId",
+            "columnName": "releaseId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "providerId",
+            "columnName": "providerId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "providerName",
+            "columnName": "providerName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seasonNumber",
+            "columnName": "seasonNumber",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "episodeNumber",
+            "columnName": "episodeNumber",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "germanSubAvailable",
+            "columnName": "germanSubAvailable",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "germanDubAvailable",
+            "columnName": "germanDubAvailable",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "monetizationType",
+            "columnName": "monetizationType",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "firstAvailableAt",
+            "columnName": "firstAvailableAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "lastUnavailableAt",
+            "columnName": "lastUnavailableAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "lastCheckedAt",
+            "columnName": "lastCheckedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nextCheckAt",
+            "columnName": "nextCheckAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "checkAttempt",
+            "columnName": "checkAttempt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "providerUrl",
+            "columnName": "providerUrl",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "evidenceType",
+            "columnName": "evidenceType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "evidenceUrl",
+            "columnName": "evidenceUrl",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "errorCode",
+            "columnName": "errorCode",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceAvailableAt",
+            "columnName": "sourceAvailableAt",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "availabilityId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_episode_provider_availability_releaseId",
+            "unique": false,
+            "columnNames": [
+              "releaseId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_episode_provider_availability_releaseId` ON `${TABLE_NAME}` (`releaseId`)"
+          },
+          {
+            "name": "index_episode_provider_availability_providerId",
+            "unique": false,
+            "columnNames": [
+              "providerId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_episode_provider_availability_providerId` ON `${TABLE_NAME}` (`providerId`)"
+          },
+          {
+            "name": "index_episode_provider_availability_status",
+            "unique": false,
+            "columnNames": [
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_episode_provider_availability_status` ON `${TABLE_NAME}` (`status`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "episode_releases",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "releaseId"
+            ],
+            "referencedColumns": [
+              "sourceReleaseId"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "scheduled_release_notifications",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`releaseId` TEXT NOT NULL, `animeId` TEXT NOT NULL, `eventAt` INTEGER NOT NULL, `language` TEXT NOT NULL, `workName` TEXT NOT NULL, `scheduledAt` INTEGER NOT NULL, PRIMARY KEY(`releaseId`), FOREIGN KEY(`releaseId`) REFERENCES `episode_releases`(`sourceReleaseId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "releaseId",
+            "columnName": "releaseId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "animeId",
+            "columnName": "animeId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "eventAt",
+            "columnName": "eventAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "language",
+            "columnName": "language",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "workName",
+            "columnName": "workName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "scheduledAt",
+            "columnName": "scheduledAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "releaseId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_scheduled_release_notifications_animeId",
+            "unique": false,
+            "columnNames": [
+              "animeId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_scheduled_release_notifications_animeId` ON `${TABLE_NAME}` (`animeId`)"
+          },
+          {
+            "name": "index_scheduled_release_notifications_eventAt",
+            "unique": false,
+            "columnNames": [
+              "eventAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_scheduled_release_notifications_eventAt` ON `${TABLE_NAME}` (`eventAt`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "episode_releases",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "releaseId"
+            ],
+            "referencedColumns": [
+              "sourceReleaseId"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "notification_deliveries",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`deliveryId` TEXT NOT NULL, `releaseId` TEXT NOT NULL, `animeId` TEXT NOT NULL, `eventType` TEXT NOT NULL, `deliveredAt` INTEGER NOT NULL, `notificationId` INTEGER NOT NULL, PRIMARY KEY(`deliveryId`))",
+        "fields": [
+          {
+            "fieldPath": "deliveryId",
+            "columnName": "deliveryId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "releaseId",
+            "columnName": "releaseId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "animeId",
+            "columnName": "animeId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "eventType",
+            "columnName": "eventType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deliveredAt",
+            "columnName": "deliveredAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notificationId",
+            "columnName": "notificationId",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "deliveryId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_notification_deliveries_releaseId",
+            "unique": false,
+            "columnNames": [
+              "releaseId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_notification_deliveries_releaseId` ON `${TABLE_NAME}` (`releaseId`)"
+          },
+          {
+            "name": "index_notification_deliveries_animeId",
+            "unique": false,
+            "columnNames": [
+              "animeId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_notification_deliveries_animeId` ON `${TABLE_NAME}` (`animeId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "justwatch_catalog_titles",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`justWatchId` TEXT NOT NULL, `internalAnimeId` TEXT, `title` TEXT NOT NULL, `releaseYear` INTEGER, `contentType` TEXT NOT NULL, `genres` TEXT NOT NULL, `coverUrl` TEXT, `justWatchUrl` TEXT, `providers` TEXT NOT NULL, `providerUrls` TEXT NOT NULL, `germanSubAvailable` INTEGER, `germanDubAvailable` INTEGER, `fetchedAt` INTEGER NOT NULL, `source` TEXT NOT NULL, `popularityRank` INTEGER, `description` TEXT, `studios` TEXT NOT NULL, `descriptionOriginal` TEXT, `descriptionOriginalLanguage` TEXT, `descriptionGermanSource` TEXT, PRIMARY KEY(`justWatchId`))",
+        "fields": [
+          {
+            "fieldPath": "justWatchId",
+            "columnName": "justWatchId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "internalAnimeId",
+            "columnName": "internalAnimeId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "releaseYear",
+            "columnName": "releaseYear",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "contentType",
+            "columnName": "contentType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "genres",
+            "columnName": "genres",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "coverUrl",
+            "columnName": "coverUrl",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "justWatchUrl",
+            "columnName": "justWatchUrl",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "providers",
+            "columnName": "providers",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "providerUrls",
+            "columnName": "providerUrls",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "germanSubAvailable",
+            "columnName": "germanSubAvailable",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "germanDubAvailable",
+            "columnName": "germanDubAvailable",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "fetchedAt",
+            "columnName": "fetchedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "popularityRank",
+            "columnName": "popularityRank",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "studios",
+            "columnName": "studios",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "descriptionOriginal",
+            "columnName": "descriptionOriginal",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "descriptionOriginalLanguage",
+            "columnName": "descriptionOriginalLanguage",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "descriptionGermanSource",
+            "columnName": "descriptionGermanSource",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "justWatchId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_justwatch_catalog_titles_internalAnimeId",
+            "unique": false,
+            "columnNames": [
+              "internalAnimeId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_justwatch_catalog_titles_internalAnimeId` ON `${TABLE_NAME}` (`internalAnimeId`)"
+          },
+          {
+            "name": "index_justwatch_catalog_titles_title",
+            "unique": false,
+            "columnNames": [
+              "title"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_justwatch_catalog_titles_title` ON `${TABLE_NAME}` (`title`)"
+          },
+          {
+            "name": "index_justwatch_catalog_titles_fetchedAt",
+            "unique": false,
+            "columnNames": [
+              "fetchedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_justwatch_catalog_titles_fetchedAt` ON `${TABLE_NAME}` (`fetchedAt`)"
+          }
+        ]
+      },
+      {
+        "tableName": "justwatch_genres",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`genreId` TEXT NOT NULL, `label` TEXT NOT NULL, `fetchedAt` INTEGER NOT NULL, `source` TEXT NOT NULL, PRIMARY KEY(`genreId`))",
+        "fields": [
+          {
+            "fieldPath": "genreId",
+            "columnName": "genreId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "label",
+            "columnName": "label",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fetchedAt",
+            "columnName": "fetchedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "genreId"
+          ]
+        }
+      },
+      {
+        "tableName": "announcements",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`announcementId` TEXT NOT NULL, `dedupeKey` TEXT NOT NULL, `animeId` TEXT, `title` TEXT NOT NULL, `summary` TEXT, `type` TEXT NOT NULL, `seasonNumber` INTEGER, `oldDate` INTEGER, `newDate` INTEGER, `releaseWindow` TEXT, `reason` TEXT, `provider` TEXT, `publishedAt` INTEGER NOT NULL, `sources` TEXT NOT NULL, `sourceUrls` TEXT NOT NULL, `imageUrl` TEXT, `fetchedAt` INTEGER NOT NULL, PRIMARY KEY(`announcementId`))",
+        "fields": [
+          {
+            "fieldPath": "announcementId",
+            "columnName": "announcementId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dedupeKey",
+            "columnName": "dedupeKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "animeId",
+            "columnName": "animeId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "summary",
+            "columnName": "summary",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seasonNumber",
+            "columnName": "seasonNumber",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "oldDate",
+            "columnName": "oldDate",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "newDate",
+            "columnName": "newDate",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "releaseWindow",
+            "columnName": "releaseWindow",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "reason",
+            "columnName": "reason",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "provider",
+            "columnName": "provider",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "publishedAt",
+            "columnName": "publishedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sources",
+            "columnName": "sources",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceUrls",
+            "columnName": "sourceUrls",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "imageUrl",
+            "columnName": "imageUrl",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "fetchedAt",
+            "columnName": "fetchedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "announcementId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_announcements_dedupeKey",
+            "unique": true,
+            "columnNames": [
+              "dedupeKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_announcements_dedupeKey` ON `${TABLE_NAME}` (`dedupeKey`)"
+          },
+          {
+            "name": "index_announcements_publishedAt",
+            "unique": false,
+            "columnNames": [
+              "publishedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_announcements_publishedAt` ON `${TABLE_NAME}` (`publishedAt`)"
+          },
+          {
+            "name": "index_announcements_animeId",
+            "unique": false,
+            "columnNames": [
+              "animeId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_announcements_animeId` ON `${TABLE_NAME}` (`animeId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "provider_metadata_identities",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`identityId` TEXT NOT NULL, `animeId` TEXT NOT NULL, `provider` TEXT NOT NULL, `providerMarket` TEXT NOT NULL, `seriesId` TEXT NOT NULL, `seasonNumber` INTEGER, `episodeNumber` INTEGER, `seasonId` TEXT, `episodeId` TEXT, `sourceUrl` TEXT, `lastCheckedAt` INTEGER NOT NULL, PRIMARY KEY(`identityId`), FOREIGN KEY(`animeId`) REFERENCES `anime`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "identityId",
+            "columnName": "identityId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "animeId",
+            "columnName": "animeId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "provider",
+            "columnName": "provider",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "providerMarket",
+            "columnName": "providerMarket",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seriesId",
+            "columnName": "seriesId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seasonNumber",
+            "columnName": "seasonNumber",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "episodeNumber",
+            "columnName": "episodeNumber",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "seasonId",
+            "columnName": "seasonId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "episodeId",
+            "columnName": "episodeId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "sourceUrl",
+            "columnName": "sourceUrl",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lastCheckedAt",
+            "columnName": "lastCheckedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "identityId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_provider_metadata_identities_animeId",
+            "unique": false,
+            "columnNames": [
+              "animeId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_provider_metadata_identities_animeId` ON `${TABLE_NAME}` (`animeId`)"
+          },
+          {
+            "name": "index_provider_metadata_identities_animeId_provider_providerMarket",
+            "unique": true,
+            "columnNames": [
+              "animeId",
+              "provider",
+              "providerMarket"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_provider_metadata_identities_animeId_provider_providerMarket` ON `${TABLE_NAME}` (`animeId`, `provider`, `providerMarket`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "anime",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "animeId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "release_postponements",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`postponementId` TEXT NOT NULL, `releaseId` TEXT, `animeId` TEXT, `title` TEXT NOT NULL, `seasonNumber` INTEGER, `episodeNumber` INTEGER, `releaseLanguage` TEXT, `originalExpectedAt` INTEGER, `newExpectedAt` INTEGER, `reason` TEXT, `direction` TEXT NOT NULL, `source` TEXT NOT NULL, `sourceUrl` TEXT NOT NULL, `evidenceUrl` TEXT, `detectedAt` INTEGER NOT NULL, `lastCheckedAt` INTEGER NOT NULL, `isActive` INTEGER NOT NULL, `revision` INTEGER NOT NULL, `notifiedRevision` INTEGER NOT NULL, `confirmationStatus` TEXT NOT NULL, `secondarySource` TEXT, `secondarySourceUrl` TEXT, PRIMARY KEY(`postponementId`))",
+        "fields": [
+          {
+            "fieldPath": "postponementId",
+            "columnName": "postponementId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "releaseId",
+            "columnName": "releaseId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "animeId",
+            "columnName": "animeId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seasonNumber",
+            "columnName": "seasonNumber",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "episodeNumber",
+            "columnName": "episodeNumber",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "releaseLanguage",
+            "columnName": "releaseLanguage",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "originalExpectedAt",
+            "columnName": "originalExpectedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "newExpectedAt",
+            "columnName": "newExpectedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "reason",
+            "columnName": "reason",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "direction",
+            "columnName": "direction",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceUrl",
+            "columnName": "sourceUrl",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "evidenceUrl",
+            "columnName": "evidenceUrl",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "detectedAt",
+            "columnName": "detectedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastCheckedAt",
+            "columnName": "lastCheckedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isActive",
+            "columnName": "isActive",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "revision",
+            "columnName": "revision",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notifiedRevision",
+            "columnName": "notifiedRevision",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confirmationStatus",
+            "columnName": "confirmationStatus",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "secondarySource",
+            "columnName": "secondarySource",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "secondarySourceUrl",
+            "columnName": "secondarySourceUrl",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "postponementId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_release_postponements_releaseId",
+            "unique": false,
+            "columnNames": [
+              "releaseId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_release_postponements_releaseId` ON `${TABLE_NAME}` (`releaseId`)"
+          },
+          {
+            "name": "index_release_postponements_animeId",
+            "unique": false,
+            "columnNames": [
+              "animeId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_release_postponements_animeId` ON `${TABLE_NAME}` (`animeId`)"
+          },
+          {
+            "name": "index_release_postponements_detectedAt",
+            "unique": false,
+            "columnNames": [
+              "detectedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_release_postponements_detectedAt` ON `${TABLE_NAME}` (`detectedAt`)"
+          },
+          {
+            "name": "index_release_postponements_isActive",
+            "unique": false,
+            "columnNames": [
+              "isActive"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_release_postponements_isActive` ON `${TABLE_NAME}` (`isActive`)"
+          }
+        ]
+      },
+      {
+        "tableName": "anime_seasons",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`animeId` TEXT NOT NULL, `canonicalSeasonNumber` INTEGER NOT NULL, `source` TEXT NOT NULL, `confirmedAt` INTEGER NOT NULL, PRIMARY KEY(`animeId`, `canonicalSeasonNumber`), FOREIGN KEY(`animeId`) REFERENCES `anime`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "animeId",
+            "columnName": "animeId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "canonicalSeasonNumber",
+            "columnName": "canonicalSeasonNumber",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confirmedAt",
+            "columnName": "confirmedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "animeId",
+            "canonicalSeasonNumber"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_anime_seasons_animeId",
+            "unique": false,
+            "columnNames": [
+              "animeId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_anime_seasons_animeId` ON `${TABLE_NAME}` (`animeId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "anime",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "animeId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "provider_season_mappings",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`animeId` TEXT NOT NULL, `canonicalSeasonNumber` INTEGER NOT NULL, `provider` TEXT NOT NULL, `providerSeasonNumber` INTEGER, `providerSeriesId` TEXT, `providerSeasonId` TEXT, `providerSeriesUrl` TEXT, `region` TEXT NOT NULL, `available` INTEGER NOT NULL, `lastConfirmedAt` INTEGER NOT NULL, `providerSeasonLabel` TEXT, PRIMARY KEY(`animeId`, `canonicalSeasonNumber`, `provider`), FOREIGN KEY(`animeId`) REFERENCES `anime`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "animeId",
+            "columnName": "animeId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "canonicalSeasonNumber",
+            "columnName": "canonicalSeasonNumber",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "provider",
+            "columnName": "provider",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "providerSeasonNumber",
+            "columnName": "providerSeasonNumber",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "providerSeriesId",
+            "columnName": "providerSeriesId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "providerSeasonId",
+            "columnName": "providerSeasonId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "providerSeriesUrl",
+            "columnName": "providerSeriesUrl",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "region",
+            "columnName": "region",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "available",
+            "columnName": "available",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastConfirmedAt",
+            "columnName": "lastConfirmedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "providerSeasonLabel",
+            "columnName": "providerSeasonLabel",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "animeId",
+            "canonicalSeasonNumber",
+            "provider"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_provider_season_mappings_animeId",
+            "unique": false,
+            "columnNames": [
+              "animeId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_provider_season_mappings_animeId` ON `${TABLE_NAME}` (`animeId`)"
+          },
+          {
+            "name": "index_provider_season_mappings_animeId_canonicalSeasonNumber",
+            "unique": false,
+            "columnNames": [
+              "animeId",
+              "canonicalSeasonNumber"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_provider_season_mappings_animeId_canonicalSeasonNumber` ON `${TABLE_NAME}` (`animeId`, `canonicalSeasonNumber`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "anime",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "animeId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "provider_preferences",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`animeId` TEXT NOT NULL, `seasonNumber` INTEGER NOT NULL, `provider` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`animeId`, `seasonNumber`), FOREIGN KEY(`animeId`) REFERENCES `anime`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "animeId",
+            "columnName": "animeId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seasonNumber",
+            "columnName": "seasonNumber",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "provider",
+            "columnName": "provider",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "animeId",
+            "seasonNumber"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_provider_preferences_animeId",
+            "unique": false,
+            "columnNames": [
+              "animeId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_provider_preferences_animeId` ON `${TABLE_NAME}` (`animeId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "anime",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "animeId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "provider_failure_states",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`providerKey` TEXT NOT NULL, `consecutiveFailures` INTEGER NOT NULL, `firstFailureAt` INTEGER NOT NULL, `lastFailureAt` INTEGER NOT NULL, `lastErrorCode` TEXT, `lastNotifiedAt` INTEGER, PRIMARY KEY(`providerKey`))",
+        "fields": [
+          {
+            "fieldPath": "providerKey",
+            "columnName": "providerKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "consecutiveFailures",
+            "columnName": "consecutiveFailures",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "firstFailureAt",
+            "columnName": "firstFailureAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastFailureAt",
+            "columnName": "lastFailureAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastErrorCode",
+            "columnName": "lastErrorCode",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lastNotifiedAt",
+            "columnName": "lastNotifiedAt",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "providerKey"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '15f7eb783381fd35deb410c1eb5ee2fe')"
+    ]
+  }
+}

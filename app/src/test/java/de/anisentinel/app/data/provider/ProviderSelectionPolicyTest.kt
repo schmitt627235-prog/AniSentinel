@@ -24,12 +24,13 @@ class ProviderSelectionPolicyTest {
         assertEquals("ADN", result.references.single().provider)
     }
 
-    @Test fun animePreferenceOnlyAppliesWhenProviderOffersSeason() {
+    @Test fun explicitAnimePreferenceControlsDisplayedProviderCatalog() {
         val result = ProviderSelectionPolicy.select(
             2, references, listOf(mapping(2, "Crunchyroll")),
             listOf(ProviderPreferenceEntity("anime", 0, "ADN", 1))
         )
-        assertEquals("Crunchyroll", result.references.single().provider)
+        assertEquals("ADN", result.references.single().provider)
+        assertEquals("USER_ANIME", result.reason)
     }
 
     @Test fun invalidSeasonPreferenceFallsBackToConfirmedCrunchyroll() {

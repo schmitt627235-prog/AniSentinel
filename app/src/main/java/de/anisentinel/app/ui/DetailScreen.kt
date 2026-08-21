@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
@@ -55,13 +56,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 private fun ReleaseHistoryCard(
     heading: String,
     release: de.anisentinel.app.data.local.EpisodeReleaseEntity,
+    releases: List<de.anisentinel.app.data.local.EpisodeReleaseEntity>,
     checks: List<de.anisentinel.app.data.local.EpisodeProviderAvailabilityEntity>,
     inferred: Boolean = false
 ) {
-    val check = checks.filter { it.releaseId == release.sourceReleaseId }
-        .maxWithOrNull(compareBy<de.anisentinel.app.data.local.EpisodeProviderAvailabilityEntity> {
-            if (it.status.startsWith("AVAILABLE_")) 1 else 0
-        }.thenBy { it.lastCheckedAt })
+    val check = semanticAvailabilityCheck(release, releases, checks)
     val formatter = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy · HH:mm")
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -88,9 +87,9 @@ private fun ReleaseHistoryCard(
                 check?.firstAvailableAt?.let(java.time.Instant::ofEpochSecond)
             )
             check?.providerName?.takeIf(String::isNotBlank)?.let { Text(stringResource(R.string.release_provider, it)) }
-            check?.sourceAvailableAt?.let { Text(stringResource(R.string.source_available_at, java.time.Instant.ofEpochSecond(it).atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")))) }
-            check?.firstAvailableAt?.let { Text(stringResource(R.string.first_detected_at, java.time.Instant.ofEpochSecond(it).atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")))) }
-            check?.lastCheckedAt?.let { Text(stringResource(R.string.calendar_last_provider_check, java.time.Instant.ofEpochSecond(it).atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")))) }
+            check?.sourceAvailableAt?.let { Text(stringResource(R.string.source_available_at, it.localDateTimeText())) }
+            check?.firstAvailableAt?.let { Text(stringResource(R.string.first_detected_at, it.localDateTimeText())) }
+            check?.lastCheckedAt?.let { Text(stringResource(R.string.calendar_last_provider_check, it.localDateTimeText())) }
             if (check?.status == "CHECK_FAILED") Text(stringResource(R.string.provider_check_failed_neutral), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
@@ -119,13 +118,41 @@ fun AnimeDetailScreen(
     val isAniList = anime.source == "ANILIST"
     val context = LocalContext.current
     val resolvedStatus = ReleaseStatusResolver().resolve(anime)
-    val availableSeasons = CanonicalSeasonPolicy.visibleSeasons(
-        state.canonicalSeasons,
-        state.providerSeasonMappings
-    )
-    val defaultSeason = focusedSeason ?: state.releases
+    val activeCalendarSeason = state.releases
+        .filterNot { it.isHistoricalImport }
         .filter { (it.expectedAt ?: Long.MIN_VALUE) >= java.time.Instant.now().epochSecond }
         .minByOrNull { it.expectedAt ?: Long.MAX_VALUE }?.seasonNumber
+        ?: state.releases.filterNot { it.isHistoricalImport }
+            .maxByOrNull { it.expectedAt ?: Long.MIN_VALUE }?.seasonNumber
+    val canonicalAvailableSeasons = CanonicalSeasonPolicy.visibleSeasons(
+        state.canonicalSeasons,
+        state.providerSeasonMappings,
+        state.releases,
+        activeCalendarSeason
+    )
+    val savedAnimeProvider = state.providerPreferences.firstOrNull { it.seasonNumber == 0 }?.provider
+    val selectedProviderCatalogSeasons = savedAnimeProvider?.let { provider ->
+        state.providerSeasonMappings.filter {
+            it.available && it.region.equals("DE", true) &&
+                ProviderPreferenceUiPolicy.canonicalName(it.provider).equals(provider, true)
+        }.mapNotNull { it.providerSeasonNumber ?: it.canonicalSeasonNumber }
+            .filter { it > 0 }.distinct().sorted()
+    }.orEmpty()
+    val selectedProviderSeasonLabels = savedAnimeProvider?.let { provider ->
+        state.providerSeasonMappings.filter {
+            it.available && it.region.equals("DE", true) &&
+                ProviderPreferenceUiPolicy.canonicalName(it.provider).equals(provider, true)
+        }.mapNotNull { mapping ->
+            (mapping.providerSeasonNumber ?: mapping.canonicalSeasonNumber).takeIf { it > 0 }
+                ?.let { it to mapping.providerSeasonLabel }
+        }.toMap()
+    }.orEmpty()
+    // An explicit provider selection must never fall back to another provider's
+    // season catalogue. Calendar rows remain visible as schedule evidence, but
+    // provider seasons/episodes stay strictly provider scoped.
+    val availableSeasons = if (savedAnimeProvider != null) selectedProviderCatalogSeasons
+        else canonicalAvailableSeasons
+    val defaultSeason = focusedSeason ?: activeCalendarSeason
         ?: availableSeasons.lastOrNull() ?: 1
     var selectedSeason by rememberSaveable(animeId) { mutableIntStateOf(defaultSeason) }
     LaunchedEffect(availableSeasons) {
@@ -133,24 +160,29 @@ fun AnimeDetailScreen(
             selectedSeason = availableSeasons.last()
         }
     }
-    val selectedSeasonMappings = state.providerSeasonMappings.filter {
-        it.canonicalSeasonNumber == selectedSeason && it.region == "DE" && it.available
+    LaunchedEffect(savedAnimeProvider, selectedProviderCatalogSeasons, state.providerReferences) {
+        if (savedAnimeProvider.equals("Crunchyroll", true) && selectedProviderCatalogSeasons.isEmpty()) {
+            state.providerReferences.firstOrNull {
+                ProviderPreferenceUiPolicy.canonicalName(it.provider).equals("Crunchyroll", true) &&
+                    !it.provider.contains("Amazon", true) && !it.seriesUrl.isNullOrBlank()
+            }?.seriesUrl?.let(detailViewModel::importCrunchyrollHistory)
+        }
     }
-    val explicitSeasonProvider = state.providerPreferences.firstOrNull { it.seasonNumber == selectedSeason }?.provider
-    val animeDefaultProvider = state.providerPreferences.firstOrNull { it.seasonNumber == 0 }?.provider
+    val animeDefaultProvider = savedAnimeProvider
     val invalidAnimePreference = animeDefaultProvider?.takeIf {
-        ProviderPreferenceUiPolicy.isInvalidAnimePreference(it, state.providerSeasonMappings)
+        ProviderPreferenceUiPolicy.isInvalidAnimePreference(
+            it, state.providerSeasonMappings, state.providerReferences
+        )
     }
-    val effectiveSeasonProvider = de.anisentinel.app.data.provider.ProviderSelectionPolicy.select(
+    val effectiveSeasonProvider = animeDefaultProvider ?: de.anisentinel.app.data.provider.ProviderSelectionPolicy.select(
         selectedSeason,
         state.providerReferences,
         state.providerSeasonMappings,
-        state.providerPreferences
+        state.providerPreferences.filter { it.seasonNumber == 0 }
     ).references.firstOrNull()?.provider
-    val invalidSeasonPreference = explicitSeasonProvider?.takeIf {
-        ProviderPreferenceUiPolicy.isInvalidSeasonPreference(it, selectedSeason, state.providerSeasonMappings)
-    }
-    val animeProviderNames = ProviderPreferenceUiPolicy.providersForAnime(state.providerSeasonMappings)
+    val animeProviderNames = ProviderPreferenceUiPolicy.providersForAnime(
+        state.providerSeasonMappings, state.providerReferences
+    )
     LaunchedEffect(selectedSeason) {
         detailViewModel.refreshSeasonAvailability(selectedSeason)
     }
@@ -216,11 +248,12 @@ fun AnimeDetailScreen(
             )
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    nextRelease?.let { release -> ReleaseHistoryCard(stringResource(R.string.next_release), release, state.episodeChecks) }
+                    nextRelease?.let { release -> ReleaseHistoryCard(stringResource(R.string.next_release), release, state.releases, state.episodeChecks) }
                     lastRelease?.let { display ->
                         ReleaseHistoryCard(
                             stringResource(if (display.inferred) R.string.previous_expected_release else R.string.last_release),
                             display.release,
+                            state.releases,
                             state.episodeChecks,
                             display.inferred
                         )
@@ -341,9 +374,9 @@ fun AnimeDetailScreen(
                             Text(stringResource(R.string.release_provider, it))
                         }
                         check.firstAvailableAt?.let { detectedAt ->
-                            Text(stringResource(R.string.first_detected_at, detectedAt.localTimeText()))
+                            Text(stringResource(R.string.first_detected_at, detectedAt.localDateTimeText()))
                             state.scheduledRelease?.eventAt?.let { expectedAt ->
-                                Text(stringResource(R.string.planned_at, expectedAt.localTimeText()))
+                                Text(stringResource(R.string.planned_at, expectedAt.localDateTimeText()))
                                 val delayMinutes = ((detectedAt - expectedAt) / 60).coerceAtLeast(0)
                                 Text(stringResource(R.string.detected_delay_minutes, delayMinutes))
                             }
@@ -376,10 +409,10 @@ fun AnimeDetailScreen(
                             .map { it.providerName }
                     )
                     val crunchyrollSeriesUrl = state.providerMetadataIdentities
-                        .firstOrNull { it.provider.contains("CRUNCHYROLL") && it.sourceUrl?.startsWith("https://") == true }
+                        .firstOrNull { it.provider.contains("CRUNCHYROLL", true) && it.sourceUrl?.startsWith("https://") == true }
                         ?.sourceUrl
                         ?: state.providerReferences.firstOrNull {
-                            it.provider == "CRUNCHYROLL" && it.seriesUrl?.startsWith("https://") == true
+                            it.provider.equals("Crunchyroll", true) && it.seriesUrl?.startsWith("https://") == true
                         }?.seriesUrl
                     val adnIdentity = state.providerMetadataIdentities.firstOrNull {
                         it.provider.startsWith("ADN") && it.providerMarket == "DE"
@@ -417,7 +450,7 @@ fun AnimeDetailScreen(
                             }
                         }
                     }
-                    if (state.providerReference?.provider == "CRUNCHYROLL") {
+                    if (state.providerReference?.provider.equals("Crunchyroll", true)) {
                         Button(onClick = detailViewModel::checkProviderNow, enabled = !state.providerChecking) {
                             Text(stringResource(R.string.check_provider_now))
                         }
@@ -509,62 +542,50 @@ fun AnimeDetailScreen(
                     }
                 }
             }
+            if (savedAnimeProvider != null && selectedProviderCatalogSeasons.isEmpty()) item {
+                DetailSection(savedAnimeProvider) {
+                    if (state.historyImportRunning) CircularProgressIndicator()
+                    Text(
+                        stringResource(R.string.provider_catalog_loading, savedAnimeProvider),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
             if (availableSeasons.size > 1) item {
-                Row(
+                LazyRow(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    availableSeasons.forEach { season ->
+                    items(availableSeasons, key = { it }) { season ->
                         FilterChip(
                             selected = selectedSeason == season,
                             onClick = { selectedSeason = season },
-                            label = { Text(stringResource(R.string.season_number, season)) }
-                        )
-                    }
-                }
-            }
-            item {
-                val providerNames = ProviderPreferenceUiPolicy.providersForSeason(
-                    selectedSeason,
-                    state.providerSeasonMappings
-                )
-                val explicit = state.providerPreferences.firstOrNull { it.seasonNumber == selectedSeason }
-                DetailSection(stringResource(R.string.provider_for_season, selectedSeason)) {
-                    if (providerNames.isEmpty()) {
-                        Text(stringResource(R.string.no_confirmed_dach_provider))
-                    } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilterChip(
-                                selected = explicit == null,
-                                onClick = { detailViewModel.clearProviderPreference(selectedSeason) },
-                                label = { Text(stringResource(R.string.use_anime_provider_preference)) }
-                            )
-                            providerNames.forEach { provider ->
-                                FilterChip(
-                                    selected = provider.equals(effectiveSeasonProvider, true),
-                                    onClick = { detailViewModel.setProviderPreference(selectedSeason, provider) },
-                                    label = { Text(provider) }
+                            label = {
+                                Text(
+                                    selectedProviderSeasonLabels[season]?.takeIf(String::isNotBlank)
+                                        ?: if (animeDefaultProvider.equals("ADN", true))
+                                        stringResource(R.string.saga_number, season)
+                                    else stringResource(R.string.season_number, season)
                                 )
                             }
-                        }
-                    }
-                    invalidSeasonPreference?.let { invalid ->
-                        Text(
-                            stringResource(R.string.provider_preference_no_longer_available, invalid),
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall
                         )
                     }
                 }
             }
             val selectedSeasonReleases = state.releases.filter { (it.seasonNumber ?: 1) == selectedSeason }
+            // Calendar rows remain provider-neutral schedule data. Historical catalogue rows,
+            // availability checks and deep links must follow the provider selected by the user.
+            val providerScopedSeasonReleases = selectedSeasonReleases.filter { release ->
+                !release.isHistoricalImport || effectiveSeasonProvider == null ||
+                    release.provider.equals(effectiveSeasonProvider, ignoreCase = true)
+            }
             val currentCalendarSeason = state.releases
                 .filterNot { it.isHistoricalImport || it.sourceReleaseId.startsWith("crunchyroll-history:") || it.sourceReleaseId.startsWith("adn-history:") }
                 .maxOfOrNull { it.seasonNumber ?: 1 }
                 ?: availableSeasons.lastOrNull()
                 ?: selectedSeason
             val useHistoricalEpisodes = selectedSeason < currentCalendarSeason
-            val currentSeasonCardReleases = selectedSeasonReleases
+            val currentSeasonCardReleases = providerScopedSeasonReleases
                 .filter {
                     useHistoricalEpisodes ||
                         (!it.isHistoricalImport &&
@@ -572,7 +593,7 @@ fun AnimeDetailScreen(
                             !it.sourceReleaseId.startsWith("adn-history:"))
                 }
                 .filter { (it.expectedAt ?: Long.MAX_VALUE) <= java.time.Instant.now().epochSecond }
-            val newestRelevantReleaseIds = selectedSeasonReleases
+            val newestRelevantReleaseIds = providerScopedSeasonReleases
                 .filter { (it.expectedAt ?: Long.MAX_VALUE) <= java.time.Instant.now().epochSecond }
                 .sortedByDescending { it.expectedAt ?: Long.MIN_VALUE }
                 .take(2)
@@ -580,11 +601,24 @@ fun AnimeDetailScreen(
             val selectedSeasonEpisodeCount = currentSeasonCardReleases
                 .mapNotNull { it.episodeNumber }
                 .maxOrNull() ?: 0
+            val directProviderEpisodeNumbers = currentSeasonCardReleases
+                .filter { it.isHistoricalImport && !it.provider.isNullOrBlank() }
+                .mapNotNull { it.episodeNumber }
+                .distinct()
+                .sorted()
             val visibleEpisodes = if (isAniList) listOfNotNull(anime.episode.takeIf { it > 0 })
-                else EpisodeCardResolver.visibleEpisodeNumbers(selectedSeasonEpisodeCount, currentSeasonCardReleases)
+                else directProviderEpisodeNumbers.ifEmpty {
+                    EpisodeCardResolver.visibleEpisodeNumbers(selectedSeasonEpisodeCount, currentSeasonCardReleases)
+                }
             items(visibleEpisodes) { episode ->
+                val localEpisodeNumber = visibleEpisodes.indexOf(episode) + 1
                 val episodeCheckRows = state.episodeChecks
-                    .filter { it.episodeNumber == episode && (it.seasonNumber ?: 1) == selectedSeason }
+                    .filter {
+                        it.episodeNumber == episode &&
+                            (it.seasonNumber ?: 1) == selectedSeason &&
+                            (effectiveSeasonProvider == null ||
+                                it.providerName.equals(effectiveSeasonProvider, ignoreCase = true))
+                    }
                 val concreteCheck = episodeCheckRows
                     .maxByOrNull { it.lastCheckedAt }
                 // A later technical failure from a secondary adapter must never hide an
@@ -596,14 +630,16 @@ fun AnimeDetailScreen(
                     .filter {
                         (it.seasonNumber ?: 1) == selectedSeason &&
                             (it.episodeNumber ?: Int.MIN_VALUE) > episode &&
-                            it.status.startsWith("AVAILABLE_")
+                            it.status.startsWith("AVAILABLE_") &&
+                            (effectiveSeasonProvider == null ||
+                                it.providerName.equals(effectiveSeasonProvider, ignoreCase = true))
                     }
                     .minByOrNull { it.episodeNumber ?: Int.MAX_VALUE }
                 val effectiveAvailableCheck = confirmedConcreteCheck
                     ?: confirmedLaterEpisode
                 val availabilityInferredFromLaterEpisode =
                     confirmedConcreteCheck == null && confirmedLaterEpisode != null
-                val historicalCandidates = selectedSeasonReleases
+                val historicalCandidates = providerScopedSeasonReleases
                     .filter {
                         it.episodeNumber == episode &&
                             (it.expectedAt ?: Long.MAX_VALUE) <= java.time.Instant.now().epochSecond &&
@@ -633,11 +669,17 @@ fun AnimeDetailScreen(
                     .distinct()
                 val availabilityText = when {
                     effectiveAvailableCheck != null ->
-                        stringResource(R.string.episode_available_at, effectiveAvailableCheck.providerName)
+                        stringResource(
+                            R.string.episode_available_at,
+                            de.anisentinel.app.domain.provider.StreamingProviderPolicy
+                                .displayName(effectiveAvailableCheck.providerName)
+                        )
                     historicalRelease?.releaseStatus?.startsWith("AVAILABLE") == true ->
                         stringResource(
                             R.string.episode_available_at,
-                            historicalRelease.provider ?: state.providerReferences.firstOrNull()?.provider ?: "Provider"
+                            de.anisentinel.app.domain.provider.StreamingProviderPolicy.displayName(
+                                historicalRelease.provider ?: state.providerReferences.firstOrNull()?.provider ?: "Provider"
+                            )
                         )
                     concreteOfferProviders.isNotEmpty() -> stringResource(R.string.episode_not_confirmed_checked)
                     concreteCheck != null ->
@@ -663,7 +705,9 @@ fun AnimeDetailScreen(
                                 tint = MaterialTheme.colorScheme.secondary
                             )
                             Text(
-                                stringResource(R.string.episode_number, episode),
+                                if (directProviderEpisodeNumbers.isNotEmpty() && localEpisodeNumber != episode)
+                                    stringResource(R.string.episode_number_with_overall, localEpisodeNumber, episode)
+                                else stringResource(R.string.episode_number, episode),
                                 Modifier.padding(start = 12.dp)
                             )
                         }
@@ -671,7 +715,7 @@ fun AnimeDetailScreen(
                             Text(availabilityText)
                             confirmedConcreteCheck?.firstAvailableAt?.let { detectedAt ->
                                 Text(
-                                    stringResource(R.string.first_detected_at, detectedAt.localTimeText()),
+                                    stringResource(R.string.first_detected_at, detectedAt.localDateTimeText()),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.tertiary
                                 )
@@ -724,13 +768,15 @@ fun AnimeDetailScreen(
                 }
             item {
                 DetailSection(stringResource(R.string.release_history)) {
-                    val sourceGroups = state.releases.groupBy { release ->
+                    val sourceGroups = state.releases
+                        .filter { (it.seasonNumber ?: 1) == selectedSeason }
+                        .groupBy { release ->
                         when {
                             release.isHistoricalImport -> release.provider ?: "Provider"
                             release.metadataSource == "ANIWORLD_CALENDAR" -> "AniWorld"
                             else -> release.provider ?: release.metadataSource
                         }
-                    }
+                        }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Outlined.Timeline, null, tint = MaterialTheme.colorScheme.primary)
                         Column(Modifier.padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -755,9 +801,37 @@ fun AnimeDetailScreen(
 }
 }
 
-private fun Long.localTimeText(): String = java.time.Instant.ofEpochSecond(this)
+internal fun Long.localDateTimeText(): String = java.time.Instant.ofEpochSecond(this)
     .atZone(java.time.ZoneId.systemDefault())
-    .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
+    .format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy · HH:mm 'Uhr'"))
+
+internal fun semanticAvailabilityCheck(
+    release: de.anisentinel.app.data.local.EpisodeReleaseEntity,
+    releases: List<de.anisentinel.app.data.local.EpisodeReleaseEntity>,
+    checks: List<de.anisentinel.app.data.local.EpisodeProviderAvailabilityEntity>
+): de.anisentinel.app.data.local.EpisodeProviderAvailabilityEntity? {
+    val semanticReleaseIds = releases.asSequence()
+        .filter {
+            it.animeId == release.animeId &&
+                (it.seasonNumber ?: 1) == (release.seasonNumber ?: 1) &&
+                it.episodeNumber == release.episodeNumber &&
+                it.releaseLanguage == release.releaseLanguage
+        }
+        .mapTo(mutableSetOf()) { it.sourceReleaseId }
+        .apply { add(release.sourceReleaseId) }
+    return checks.asSequence()
+        .filter { it.releaseId in semanticReleaseIds }
+        .filter {
+            when (release.releaseLanguage) {
+                "GER_SUB" -> it.germanSubAvailable != false
+                "GER_DUB" -> it.germanDubAvailable != false
+                else -> true
+            }
+        }
+        .maxWithOrNull(compareBy<de.anisentinel.app.data.local.EpisodeProviderAvailabilityEntity> {
+            if (it.status.startsWith("AVAILABLE_")) 1 else 0
+        }.thenBy { it.lastCheckedAt })
+}
 
 @Composable
 private fun localizedReleaseLanguage(value: String?): String = stringResource(

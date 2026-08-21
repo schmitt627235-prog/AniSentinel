@@ -143,7 +143,11 @@ class ProviderPipelineRepository(
         }
 
     suspend fun checkDueEpisodes(now: Instant = Instant.now()): ProviderPipelineRun {
-        val releases = dao.dueFavoriteReleases(now.epochSecond, now.minusSeconds(7 * 86_400).epochSecond)
+        val oldest = now.minusSeconds(7 * 86_400).epochSecond
+        val releases = (
+            dao.dueFavoriteReleases(now.epochSecond, oldest) +
+                dao.fallbackConfirmedReleasesAwaitingDirectCheck(now.epochSecond, oldest)
+            )
             .groupBy(::releaseKey)
             .values
             .map { duplicates -> duplicates.minBy { if (it.animeId.startsWith("aniworld:episode-")) 1 else 0 } }
@@ -201,12 +205,20 @@ class ProviderPipelineRepository(
             dao.providerSeasonMappings(release.animeId, release.seasonNumber ?: 1),
             dao.providerPreferences(release.animeId, release.seasonNumber ?: 1)
         ).references
-        runMetadataProbes(release, anime.titleGerman, episode, selectedProviders, now)
-        val directCandidates = selectedProviders.filter {
+        // The preference controls presentation/deep-link choice only. Availability checks must
+        // cover every German streaming provider discovered by JustWatch so a negative result from
+        // one catalogue cannot hide a valid release at another provider.
+        val directProbeProviders = providerReferences.filter {
+            ProviderMarketPolicy.isAppMarket(it.providerMarket) &&
+                metadataAdapters.any { adapter -> adapter.supports(it.provider) }
+        }.distinctBy { it.provider.lowercase() }
+        runMetadataProbes(release, anime.titleGerman, episode, directProbeProviders, now)
+        val directCandidates = providerReferences.filter {
             it.provider.contains("Crunchyroll", ignoreCase = true) &&
                 !it.provider.contains("Amazon", ignoreCase = true) &&
-                !it.provider.contains("Channel", ignoreCase = true)
-        }
+                !it.provider.contains("Channel", ignoreCase = true) &&
+                ProviderMarketPolicy.isAppMarket(it.providerMarket)
+        }.distinctBy { it.provider.lowercase() }
         var directNegative = false
         var directChecked = false
         directCandidates.forEach { reference ->
@@ -246,25 +258,21 @@ class ProviderPipelineRepository(
                 release.sourceReleaseId, release.releaseLanguage,
                 excludedSources = setOf("ANIWORLD_CALENDAR_FALLBACK_V15")
             )) {
-            dao.updateReleaseStatus(release.sourceReleaseId, "AVAILABLE")
+            markSemanticReleaseAvailable(release)
             return ProviderPipelineRun(if (selectedId != null) 1 else 0, 1, 0)
         }
 
         val directRows = dao.episodeProviderAvailability(release.sourceReleaseId)
             .filterNot { it.source == "ANIWORLD_CALENDAR_FALLBACK_V15" || it.source == "UNOFFICIAL_JUSTWATCH_DIAGNOSTIC" }
         val directConclusiveNegative = directRows.any { it.status == EpisodeAvailabilityStatus.NOT_AVAILABLE_YET.name }
-        if (directConclusiveNegative) {
-            dao.updateReleaseStatus(release.sourceReleaseId, "PENDING_CONFIRMATION")
-            return ProviderPipelineRun(if (selectedId != null) 1 else 0, 1, 0)
-        }
-
-        // AniWorld is a technical fallback only. A successfully parsed negative provider response
-        // remains NOT_AVAILABLE_YET and continues through the direct provider schedule.
+        val fallbackAllowed = release.expectedAt?.let { now.epochSecond >= it + 10 * 60 } == true
+        // At T+10 AniWorld becomes an independent safety signal. A conclusive negative
+        // provider result must not suppress it; direct checks still ran first in this pass.
         if (!shouldUseAniWorldFallback(
                 directAvailable = false,
                 directConclusiveNegative = directConclusiveNegative || directChecked,
                 directFailed = directFailed,
-                fallbackAllowed = true
+                fallbackAllowed = fallbackAllowed
             )) {
             dao.updateReleaseStatus(release.sourceReleaseId, "PENDING_CONFIRMATION")
             return ProviderPipelineRun(if (selectedId != null) 1 else 0, 1, 0)
@@ -300,13 +308,26 @@ class ProviderPipelineRepository(
             persistenceSource = "ANIWORLD_CALENDAR_FALLBACK_V15"
         )
         if (isExpectedLanguageAvailable(release.sourceReleaseId, release.releaseLanguage)) {
-            dao.updateReleaseStatus(release.sourceReleaseId, "AVAILABLE")
+            markSemanticReleaseAvailable(release)
             return ProviderPipelineRun(if (selectedId != null) 1 else 0, 1, 0)
         }
         val fallbackNegative = fallback is ProviderEpisodeCheckResult.Checked && !fallback.availability.episodeFound
         val finalStatus = if (directNegative && fallbackNegative) "DELAYED_CONFIRMED" else "OVERDUE_UNCONFIRMED"
         dao.updateReleaseStatus(release.sourceReleaseId, finalStatus)
         return ProviderPipelineRun(if (selectedId != null) 1 else 0, 1, if (finalStatus == "OVERDUE_UNCONFIRMED") 1 else 0)
+    }
+
+    private suspend fun markSemanticReleaseAvailable(
+        release: de.anisentinel.app.data.local.EpisodeReleaseEntity
+    ) {
+        val episode = release.episodeNumber ?: return
+        dao.updateSemanticReleaseStatus(
+            animeId = release.animeId,
+            seasonNumber = release.seasonNumber ?: 1,
+            episodeNumber = episode,
+            releaseLanguage = release.releaseLanguage,
+            status = "AVAILABLE"
+        )
     }
 
     /** Experimental probes run beside the established path and never promote a release by themselves. */
@@ -317,6 +338,11 @@ class ProviderPipelineRepository(
         references: List<ProviderReferenceEntity>,
         now: Instant
     ) = coroutineScope {
+        val titleAliases = (dao.justWatchMatches(release.animeId)
+            .filter { it.status == "MATCHED" }
+            .mapNotNull { it.title.takeIf(String::isNotBlank) } +
+            listOfNotNull(dao.justWatchCatalogTitleForAnime(release.animeId)?.title))
+            .toSet()
         metadataAdapters.flatMap { adapter ->
             references.filter { adapter.supports(it.provider) && ProviderMarketPolicy.isAppMarket(it.providerMarket) }
                 .take(1)
@@ -325,7 +351,8 @@ class ProviderPipelineRepository(
                         ?.let { ProviderMetadataIdentity(it.provider, it.providerMarket, it.seriesId, it.seasonId, it.episodeId, it.sourceUrl, it.seasonNumber) }
                     val request = ProviderMetadataProbeRequest(
                         release.animeId, title, release.seasonNumber, episode, release.releaseLanguage,
-                        ProviderMarketPolicy.GERMANY, reference.seriesUrl, release.expectedAt?.let(Instant::ofEpochSecond)
+                        ProviderMarketPolicy.GERMANY, reference.seriesUrl, release.expectedAt?.let(Instant::ofEpochSecond),
+                        titleAliases
                     )
                     Triple(adapter, reference, adapter.probe(request, cached))
                 } }
@@ -644,7 +671,7 @@ internal fun shouldUseAniWorldFallback(
     directConclusiveNegative: Boolean,
     directFailed: Boolean,
     fallbackAllowed: Boolean
-): Boolean = !directAvailable && !directConclusiveNegative && directFailed && fallbackAllowed
+): Boolean = !directAvailable && fallbackAllowed
 
 internal fun providerSyncCandidates(
     due: List<de.anisentinel.app.data.local.EpisodeReleaseEntity>,

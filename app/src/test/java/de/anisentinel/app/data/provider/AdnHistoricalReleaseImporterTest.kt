@@ -46,6 +46,16 @@ class AdnHistoricalReleaseImporterTest {
         assertEquals(2, result.imported)
         assertEquals(2, dao.observeEpisodeReleasesForAnime("adn-anime").first().size)
         assertTrue(dao.observeEpisodeReleasesForAnime("adn-anime").first().all { it.isHistoricalImport && it.metadataSource == "ADN_PUBLIC_METADATA" })
+        assertEquals(
+            listOf(1),
+            dao.observeAnimeSeasons("adn-anime").first().map { it.canonicalSeasonNumber }
+        )
+        assertEquals(
+            listOf("ADN"),
+            dao.observeProviderSeasonMappings("adn-anime").first()
+                .filter { it.available && it.region == "DE" }
+                .map { it.provider }
+        )
         assertTrue(dao.dueFavoriteReleases(Instant.now().epochSecond, 0).isEmpty())
         assertTrue(dao.scheduledReleaseNotifications().isEmpty())
     }
