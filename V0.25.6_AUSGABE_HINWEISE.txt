@@ -1,0 +1,11 @@
+AniSentinel v0.25.6
+
+APK installieren:
+AniSentinel-v0.25.6-DIAGNOSETEST.apk
+
+Der Ausgabeordner enthält APK, vollständigen bereinigten Sourcecode, Source-ZIP,
+Änderungsbericht, Validierungsbericht, JVM-Testresultate, Screenshot,
+720p-Geräteclip und SHA-256-Prüfsummen.
+
+Das Gesamtpaket bleibt unter 512 MB. Private Gerätedaten und lokale Datenbanken
+sind nicht enthalten.

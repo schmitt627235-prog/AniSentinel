@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.25.6 – belastbare Staffel- und Providerpräferenzen – 2026-08-21
+
+- Eine animeweite Providerpräferenz gilt als Standard für alle Staffeln; eine staffelbezogene Auswahl überschreibt sie gezielt.
+- Auswahlchips zeigen ausschließlich Provider, deren konkrete Staffel für Deutschland bestätigt ist. Allgemeine Katalogreferenzen erzeugen keine auswählbaren Provider.
+- Gespeicherte Präferenzen auf nicht mehr bestätigte Staffelprovider werden nicht erzwungen; die App fällt auf einen bestätigten Provider beziehungsweise die automatische Auswahl zurück und kennzeichnet die ungültige Vorgabe.
+- Solange für eine Staffel noch kein Mapping existiert, prüft die generische Discovery-Pipeline Crunchyroll zuerst und anschließend die übrigen Referenzen; daraus wird weiterhin erst nach einem echten Staffelcheck ein bestätigtes Mapping.
+- Staffelchips entstehen aus verifizierten kanonischen Staffeln und bestätigten Provider-Mappings. Mehrere alte, ausschließlich aus Release-Backfill stammende Staffelnummern werden nicht mehr als reale Staffelstruktur ausgegeben.
+- Regressionstests decken Phantomstaffeln, verteilte Provider-Staffeln, animeweite Standards, Staffel-Ausnahmen und ungültig gewordene Präferenzen ab.
+
 ## v0.25.5 – Release-Lifecycle, Staffelprovider und Anime-Katalog – 2026-08-21
 
 - Alte unbestätigte Releases bleiben nicht mehr sieben Tage als enge aktive Provider-Wächter bestehen. Ein Nachfolger beendet den alten engen Watcher nach einer kurzen Karenz; spätestens nach 24 Stunden wird er `STALE_UNCONFIRMED`.

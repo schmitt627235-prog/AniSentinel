@@ -119,22 +119,38 @@ fun AnimeDetailScreen(
     val isAniList = anime.source == "ANILIST"
     val context = LocalContext.current
     val resolvedStatus = ReleaseStatusResolver().resolve(anime)
-    val availableSeasons = (state.canonicalSeasons.map { it.canonicalSeasonNumber } +
-        state.releases.map { it.seasonNumber ?: 1 }).distinct().sorted()
+    val availableSeasons = CanonicalSeasonPolicy.visibleSeasons(
+        state.canonicalSeasons,
+        state.providerSeasonMappings
+    )
     val defaultSeason = focusedSeason ?: state.releases
         .filter { (it.expectedAt ?: Long.MIN_VALUE) >= java.time.Instant.now().epochSecond }
         .minByOrNull { it.expectedAt ?: Long.MAX_VALUE }?.seasonNumber
         ?: availableSeasons.lastOrNull() ?: 1
     var selectedSeason by rememberSaveable(animeId) { mutableIntStateOf(defaultSeason) }
+    LaunchedEffect(availableSeasons) {
+        if (availableSeasons.isNotEmpty() && selectedSeason !in availableSeasons) {
+            selectedSeason = availableSeasons.last()
+        }
+    }
     val selectedSeasonMappings = state.providerSeasonMappings.filter {
         it.canonicalSeasonNumber == selectedSeason && it.region == "DE" && it.available
     }
     val explicitSeasonProvider = state.providerPreferences.firstOrNull { it.seasonNumber == selectedSeason }?.provider
     val animeDefaultProvider = state.providerPreferences.firstOrNull { it.seasonNumber == 0 }?.provider
-    val effectiveSeasonProvider = explicitSeasonProvider ?: animeDefaultProvider
-        ?.takeIf { preferred -> selectedSeasonMappings.any { it.provider.equals(preferred, true) } }
-        ?: selectedSeasonMappings.firstOrNull { it.provider.equals("Crunchyroll", true) }?.provider
-        ?: selectedSeasonMappings.firstOrNull()?.provider
+    val invalidAnimePreference = animeDefaultProvider?.takeIf {
+        ProviderPreferenceUiPolicy.isInvalidAnimePreference(it, state.providerSeasonMappings)
+    }
+    val effectiveSeasonProvider = de.anisentinel.app.data.provider.ProviderSelectionPolicy.select(
+        selectedSeason,
+        state.providerReferences,
+        state.providerSeasonMappings,
+        state.providerPreferences
+    ).references.firstOrNull()?.provider
+    val invalidSeasonPreference = explicitSeasonProvider?.takeIf {
+        ProviderPreferenceUiPolicy.isInvalidSeasonPreference(it, selectedSeason, state.providerSeasonMappings)
+    }
+    val animeProviderNames = ProviderPreferenceUiPolicy.providersForAnime(state.providerSeasonMappings)
     LaunchedEffect(selectedSeason) {
         detailViewModel.refreshSeasonAvailability(selectedSeason)
     }
@@ -461,6 +477,38 @@ fun AnimeDetailScreen(
                 }
             }
             item { SectionHeader(stringResource(R.string.episodes)) }
+            item {
+                DetailSection(stringResource(R.string.preferred_provider_for_anime)) {
+                    if (animeProviderNames.isEmpty()) {
+                        Text(stringResource(R.string.no_confirmed_dach_provider))
+                    } else {
+                        FilterChip(
+                            selected = animeDefaultProvider == null || invalidAnimePreference != null,
+                            onClick = { detailViewModel.clearProviderPreference(0) },
+                            label = { Text(stringResource(R.string.provider_automatic)) }
+                        )
+                        animeProviderNames.forEach { provider ->
+                            FilterChip(
+                                selected = provider.equals(animeDefaultProvider, true),
+                                onClick = { detailViewModel.setProviderPreference(0, provider) },
+                                label = { Text(provider) }
+                            )
+                        }
+                        Text(
+                            stringResource(R.string.anime_provider_preference_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    invalidAnimePreference?.let { invalid ->
+                        Text(
+                            stringResource(R.string.provider_preference_no_longer_available, invalid),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            }
             if (availableSeasons.size > 1) item {
                 Row(
                     Modifier.fillMaxWidth(),
@@ -476,14 +524,21 @@ fun AnimeDetailScreen(
                 }
             }
             item {
-                val providerNames = (selectedSeasonMappings.map { it.provider } +
-                    state.providerReferences.map { it.provider }).distinct().sorted()
+                val providerNames = ProviderPreferenceUiPolicy.providersForSeason(
+                    selectedSeason,
+                    state.providerSeasonMappings
+                )
                 val explicit = state.providerPreferences.firstOrNull { it.seasonNumber == selectedSeason }
                 DetailSection(stringResource(R.string.provider_for_season, selectedSeason)) {
                     if (providerNames.isEmpty()) {
                         Text(stringResource(R.string.no_confirmed_dach_provider))
                     } else {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(
+                                selected = explicit == null,
+                                onClick = { detailViewModel.clearProviderPreference(selectedSeason) },
+                                label = { Text(stringResource(R.string.use_anime_provider_preference)) }
+                            )
                             providerNames.forEach { provider ->
                                 FilterChip(
                                     selected = provider.equals(effectiveSeasonProvider, true),
@@ -492,11 +547,13 @@ fun AnimeDetailScreen(
                                 )
                             }
                         }
-                        if (explicit != null) {
-                            TextButton(onClick = { detailViewModel.clearProviderPreference(selectedSeason) }) {
-                                Text(stringResource(R.string.provider_automatic))
-                            }
-                        }
+                    }
+                    invalidSeasonPreference?.let { invalid ->
+                        Text(
+                            stringResource(R.string.provider_preference_no_longer_available, invalid),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
                 }
             }

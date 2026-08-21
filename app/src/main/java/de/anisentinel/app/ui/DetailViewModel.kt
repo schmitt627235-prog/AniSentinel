@@ -342,6 +342,12 @@ class DetailViewModel(
     }
 
     fun setProviderPreference(seasonNumber: Int, provider: String) {
+        val isConfirmed = _state.value.providerSeasonMappings.any { mapping ->
+            mapping.region == "DE" && mapping.available &&
+                mapping.provider.equals(provider, ignoreCase = true) &&
+                (seasonNumber == 0 || mapping.canonicalSeasonNumber == seasonNumber)
+        }
+        if (!isConfirmed) return
         viewModelScope.launch {
             container.database.aniSentinelDao().upsertProviderPreference(
                 de.anisentinel.app.data.local.ProviderPreferenceEntity(

@@ -401,6 +401,10 @@
     <string name="changelog_v22_title">Version 0.22 · Robust news details</string>
     <string name="changelog_v22_body">An invalid or removed announcement ID no longer remains in a permanent loading state and instead provides a clear way back to the news list.</string>
     <string name="provider_for_season">Provider for season %1$d</string>
+    <string name="preferred_provider_for_anime">Preferred provider for this anime</string>
+    <string name="anime_provider_preference_hint">Applies to every season for which this provider is confirmed as available.</string>
+    <string name="use_anime_provider_preference">Use anime preference</string>
+    <string name="provider_preference_no_longer_available">The saved selection %1$s is no longer available for this season. AniSentinel is using a confirmed provider automatically.</string>
     <string name="provider_automatic">Select automatically</string>
     <string name="no_confirmed_dach_provider">No confirmed provider for this season in Germany yet.</string>
 </resources>
