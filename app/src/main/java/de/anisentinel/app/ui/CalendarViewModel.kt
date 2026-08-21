@@ -183,7 +183,9 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
                             ?: "–",
                         row.release.episodeNumber, Instant.ofEpochSecond(at),
                         latestEpisodeAvailability?.providerName
-                            ?: row.providerReferences.map { it.provider }.distinct().joinToString(" · ").takeIf { it.isNotBlank() },
+                            ?: de.anisentinel.app.domain.provider.StreamingProviderPolicy
+                                .visible(row.providerReferences.map { it.provider })
+                                .joinToString(" · ").takeIf { it.isNotBlank() },
                         row.release.metadataSource, row.release.sourceUrl, row.release.providerUrl,
                         ReleaseSourceType.fromMetadataSource(row.release.metadataSource),
                         row.availability.any { availability ->

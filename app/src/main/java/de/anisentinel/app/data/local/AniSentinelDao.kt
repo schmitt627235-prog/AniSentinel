@@ -163,6 +163,15 @@ interface AniSentinelDao {
     @Query("SELECT * FROM provider_season_mappings WHERE animeId = :animeId AND canonicalSeasonNumber = :seasonNumber AND region = 'DE' ORDER BY provider")
     suspend fun providerSeasonMappings(animeId: String, seasonNumber: Int): List<ProviderSeasonMappingEntity>
 
+    @Query("SELECT DISTINCT providerSeriesId FROM provider_season_mappings WHERE animeId = :animeId AND lower(provider) = lower(:provider) AND providerSeriesId IS NOT NULL")
+    suspend fun providerCatalogSeriesIds(animeId: String, provider: String): List<String>
+
+    @Query("DELETE FROM provider_season_mappings WHERE animeId = :animeId AND lower(provider) = lower(:provider)")
+    suspend fun deleteProviderSeasonMappings(animeId: String, provider: String)
+
+    @Query("DELETE FROM episode_releases WHERE animeId = :animeId AND isHistoricalImport = 1 AND lower(COALESCE(provider, '')) = lower(:provider)")
+    suspend fun deleteHistoricalProviderReleases(animeId: String, provider: String)
+
     @Query("SELECT * FROM provider_preferences WHERE animeId = :animeId ORDER BY seasonNumber")
     fun observeProviderPreferences(animeId: String): Flow<List<ProviderPreferenceEntity>>
 
@@ -192,6 +201,34 @@ interface AniSentinelDao {
 
     @Query("SELECT er.* FROM episode_releases er INNER JOIN favorites f ON f.animeId = er.animeId WHERE f.enabled = 1 AND er.isHistoricalImport = 0 AND er.expectedAt IS NOT NULL AND er.expectedAt <= :nowEpochSeconds AND er.expectedAt >= :oldestEpochSeconds AND er.releaseStatus NOT IN ('AVAILABLE', 'POSTPONED', 'DELAYED', 'DELAYED_CONFIRMED', 'STALE_UNCONFIRMED') AND er.releaseStatus NOT LIKE 'AVAILABLE_%' AND ((f.languagePreference = 'BOTH') OR (f.languagePreference = 'SUB' AND er.releaseLanguage = 'GER_SUB') OR (f.languagePreference = 'DUB' AND er.releaseLanguage = 'GER_DUB')) ORDER BY er.expectedAt")
     suspend fun dueFavoriteReleases(nowEpochSeconds: Long, oldestEpochSeconds: Long): List<EpisodeReleaseEntity>
+
+    @Query("""
+        SELECT DISTINCT er.* FROM episode_releases er
+        INNER JOIN favorites f ON f.animeId = er.animeId
+        INNER JOIN episode_provider_availability fallback ON fallback.releaseId = er.sourceReleaseId
+        WHERE f.enabled = 1
+          AND er.isHistoricalImport = 0
+          AND er.expectedAt IS NOT NULL
+          AND er.expectedAt <= :nowEpochSeconds
+          AND er.expectedAt >= :oldestEpochSeconds
+          AND fallback.source = 'ANIWORLD_CALENDAR_FALLBACK_V15'
+          AND (fallback.firstAvailableAt IS NOT NULL OR fallback.status LIKE 'AVAILABLE_%')
+          AND NOT EXISTS (
+              SELECT 1 FROM episode_provider_availability direct
+              INNER JOIN episode_releases direct_release ON direct_release.sourceReleaseId = direct.releaseId
+              WHERE direct_release.animeId = er.animeId
+                AND COALESCE(direct_release.seasonNumber, 1) = COALESCE(er.seasonNumber, 1)
+                AND direct_release.episodeNumber = er.episodeNumber
+                AND COALESCE(direct_release.releaseLanguage, '') = COALESCE(er.releaseLanguage, '')
+                AND direct.source NOT IN ('ANIWORLD_CALENDAR_FALLBACK_V15', 'UNOFFICIAL_JUSTWATCH_DIAGNOSTIC')
+                AND (direct.firstAvailableAt IS NOT NULL OR direct.status LIKE 'AVAILABLE_%')
+          )
+        ORDER BY er.expectedAt
+    """)
+    suspend fun fallbackConfirmedReleasesAwaitingDirectCheck(
+        nowEpochSeconds: Long,
+        oldestEpochSeconds: Long
+    ): List<EpisodeReleaseEntity>
 
     @Query("SELECT COUNT(*) FROM favorites WHERE animeId = :animeId")
     suspend fun favoriteRecordCount(animeId: String): Int
@@ -351,6 +388,22 @@ interface AniSentinelDao {
     @Query("UPDATE episode_releases SET releaseStatus = :status WHERE sourceReleaseId = :releaseId")
     suspend fun updateReleaseStatus(releaseId: String, status: String)
 
+    @Query("""
+        UPDATE episode_releases SET releaseStatus = :status
+        WHERE animeId = :animeId
+          AND COALESCE(seasonNumber, 1) = :seasonNumber
+          AND episodeNumber = :episodeNumber
+          AND COALESCE(releaseLanguage, '') = COALESCE(:releaseLanguage, '')
+          AND isHistoricalImport = 0
+    """)
+    suspend fun updateSemanticReleaseStatus(
+        animeId: String,
+        seasonNumber: Int,
+        episodeNumber: Int,
+        releaseLanguage: String?,
+        status: String
+    )
+
     @Query("SELECT * FROM justwatch_title_matches WHERE animeId = :animeId ORDER BY fetchedAt DESC")
     suspend fun justWatchMatches(animeId: String): List<JustWatchTitleMatchEntity>
 
@@ -474,6 +527,38 @@ interface AniSentinelDao {
     ) {
         upsertEpisodeReleases(releases)
         upsertReleaseSourceReferences(references)
+    }
+
+    @Transaction
+    suspend fun importHistoricalProviderCatalog(
+        releases: List<EpisodeReleaseEntity>,
+        references: List<ReleaseSourceReferenceEntity>,
+        seasons: List<AnimeSeasonEntity>,
+        mappings: List<ProviderSeasonMappingEntity>
+    ) {
+        upsertEpisodeReleases(releases)
+        upsertReleaseSourceReferences(references)
+        seasons.forEach { upsertAnimeSeason(it) }
+        mappings.forEach { upsertProviderSeasonMapping(it) }
+    }
+
+    /** Atomically replaces a provider catalogue only after the new catalogue parsed successfully. */
+    @Transaction
+    suspend fun replaceHistoricalProviderCatalogIfSeriesChanged(
+        animeId: String,
+        provider: String,
+        providerSeriesId: String,
+        releases: List<EpisodeReleaseEntity>,
+        references: List<ReleaseSourceReferenceEntity>,
+        seasons: List<AnimeSeasonEntity>,
+        mappings: List<ProviderSeasonMappingEntity>
+    ) {
+        // A successful refresh is a complete snapshot. Always remove stale rows from
+        // the same series as well (for example recap/special rows rejected by a newer
+        // parser); calendar releases and other providers are untouched.
+        deleteHistoricalProviderReleases(animeId, provider)
+        deleteProviderSeasonMappings(animeId, provider)
+        importHistoricalProviderCatalog(releases, references, seasons, mappings)
     }
 
     @Upsert

@@ -157,18 +157,33 @@ internal object PublicEpisodePageParser {
         val unavailable = unavailableMarkers.any { text.contains(it, true) }
         val episodePattern = episodePattern(request.seasonNumber, request.episodeNumber)
         val episodeMatch = episodePattern.find(text) ?: episodePattern.find(body.replace("\\/", "/"))
+        val structured = structuredEpisode(body, request.seasonNumber, request.episodeNumber)
         val stable = identity.copy(
             seasonId = identity.seasonId ?: request.seasonNumber?.toString(),
-            episodeId = episodeMatch?.groups?.get("episodeId")?.value,
+            episodeId = structured?.episodeId ?: episodeMatch?.groups?.get("episodeId")?.value,
             seasonNumber = identity.seasonNumber ?: request.seasonNumber,
             sourceUrl = identity.sourceUrl ?: pageUrl
         )
-        if (episodeMatch == null || unavailable) {
+        if (unavailable) {
             return ProviderMetadataProbeResult.NotAvailableYet(stable, checkedAt, "${providerId}_EPISODE_NOT_AVAILABLE")
         }
-        val contextStart = (episodeMatch.range.first - 220).coerceAtLeast(0)
-        val contextEnd = (episodeMatch.range.last + 420).coerceAtMost(text.lastIndex)
-        val context = if (text.isEmpty()) "" else text.substring(contextStart, contextEnd + 1)
+        if (episodeMatch == null && structured == null) {
+            // A dynamic shell without an inspectable episode index cannot prove absence.
+            // Only a successfully parsed catalogue containing other episodes may produce
+            // the conclusive NOT_AVAILABLE result.
+            return if (containsStructuredEpisodeIndex(body)) {
+                ProviderMetadataProbeResult.NotAvailableYet(stable, checkedAt, "${providerId}_EPISODE_NOT_AVAILABLE")
+            } else {
+                ProviderMetadataProbeResult.CheckFailed(
+                    "${providerId}_PUBLIC_EPISODE_INDEX_NOT_PARSEABLE", checkedAt, true
+                )
+            }
+        }
+        val context = structured?.context ?: episodeMatch?.let { match ->
+            val contextStart = (match.range.first - 220).coerceAtLeast(0)
+            val contextEnd = (match.range.last + 420).coerceAtMost(text.lastIndex)
+            if (text.isEmpty()) "" else text.substring(contextStart, contextEnd + 1)
+        }.orEmpty()
         val globalLanguage = text.take(2_000)
         val sub = hasGermanSub(context) || hasGermanSub(globalLanguage)
         val dub = hasGermanDub(context) || hasGermanDub(globalLanguage)
@@ -182,6 +197,7 @@ internal object PublicEpisodePageParser {
         }
         val episodeUrl = document.selectFirst("a[href]:matchesOwn((?i)(S\\d+\\s*[:·-]?\\s*(?:F|E|Folge|Episode)\\s*${request.episodeNumber}|(?:Folge|Episode)\\s*${request.episodeNumber}))")
             ?.absUrl("href")?.takeIf(String::isNotBlank)
+            ?: structured?.episodeUrl
             ?: stable.sourceUrl
         return ProviderMetadataProbeResult.Available(
             ProviderEpisodeAvailability(
@@ -198,6 +214,59 @@ internal object PublicEpisodePageParser {
             "(?<episodeId>[A-Z0-9_-]{6,30}\\s+)?(?:$seasonPart(?:F|E|Folge|Episode)\\s*0?$episode\\b|(?:Folge|Episode)\\s*0?$episode\\b)",
             setOf(RegexOption.IGNORE_CASE)
         )
+    }
+
+    private data class StructuredEpisode(
+        val episodeId: String?,
+        val episodeUrl: String?,
+        val context: String
+    )
+
+    private val episodeNumberField = Regex(
+        "\"(?:episodeNumber|episode_number|episode)\"\\s*:\\s*\"?(\\d+)\"?",
+        RegexOption.IGNORE_CASE
+    )
+    private val seasonNumberField = Regex(
+        "\"(?:seasonNumber|season_number|season)\"\\s*:\\s*\"?(\\d+)\"?",
+        RegexOption.IGNORE_CASE
+    )
+    private val episodeIdField = Regex(
+        "\"(?:episodeId|episode_id|videoId|id)\"\\s*:\\s*\"([^\"}]{4,80})",
+        RegexOption.IGNORE_CASE
+    )
+    private val episodeUrlField = Regex(
+        "\"(?:episodeUrl|episode_url|watchUrl|url)\"\\s*:\\s*\"(https?:[^\"]+)",
+        RegexOption.IGNORE_CASE
+    )
+
+    private fun normalizedStructuredBody(body: String): String =
+        body.replace("\\/", "/").replace("\\\"", "\"")
+
+    private fun containsStructuredEpisodeIndex(body: String): Boolean =
+        episodeNumberField.find(normalizedStructuredBody(body)) != null
+
+    private fun structuredEpisode(body: String, season: Int?, episode: Int): StructuredEpisode? {
+        val normalized = normalizedStructuredBody(body)
+        return episodeNumberField.findAll(normalized)
+            .filter { it.groupValues[1].toIntOrNull() == episode }
+            .mapNotNull { match ->
+                val start = (match.range.first - 1_200).coerceAtLeast(0)
+                val end = (match.range.last + 1_200).coerceAtMost(normalized.lastIndex)
+                if (end < start) return@mapNotNull null
+                val context = normalized.substring(start, end + 1)
+                val parsedSeasons = seasonNumberField.findAll(context)
+                    .mapNotNull { it.groupValues[1].toIntOrNull() }
+                    .toSet()
+                if (season != null && parsedSeasons.isNotEmpty() && season !in parsedSeasons) {
+                    return@mapNotNull null
+                }
+                StructuredEpisode(
+                    episodeId = episodeIdField.find(context)?.groupValues?.getOrNull(1),
+                    episodeUrl = episodeUrlField.find(context)?.groupValues?.getOrNull(1),
+                    context = Jsoup.parse(context).text().ifBlank { context }
+                )
+            }
+            .firstOrNull()
     }
 
     private fun hasGermanSub(value: String) = listOf(

@@ -680,18 +680,21 @@ fun CalendarScreen(
                         release.lastCheckedAt?.let {
                             if (isNotEmpty()) append("\n")
                             append(stringResource(R.string.calendar_last_provider_check,
-                                it.atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))))
+                                it.atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy · HH:mm 'Uhr'"))))
                         }
                         release.providerName?.takeIf(String::isNotBlank)?.let {
-                            append("\n").append(stringResource(R.string.calendar_available_provider, it))
+                            append("\n").append(stringResource(
+                                R.string.calendar_available_provider,
+                                de.anisentinel.app.domain.provider.StreamingProviderPolicy.displayName(it)
+                            ))
                         }
                         release.firstAvailableAt?.let {
                             append("\n").append(stringResource(R.string.first_detected_at,
-                                it.atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))))
+                                it.atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy · HH:mm 'Uhr'"))))
                         }
                         release.sourceAvailableAt?.let {
                             append("\n").append(stringResource(R.string.source_available_at,
-                                it.atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))))
+                                it.atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy · HH:mm 'Uhr'"))))
                         }
                         if (!release.availabilityConfirmed && release.providerErrorCode != null) {
                             append("\n").append(stringResource(R.string.calendar_provider_check_failed))
@@ -1188,7 +1191,10 @@ fun SettingsScreen(
                             Text(stringResource(R.string.episode_check_status, localizedReleaseStatus(check.status)))
                             Text(stringResource(R.string.episode_check_target, check.seasonNumber ?: 1, check.episodeNumber ?: 0))
                             check.providerName.takeIf(String::isNotBlank)?.let {
-                                Text(stringResource(R.string.release_provider, it))
+                                Text(stringResource(
+                                    R.string.release_provider,
+                                    de.anisentinel.app.domain.provider.StreamingProviderPolicy.displayName(it)
+                                ))
                             }
                         }
                         monitoringDiagnostics.latestDeliveries.forEach { delivery ->

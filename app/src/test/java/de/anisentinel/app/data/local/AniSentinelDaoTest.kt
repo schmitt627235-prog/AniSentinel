@@ -109,6 +109,26 @@ class AniSentinelDaoTest {
     }
 
     @Test
+    fun `semantic availability updates duplicate release ids for same real episode`() = runBlocking {
+        val anime = anime("aniworld:black-torch", "BLACK TORCH")
+        val first = EpisodeReleaseEntity(
+            "aniworld:black-torch:s1:e7:dub", anime.id, 7, null, 1_000,
+            "Crunchyroll", "ANIWORLD_CALENDAR", null, null, 900,
+            seasonNumber = 1, releaseLanguage = "GER_DUB"
+        )
+        val duplicate = first.copy(
+            sourceReleaseId = "provider:black-torch:s1:e7:dub",
+            releaseStatus = "OVERDUE_UNCONFIRMED"
+        )
+        dao.upsertAnime(listOf(anime))
+        dao.upsertEpisodeReleases(listOf(first, duplicate))
+
+        dao.updateSemanticReleaseStatus(anime.id, 1, 7, "GER_DUB", "AVAILABLE")
+
+        assertTrue(dao.episodeReleasesForAnime(anime.id).all { it.releaseStatus == "AVAILABLE" })
+    }
+
+    @Test
     fun `episode persists honest availability window`() = runBlocking {
         dao.upsertAnime(listOf(anime("atlas", "Atlas of Ash")))
         dao.upsertEpisodes(

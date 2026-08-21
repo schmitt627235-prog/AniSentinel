@@ -289,7 +289,8 @@ data class ProviderSeasonMappingEntity(
     val providerSeriesUrl: String?,
     val region: String,
     val available: Boolean,
-    val lastConfirmedAt: Long
+    val lastConfirmedAt: Long,
+    val providerSeasonLabel: String? = null
 )
 
 /** seasonNumber 0 is the anime-wide default; positive values are explicit season overrides. */

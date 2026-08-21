@@ -36,7 +36,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ,ProviderPreferenceEntity::class
         ,ProviderFailureStateEntity::class
     ],
-    version = 26,
+    version = 27,
     exportSchema = true
 )
 abstract class AniSentinelDatabase : RoomDatabase() {
@@ -421,6 +421,11 @@ abstract class AniSentinelDatabase : RoomDatabase() {
                 database.execSQL("CREATE INDEX IF NOT EXISTS index_provider_preferences_animeId ON provider_preferences(animeId)")
                 database.execSQL("CREATE TABLE IF NOT EXISTS provider_failure_states (providerKey TEXT NOT NULL, consecutiveFailures INTEGER NOT NULL, firstFailureAt INTEGER NOT NULL, lastFailureAt INTEGER NOT NULL, lastErrorCode TEXT, lastNotifiedAt INTEGER, PRIMARY KEY(providerKey))")
                 database.execSQL("INSERT OR IGNORE INTO anime_seasons (animeId, canonicalSeasonNumber, source, confirmedAt) SELECT animeId, seasonNumber, 'RELEASE_BACKFILL', MAX(fetchedAt) FROM episode_releases WHERE seasonNumber IS NOT NULL AND seasonNumber > 0 GROUP BY animeId, seasonNumber")
+            }
+        }
+        val MIGRATION_26_27 = object : Migration(26, 27) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE provider_season_mappings ADD COLUMN providerSeasonLabel TEXT")
             }
         }
     }

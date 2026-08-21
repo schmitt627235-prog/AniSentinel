@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.25.8 – einheitliche Providerprüfung und T+10-Sicherheitsfallback – 2026-08-21
+
+- Alle von JustWatch Deutschland bestätigten und direkt unterstützten Anbieter werden je fälliger Episode geprüft; die Nutzerpräferenz steuert Darstellung und Deep-Link, nicht mehr den Umfang der Prüfung.
+- Direkte Prüfergebnisse unterscheiden verfügbar, technisch erfolgreich noch nicht verfügbar und technisch nicht auswertbar. Ein Parserfehler wird nicht als fehlende Episode ausgegeben.
+- AniWorld wird exakt ab zehn Minuten nach dem erwarteten Termin als unabhängiger Sicherheitsbeleg geprüft, auch nach einem direkten negativen Ergebnis. Direkte Providerprüfungen laufen nach einer Fallback-Bestätigung weiter.
+- Availability und Releasezustand werden für fachlich identische Episoden über Anime, Staffel, Episode und Sprachfassung abgeglichen. Dadurch beenden auch Belege unter einer anderen Quell-ID falsche Verzögerungsanzeigen.
+- Der Netflix-Webparser wertet zusätzlich strukturierte eingebettete Staffel-, Episoden-, ID- und URL-Metadaten aus. Nicht eindeutig auswertbare Seiten liefern `CHECK_FAILED` statt eines Falschnegativs.
+- Historische Prüf- und Erkennungszeitpunkte zeigen global Datum und Uhrzeit.
+- Regressionstests decken BLACK-TORCH-artige Quell-ID-Dubletten, Chainsmoker Cat S1E8, T+10-Grenzen und Room-Statusabgleich ab.
+
+## v0.25.7 – lange Serien und Provider-Staffelkataloge – 2026-08-21
+
+- Nutzer können ADN oder Crunchyroll als animeweiten bevorzugten Anbieter wählen, sobald JustWatch Deutschland den direkten Anbieter für den Titel bestätigt; Amazon-Channel- und sonstige Shopangebote werden nicht als Direktadapter ausgegeben.
+- Die Anbieterwahl steuert nun tatsächlich Episodenstatus, historische Katalogzeilen und Deep-Links. Daten eines anderen Providers werden nach einer manuellen Auswahl nicht mehr untergemischt.
+- Bei einer Providerwahl verwendet die Staffelauswahl dessen eigene bestätigte Katalogstruktur. ADN-Abschnitte werden als Sagas bezeichnet; AniWorld-Staffelnummern werden nicht mehr blind mit Provider-Staffelnummern gleichgesetzt.
+- Eine Crunchyroll-Auswahl stößt die öffentliche Katalogauflösung über die bereits gespeicherte reale Anbieter-URL an. Bei technisch nicht auflösbarem Katalog werden keine ADN-Daten als Crunchyroll-Ergebnis ausgegeben.
+- Echte historische ADN- und Crunchyroll-Metadaten bestätigen ihre kanonischen Staffeln und erzeugen transaktional deutsche Provider-Staffel-Mappings.
+- Die Staffelauswahl bleibt für lange Serien sichtbar und ist horizontal scrollbar; der aktuelle Kalender-Arc wird neben historisch bestätigten Staffeln erhalten.
+- Reine AniWorld-Kalenderzeilen oder mehrdeutige alte Backfill-Zeilen erzeugen weiterhin keine Phantomstaffeln.
+- Der automatische Crunchyroll-Historienimport versucht nach einer nicht auflösbaren direkten Provider-URL zusätzlich die exakte öffentliche Titelsuche.
+- Wenn dieselbe Staffel bei Crunchyroll und ADN bestätigt ist und keine manuelle Vorgabe besteht, bleibt Crunchyroll die automatische Priorität.
+
 ## v0.25.6 – belastbare Staffel- und Providerpräferenzen – 2026-08-21
 
 - Eine animeweite Providerpräferenz gilt als Standard für alle Staffeln; eine staffelbezogene Auswahl überschreibt sie gezielt.

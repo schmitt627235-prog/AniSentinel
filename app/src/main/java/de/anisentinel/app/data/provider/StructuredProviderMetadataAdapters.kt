@@ -199,8 +199,20 @@ class CrunchyrollMetadataAdapter(
     override suspend fun probe(request: ProviderMetadataProbeRequest, identity: ProviderMetadataIdentity?): ProviderMetadataProbeResult {
         val now = clock.instant()
         return try {
-            val seriesId = identity?.seriesId ?: catalogClient.resolveSeries(identity?.sourceUrl ?: request.providerUrl, request.title)
-                ?: return ProviderMetadataProbeResult.CheckFailed("CRUNCHYROLL_SERIES_NOT_IDENTIFIED", now, false)
+            // A JustWatch outbound URL or a previously persisted identity proves only
+            // that Crunchyroll is a provider, not that the referenced Crunchyroll series
+            // belongs to this anime. Resolve the title against Crunchyroll's direct search
+            // on every identity refresh; never reuse an unvalidated foreign series ID.
+            val resolvedIds = (listOf(request.title) + request.titleAliases)
+                .filter(String::isNotBlank)
+                .distinct()
+                .mapNotNull { catalogClient.resolveSeries(reference = null, title = it) }
+                .distinct()
+            val seriesId = resolvedIds.singleOrNull()
+                ?: return ProviderMetadataProbeResult.CheckFailed(
+                    if (resolvedIds.isEmpty()) "CRUNCHYROLL_SERIES_NOT_IDENTIFIED" else "CRUNCHYROLL_SERIES_ID_AMBIGUOUS",
+                    now, false
+                )
             val catalog = catalogClient.loadSeries(seriesId)
             val normalized = CrunchyrollEpisodeNormalizer.resolve(
                 catalog.episodes, request.seasonNumber, request.episodeNumber, request.expectedLanguage,

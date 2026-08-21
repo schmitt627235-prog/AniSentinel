@@ -178,7 +178,28 @@ class AdnHistoricalReleaseImporter(
             references += reference(releaseId, episode, response.finalUrl, now)
             if (existing == null) inserted++ else enriched++
         }
-        dao.importHistoricalProviderReleases(rows, references)
+        val confirmedSeasons = dated.map { it.seasonNumber }.filter { it > 0 }.distinct()
+        dao.importHistoricalProviderCatalog(
+            rows,
+            references,
+            confirmedSeasons.map {
+                AnimeSeasonEntity(animeId, it, "ADN_PUBLIC_METADATA", now.epochSecond)
+            },
+            confirmedSeasons.map {
+                ProviderSeasonMappingEntity(
+                    animeId = animeId,
+                    canonicalSeasonNumber = it,
+                    provider = "ADN",
+                    providerSeasonNumber = it,
+                    providerSeriesId = showId,
+                    providerSeasonId = null,
+                    providerSeriesUrl = null,
+                    region = "DE",
+                    available = true,
+                    lastConfirmedAt = now.epochSecond
+                )
+            }
+        )
         dao.upsertProviderMetadataIdentity(ProviderMetadataIdentityEntity(
             "provider-identity:$animeId:ADN_PUBLIC_METADATA:DE", animeId, "ADN_PUBLIC_METADATA",
             "DE", showId, null, null, null, null, response.finalUrl, now.epochSecond

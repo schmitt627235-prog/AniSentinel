@@ -70,6 +70,7 @@ class AppContainer(context: Context) {
         ,AniSentinelDatabase.MIGRATION_23_24
         ,AniSentinelDatabase.MIGRATION_24_25
         ,AniSentinelDatabase.MIGRATION_25_26
+        ,AniSentinelDatabase.MIGRATION_26_27
     ).build()
 
     val newsRepository = Anime2YouNewsRepository(database.aniSentinelDao())

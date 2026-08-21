@@ -40,4 +40,12 @@ class JustWatchPublicMetadataParserTest {
         assertEquals("Nur Beschreibung", result.description)
         assertEquals(emptySet<String>(), result.studios)
     }
+
+    @Test
+    fun seoStreamingCopyIsNotUsedAsSynopsis() {
+        val result = JustWatchPublicMetadataParser.parse(
+            """<meta name="description" content="Wo und wie heute Das Band der Unterwelt im Stream online auf Netflix, Prime Video und Disney+ sehen. Kostenlos Option!">"""
+        )
+        assertEquals(null, result.description)
+    }
 }

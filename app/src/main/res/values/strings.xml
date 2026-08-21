@@ -369,6 +369,7 @@
     <string name="current_season_count">Sommer 2026 · %1$d Titel</string>
     <string name="season_episode">Staffel %1$d · Folge %2$d</string>
     <string name="season_number">Staffel %1$d</string>
+    <string name="saga_number">Saga %1$d</string>
     <string name="stats_today">Releases heute</string>
     <string name="stats_week">Releases diese Woche</string>
     <string name="stats_sub">GER SUB gesamt</string>
@@ -490,4 +491,6 @@
     <string name="provider_preference_no_longer_available">Die gespeicherte Auswahl %1$s ist für diese Staffel nicht mehr verfügbar. AniSentinel verwendet automatisch einen bestätigten Anbieter.</string>
     <string name="provider_automatic">Automatisch auswählen</string>
     <string name="no_confirmed_dach_provider">Aktuell kein bestätigter DACH-Anbieter für diese Staffel.</string>
+    <string name="provider_catalog_loading">Der direkte Episodenkatalog von %1$s ist noch nicht geladen oder technisch nicht verfügbar. Es werden keine Daten eines anderen Anbieters eingesetzt.</string>
+    <string name="episode_number_with_overall">Folge %1$d (Episode %2$d)</string>
 </resources>

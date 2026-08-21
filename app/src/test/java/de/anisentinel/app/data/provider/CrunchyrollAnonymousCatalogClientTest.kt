@@ -13,6 +13,16 @@ class CrunchyrollAnonymousCatalogClientTest {
     private val transport = CrunchyrollCatalogTransport { url ->
         when {
             "/objects/GEWATCHDE" in url -> response(url, """{"data":[{"series_id":"GSERIES"}]}""")
+            "/discover/search" in url -> response(url, """{"data":[
+                {"type":"series","items":[
+                    {"id":"GDAEMONS","type":"series","title":"Daemons of the Shadow Realm"},
+                    {"id":"GOTHER","type":"series","title":"Another title",
+                     "recommendations":[{"id":"GATTACK","type":"series","title":"Daemons of the Shadow Realm"}]}
+                ]},
+                {"type":"top_results","items":[
+                    {"id":"GEPISODE","type":"episode","title":"Daemons of the Shadow Realm"}
+                ]}
+            ]}""")
             "/series/GSERIES/seasons" in url -> response(url, """{"data":[
                 {"id":"S-JA","season_number":2,"audio_locale":"ja-JP"},
                 {"id":"S-DE","season_number":2,"audio_locale":"de-DE"}
@@ -52,6 +62,12 @@ class CrunchyrollAnonymousCatalogClientTest {
             .single { it.episodeId == "E-PLACEHOLDER" }
         assertNull(row.availableAt)
         assertTrue("GER_SUB" in row.releaseLanguages)
+    }
+
+    @Test fun resolvesOnlyDirectExactSeriesHitAndIgnoresNestedUnrelatedIds() = runBlocking {
+        val resolved = CrunchyrollAnonymousCatalogClient(transport)
+            .resolveSeries(null, "Daemons of the Shadow Realm")
+        assertEquals("GDAEMONS", resolved)
     }
 
     private fun response(url: String, body: String) = MetadataHttpResponse(200, body, url, "application/json")

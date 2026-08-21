@@ -18,7 +18,8 @@ enum class EpisodeAvailabilityStatus {
 data class ProviderMetadataProbeRequest(
     val animeId: String, val title: String, val seasonNumber: Int?, val episodeNumber: Int,
     val expectedLanguage: String?, val market: String = ProviderMarketPolicy.GERMANY,
-    val providerUrl: String? = null, val expectedAt: Instant? = null
+    val providerUrl: String? = null, val expectedAt: Instant? = null,
+    val titleAliases: Set<String> = emptySet()
 )
 
 data class ProviderMetadataIdentity(
@@ -197,15 +198,22 @@ object StreamingProviderPolicy {
 
     fun visible(providers: Iterable<String>): List<String> = providers
         .filter(::isStreaming)
-        .distinct()
+        .map(::displayName)
+        .distinctBy { it.lowercase() }
         .sortedWith(String.CASE_INSENSITIVE_ORDER)
 
     fun confirmedDisplayProvider(providers: Iterable<String>): String? = providers
         .filter(::isStreaming)
-        .distinct()
+        .map(::displayName)
+        .distinctBy { it.lowercase() }
         .minWithOrNull(compareBy<String> { provider ->
             preferred.indexOfFirst { it in provider.lowercase() }.let { if (it < 0) Int.MAX_VALUE else it }
         }.thenBy(String.CASE_INSENSITIVE_ORDER) { it })
+
+    fun displayName(provider: String): String = when {
+        provider.contains("crunchyroll", true) -> "Crunchyroll"
+        else -> provider.trim()
+    }
 }
 
 object ProviderMarketPolicy {
