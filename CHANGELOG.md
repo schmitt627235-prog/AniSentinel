@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.25.16
+
+- **Build 17 / versionCode 63:** AniList→AniSearch→DACH-Verknüpfung vervollständigt.
+- Alle englischen, Romaji-, nativen und synonymen AniList-Titel werden als deduplizierte Suchvarianten genutzt; generische Season-/Staffel-/Dai-Ki-/Part-/Cour-Aliase bleiben erhalten.
+- Konservative Trefferwertung verwirft Staffel-/Cour-Widersprüche und gleichwertig mehrdeutige Kandidaten statt einen falschen AniSearch-Titel zu erzwingen.
+- AniSearch-Matches werden separat gecacht; bekannte IDs führen direkt zur Detailseite und vermeiden erneute Titelsuchen.
+- Nur ein vorhandener regionaler `ul.xlist.row.simple.infoblock` ohne deutschen Eintrag erzeugt `DACH_NOT_LICENSED_YET`; fehlender Block, HTTP-/Parser-/Matchfehler bleiben `DACH_UNKNOWN`.
+- Deutscher Publisher und DACH-Verfügbarkeitsbeginn werden ausschließlich aus demselben deutschen Ländereintrag gelesen; Beobachtungs- und Erkennungszeit bleiben getrennt.
+- Die ungültige generierte AniSearch-Such-URL im manuellen Detailbutton wurde entfernt; ohne sichere ID öffnet die neutrale AniSearch-Animeübersicht.
+- AniSearch-Anfragen laufen prozessweit seriell. `Retry-After` wird beachtet; ohne Header greift ein exponentieller Backoff von 30 Minuten bis maximal 24 Stunden. Nach 429 startet keine weitere AniSearch-Anfrage.
+- Aliasvarianten werden lokal dedupliziert und nur nach einer erfolgreichen, aber ergebnislosen Suche nacheinander probiert; Netzwerkfehler erzeugen kein Varianten-Fanout.
+- Drawer-Bereich „Heiß erwartete Titel“ mit echter Liste und Detailnavigation aktiviert.
+- Noch nicht gestartete Anime werden über AniLists dokumentierte GraphQL-API geladen und nachvollziehbar nach AniList-Popularity sortiert.
+- Laufende sowie beendete Titel werden ausgeschlossen; Saisonfilter entstehen dynamisch aus den realen Daten.
+- Kanonische Future-Identität, generische Staffelalias-Auflösung und getrennte DACH-Zeitfelder ergänzt.
+- Moderater 24-Stunden-Cache behält gültige Future-Daten bei Netzwerk- oder Parserfehlern.
+- DACH-Angaben bleiben ohne belastbaren Beleg ehrlich unbestätigt; spätere höher priorisierte Bestätigungen ersetzen den sichtbaren Negativstatus.
+
+## 0.25.15
+
+- Selektive Backup- und Restore-Kategorien mit „Alles auswählen“ und „Alles abwählen“ ergänzt.
+- Compose-Activity-Auflösung korrigiert, sodass Androids Datei- und App-Einstellungsdialoge zuverlässig öffnen.
+- Restore zeigt validierte enthaltene Bereiche vor jeder Änderung und überschreibt nur die bestätigte Auswahl.
+- Redundante „Aktiv“-Zusätze an bedienbaren Einstellungskarten entfernt.
+
+- Kalender-Einstellungen für Sub, Dub, vergangene Termine und Favoritenfilter.
+- Globaler, rückwärtskompatibler Anbieter-Sichtbarkeitsfilter für Crunchyroll, ADN, Netflix, Disney+ und aniverse.
+- Versioniertes lokales JSON-Backup und sicher validierter Merge-Restore über Androids Dateiauswahl.
+- Datenschutzseite mit realem Berechtigungsstatus, Systemeinstellungslink und bestätigter Löschung lokaler Nutzerdaten.
+- Alle vier bisherigen Platzhalter unter Einstellungen als echte Unterseiten aktiviert.
+
 ## 0.25.14
 
 - Gemeinsamen `ReleaseDisplayState` für Home, Favoriten und Detail eingeführt; Episode, Verschiebung und Countdown stammen aus derselben kanonischen Releaseidentität.

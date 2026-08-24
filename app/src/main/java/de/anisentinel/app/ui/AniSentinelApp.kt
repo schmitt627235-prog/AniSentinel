@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.CompassCalibration
+import androidx.compose.material.icons.outlined.LocalFireDepartment
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Settings
@@ -43,7 +43,7 @@ private enum class MainDestination(
     HOME("home", R.string.nav_start, Icons.Outlined.Home),
     CALENDAR("calendar", R.string.nav_calendar, Icons.Outlined.CalendarMonth),
     FAVORITES("favorites", R.string.nav_favorites, Icons.Outlined.FavoriteBorder),
-    DISCOVER("discover", R.string.nav_discover, Icons.Outlined.CompassCalibration),
+    ANTICIPATED("anticipated", R.string.anticipated_titles_short, Icons.Outlined.LocalFireDepartment),
     SETTINGS("settings", R.string.nav_settings, Icons.Outlined.Settings)
 }
 
@@ -59,9 +59,12 @@ fun AniSentinelApp(notificationTarget: android.net.Uri? = null, onNotificationTa
 
     fun navigate(destination: MainDestination) {
         navController.navigate(destination.route) {
-            popUpTo(MainDestination.HOME.route) { saveState = true }
+            // Secondary destinations such as Discover must never be restored on top
+            // of a main tab. Saving that mixed stack made the selected tab change
+            // while the Discover screen remained visible until Back was pressed.
+            popUpTo(MainDestination.HOME.route) { saveState = false }
             launchSingleTop = true
-            restoreState = true
+            restoreState = false
         }
     }
 
@@ -158,17 +161,21 @@ fun AniSentinelApp(notificationTarget: android.net.Uri? = null, onNotificationTa
                                 onAnimeClick = { navController.navigate("details/$it") }
                             )
                         }
-                        composable(MainDestination.DISCOVER.route) {
-                            DiscoverScreen(
+                        composable(MainDestination.ANTICIPATED.route) {
+                            AnticipatedTitlesScreen(
                                 padding,
                                 onMenu = { scope.launch { drawerState.open() } },
-                                onAnimeClick = { navController.navigate("details/$it") }
+                                onOpen = { navController.navigate("anticipated/$it") }
                             )
                         }
                         composable(MainDestination.SETTINGS.route) {
                             SettingsScreen(
                                 padding,
                                 onMenu = { scope.launch { drawerState.open() } },
+                                onCalendarSettings = { navController.navigate("settings/calendar") },
+                                onBackupSettings = { navController.navigate("settings/backup") },
+                                onPrivacySettings = { navController.navigate("settings/privacy") },
+                                onProviderSettings = { navController.navigate("settings/providers") },
                                 onAboutClick = {
                                     navController.navigate("about") { launchSingleTop = true }
                                 }
@@ -177,6 +184,10 @@ fun AniSentinelApp(notificationTarget: android.net.Uri? = null, onNotificationTa
                         composable("about") {
                             AboutScreen(padding, onBack = navController::navigateUp)
                         }
+                        composable("settings/calendar") { CalendarSettingsScreen(padding, navController::navigateUp) }
+                        composable("settings/backup") { BackupSettingsScreen(padding, navController::navigateUp) }
+                        composable("settings/privacy") { PrivacySettingsScreen(padding, navController::navigateUp) }
+                        composable("settings/providers") { ProviderSettingsScreen(padding, navController::navigateUp) }
                         composable("providers") {
                             ProvidersScreen(padding, navController::navigateUp, onAnimeClick = { navController.navigate("details/$it") })
                         }
@@ -185,6 +196,14 @@ fun AniSentinelApp(notificationTarget: android.net.Uri? = null, onNotificationTa
                         }
                         composable("dubs") {
                             DubReleasesScreen(padding, navController::navigateUp, onAnimeClick = { navController.navigate("details/$it") })
+                        }
+                        composable("discover") { DiscoverScreen(padding, onMenu = { scope.launch { drawerState.open() } }, onAnimeClick = { navController.navigate("details/$it") }) }
+                        composable("anticipated/{aniListId}") { entry ->
+                            AnticipatedTitleDetailScreen(
+                                padding,
+                                entry.arguments?.getString("aniListId")?.toIntOrNull() ?: -1,
+                                navController::navigateUp
+                            )
                         }
                         composable("news") {
                             NewsScreen(

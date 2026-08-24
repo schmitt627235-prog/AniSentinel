@@ -49,6 +49,13 @@ interface SettingsRepository {
     suspend fun setReleaseDueNotificationsEnabled(enabled: Boolean)
     suspend fun setWatchProfileId(id: String)
     suspend fun setPreferredProviders(ids: Set<String>)
+    suspend fun setDisabledProviders(ids: Set<String>)
+    suspend fun setCalendarShowSub(enabled: Boolean)
+    suspend fun setCalendarShowDub(enabled: Boolean)
+    suspend fun setCalendarShowPast(enabled: Boolean)
+    suspend fun setCalendarFavoritesOnly(enabled: Boolean)
+    suspend fun replaceUserSettings(settings: AppSettings)
+    suspend fun resetUserSettings()
     suspend fun setLiveDataEnabled(enabled: Boolean)
 }
 
@@ -132,5 +139,10 @@ data class AppSettings(
     val releaseDueNotificationsEnabled: Boolean = false,
     val watchProfileId: String = "automatic",
     val preferredProviderIds: Set<String> = emptySet(),
+    val disabledProviderIds: Set<String> = emptySet(),
+    val calendarShowSub: Boolean = true,
+    val calendarShowDub: Boolean = true,
+    val calendarShowPast: Boolean = true,
+    val calendarFavoritesOnly: Boolean = false,
     val liveDataEnabled: Boolean = false
 )

@@ -1,6 +1,7 @@
 package de.anisentinel.app.data.anisearch
 
 import android.content.Context
+import android.util.Log
 import de.anisentinel.app.data.settings.SourceCooldownStore
 import java.io.File
 import java.net.HttpURLConnection
@@ -59,39 +60,65 @@ class AniSearchHttpTransport(
     private suspend fun fetch(sourceUrl: String): AniSearchFetchResult {
         val cache = File(cacheDirectory, sourceUrl.sha256() + ".html")
         if (cache.isFile && clock.millis() - cache.lastModified() <= cacheTtlSeconds * 1_000) {
+            Log.i(LOG_TAG, "cache-hit url=$sourceUrl")
             return AniSearchFetchResult.Success(cache.readText(), sourceUrl, fromCache = true)
         }
         val nowSeconds = clock.instant().epochSecond
         val nextAllowed = cooldownStore?.nextAllowedAt("anisearch") ?: 0L
-        if (nowSeconds < nextAllowed) return AniSearchFetchResult.RateLimited(nextAllowed - nowSeconds)
+        val effectiveNextAllowed = maxOf(nextAllowed, globalNextAllowedAtSeconds)
+        if (nowSeconds < effectiveNextAllowed) {
+            Log.i(LOG_TAG, "cooldown-hit remaining=${effectiveNextAllowed - nowSeconds}s url=$sourceUrl")
+            return AniSearchFetchResult.RateLimited(effectiveNextAllowed - nowSeconds)
+        }
         repeat(2) { attempt ->
             val response = requestMutex.withLock {
+                val cooldownRemaining = globalNextAllowedAtSeconds - clock.instant().epochSecond
+                if (cooldownRemaining > 0) {
+                    Log.i(LOG_TAG, "cooldown-hit-after-lock remaining=${cooldownRemaining}s url=$sourceUrl")
+                    return AniSearchFetchResult.RateLimited(cooldownRemaining)
+                }
                 val waitMillis = (lastRequestAtMillis + minimumRequestIntervalMillis - clock.millis())
                     .coerceAtLeast(0)
                 if (waitMillis > 0) delay(waitMillis)
                 lastRequestAtMillis = clock.millis()
-                runCatching { loader(sourceUrl) }.getOrNull()
+                Log.i(LOG_TAG, "request-start url=$sourceUrl")
+                runCatching { loader(sourceUrl) }.onFailure {
+                    Log.w(LOG_TAG, "request-failed type=${it.javaClass.simpleName} url=$sourceUrl")
+                }.getOrNull()
             } ?: return AniSearchFetchResult.TemporarilyUnavailable(null)
             when (response.code) {
                 in 200..299 -> {
                     if (response.body.isBlank()) return AniSearchFetchResult.TemporarilyUnavailable(response.code)
                     cache.writeText(response.body)
+                    globalRateLimitCount = 0
+                    Log.i(LOG_TAG, "success code=${response.code} bytes=${response.body.length} url=$sourceUrl")
                     return AniSearchFetchResult.Success(response.body, sourceUrl, fromCache = false)
                 }
-                401, 403 -> return AniSearchFetchResult.AccessBlocked(response.code)
+                401, 403 -> {
+                    Log.w(LOG_TAG, "access-blocked code=${response.code} url=$sourceUrl")
+                    return AniSearchFetchResult.AccessBlocked(response.code)
+                }
                 404 -> return AniSearchFetchResult.NotFound
                 // Interactive requests must never freeze the UI while waiting out a rate limit.
                 // A later explicit user action may retry; the cached result remains available.
                 429 -> {
-                    cooldownStore?.setNextAllowedAt(
-                        "anisearch",
-                        clock.instant().epochSecond + (response.retryAfterSeconds ?: 30 * 60)
-                    )
-                    return AniSearchFetchResult.RateLimited(response.retryAfterSeconds)
+                    Log.w(LOG_TAG, "rate-limited retryAfter=${response.retryAfterSeconds} url=$sourceUrl")
+                    globalRateLimitCount = (globalRateLimitCount + 1).coerceAtMost(6)
+                    val exponentialBackoff = (30L * 60L * (1L shl (globalRateLimitCount - 1))).coerceAtMost(24L * 60L * 60L)
+                    val cooldownUntil = clock.instant().epochSecond + (response.retryAfterSeconds ?: exponentialBackoff)
+                    globalNextAllowedAtSeconds = maxOf(globalNextAllowedAtSeconds, cooldownUntil)
+                    cooldownStore?.setNextAllowedAt("anisearch", cooldownUntil)
+                    return AniSearchFetchResult.RateLimited(response.retryAfterSeconds ?: exponentialBackoff)
                 }
                 in 500..599 -> if (attempt == 0) delay(5_000)
-                    else return AniSearchFetchResult.TemporarilyUnavailable(response.code)
-                else -> return AniSearchFetchResult.TemporarilyUnavailable(response.code)
+                    else {
+                        Log.w(LOG_TAG, "unavailable code=${response.code} url=$sourceUrl")
+                        return AniSearchFetchResult.TemporarilyUnavailable(response.code)
+                    }
+                else -> {
+                    Log.w(LOG_TAG, "unexpected code=${response.code} url=$sourceUrl")
+                    return AniSearchFetchResult.TemporarilyUnavailable(response.code)
+                }
             }
         }
         return AniSearchFetchResult.TemporarilyUnavailable(null)
@@ -109,9 +136,18 @@ class AniSearchHttpTransport(
 
     companion object {
         private val HOSTS = setOf("anisearch.de", "www.anisearch.de")
+        private const val LOG_TAG = "AniSearchTransport"
         private val DETAIL_PATH = Regex("/anime/\\d+(?:[,/].*)?")
         private val requestMutex = Mutex()
         private var lastRequestAtMillis = 0L
+        @Volatile private var globalNextAllowedAtSeconds = 0L
+        @Volatile private var globalRateLimitCount = 0
+
+        internal fun resetGlobalCooldownForTests() {
+            globalNextAllowedAtSeconds = 0L
+            globalRateLimitCount = 0
+            lastRequestAtMillis = 0L
+        }
 
         private suspend fun load(url: String): AniSearchHttpResponse = withContext(Dispatchers.IO) {
             val connection = URL(url).openConnection() as HttpURLConnection
@@ -121,8 +157,12 @@ class AniSearchHttpTransport(
                 connection.instanceFollowRedirects = true
                 connection.setRequestProperty(
                     "User-Agent",
-                    "AniSentinel/0.10.0 (Android; public AniSearch metadata; no login)"
+                    "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 " +
+                        "(KHTML, like Gecko) Chrome/128.0 Mobile Safari/537.36 " +
+                        "AniSentinel/0.25.16 (+https://github.com/schmitt627235-prog/AniSentinel)"
                 )
+                connection.setRequestProperty("Accept", "text/html,application/xhtml+xml")
+                connection.setRequestProperty("Accept-Language", "de-DE,de;q=0.9,en;q=0.7")
                 val code = connection.responseCode
                 val body = (if (code in 200..299) connection.inputStream else connection.errorStream)
                     ?.bufferedReader()?.use { it.readText() }.orEmpty()

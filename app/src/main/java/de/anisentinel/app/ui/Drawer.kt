@@ -63,13 +63,13 @@ fun AppDrawer(
         DrawerItem(R.string.nav_start, Icons.Outlined.Home, "home"),
         DrawerItem(R.string.nav_calendar, Icons.Outlined.CalendarMonth, "calendar"),
         DrawerItem(R.string.nav_favorites, Icons.Outlined.FavoriteBorder, "favorites"),
-        DrawerItem(R.string.nav_discover, Icons.Outlined.CompassCalibration, "discover")
+        DrawerItem(R.string.anticipated_titles, Icons.Outlined.LocalFireDepartment, "anticipated")
     )
     val secondaryItems = listOf(
         DrawerItem(R.string.drawer_providers, Icons.Outlined.SmartDisplay, "providers"),
         DrawerItem(R.string.drawer_season, Icons.Outlined.Today, "season"),
         DrawerItem(R.string.drawer_dubs, Icons.Outlined.NewReleases, "dubs"),
-        DrawerItem(R.string.anticipated_titles, Icons.Outlined.LocalFireDepartment),
+        DrawerItem(R.string.nav_discover, Icons.Outlined.CompassCalibration, "discover"),
         DrawerItem(R.string.drawer_news, Icons.Outlined.MenuBook, "news"),
         DrawerItem(R.string.postponements_title, Icons.Outlined.EventBusy, "postponements"),
         DrawerItem(R.string.drawer_stats, Icons.Outlined.ShowChart, "statistics"),

@@ -3,6 +3,7 @@ package de.anisentinel.app.data.anisearch
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.LocalDate
 
 class AniSearchHtmlParserTest {
     @Test
@@ -46,5 +47,67 @@ class AniSearchHtmlParserTest {
         )
         assertEquals(1, hits.size)
         assertEquals("3633", hits.single().anisearchId)
+    }
+
+    @Test
+    fun parsesConfirmedGermanFuturePublisherAndAvailabilityMonth() {
+        val html = """
+            <html><body><h1>Die Tagebücher der Apothekerin: Staffel 3 - Cour 1</h1>
+            <div itemprop="description">Künftige Staffel.</div><ul class="xlist row simple infoblock">
+              <li><img src="https://cdn.anisearch.de/media/country/de.webp" class="flag" alt="Deutsch" title="Deutsch">
+              <div class="title" lang="de"><strong>Die Tagebücher der Apothekerin: Staffel 3 - Cour 1</strong></div>
+              <div class="status"><span class="header">Status:</span> Zukünftig</div>
+              <div class="released"><span class="header">Veröffentlicht:</span> 10.2026 ‑ ?</div>
+              <div class="company"><span class="header">Publisher:</span> <a href="company/1258,crunchyroll">Crunchyroll</a></div></li>
+            </ul></body></html>
+        """.trimIndent()
+        val value = (AniSearchHtmlParser.parse(html, "https://www.anisearch.de/anime/20704,test") as AniSearchParseResult.Success).value
+        assertTrue(value.dachLicensed)
+        assertTrue(value.regionalReleaseBlockPresent)
+        assertEquals("Crunchyroll", value.dachPublisher)
+        assertEquals(null, value.dachAvailableFrom)
+        assertEquals("10.2026", value.dachAvailablePeriod)
+        assertEquals("20704", value.anisearchId)
+    }
+
+    @Test
+    fun confirmsDachReleaseWithoutRequiringPublisher() {
+        val html = """
+            <html><body><h1>Lizenzierter Titel</h1>
+            <div itemprop="description">Beschreibung.</div><ul class="xlist row simple infoblock">
+              <li><img src="https://cdn.anisearch.de/media/country/de.webp" class="flag" alt="Deutsch" title="Deutsch">
+              <div class="title" lang="de"><strong>Lizenzierter Titel</strong></div>
+              <div class="status">Status: Zukünftig</div>
+              <div class="released">Veröffentlicht: Herbst 2026 - ?</div></li>
+            </ul></body></html>
+        """.trimIndent()
+        val value = (AniSearchHtmlParser.parse(html, "https://www.anisearch.de/anime/99999,test") as AniSearchParseResult.Success).value
+        assertTrue(value.dachLicensed)
+        assertEquals(null, value.dachPublisher)
+        assertEquals("Herbst 2026", value.dachAvailablePeriod)
+    }
+
+    @Test
+    fun germanFlagOutsideRegionalInfoblockDoesNotConfirmLicense() {
+        val html = """
+            <html><body><h1>Titel</h1><div itemprop="description">Beschreibung.</div>
+            <img src="https://cdn.anisearch.de/media/country/de.webp" class="flag" alt="Deutsch" title="Deutsch">
+            </body></html>
+        """.trimIndent()
+        val value = (AniSearchHtmlParser.parse(html, "https://www.anisearch.de/anime/99998,test") as AniSearchParseResult.Success).value
+        assertTrue(!value.dachLicensed)
+        assertTrue(!value.regionalReleaseBlockPresent)
+    }
+
+    @Test
+    fun missingGermanEntryInPresentRegionalBlockIsAValidNegativeObservation() {
+        val html = """
+            <html><body><h1>Unlizenzierter Future-Titel</h1><div itemprop="description">Beschreibung.</div>
+            <ul class="xlist row simple infoblock"><li><img class="flag" src="/media/country/jp.webp" alt="Japanisch"></li></ul>
+            </body></html>
+        """.trimIndent()
+        val value = (AniSearchHtmlParser.parse(html, "https://www.anisearch.de/anime/99997,test") as AniSearchParseResult.Success).value
+        assertTrue(value.regionalReleaseBlockPresent)
+        assertTrue(!value.dachLicensed)
     }
 }

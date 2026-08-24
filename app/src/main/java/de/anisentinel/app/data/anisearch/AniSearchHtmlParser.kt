@@ -1,6 +1,7 @@
 package de.anisentinel.app.data.anisearch
 
 import java.net.URI
+import java.time.LocalDate
 import org.jsoup.Jsoup
 
 data class AniSearchImport(
@@ -14,7 +15,12 @@ data class AniSearchImport(
     val releaseYear: Int? = null,
     val mediaType: String? = null,
     val status: String? = null,
-    val synonyms: Set<String> = emptySet()
+    val synonyms: Set<String> = emptySet(),
+    val regionalReleaseBlockPresent: Boolean = false,
+    val dachLicensed: Boolean = false,
+    val dachPublisher: String? = null,
+    val dachAvailableFrom: LocalDate? = null,
+    val dachAvailablePeriod: String? = null
 )
 
 data class AniSearchSearchHit(val anisearchId: String, val title: String, val sourceUrl: String)
@@ -76,6 +82,19 @@ object AniSearchHtmlParser {
         val startDate = jsonString(jsonLd, "startDate")
         val synonyms = document.select(".title strong, .title .grey, .synonyms, #text-synonyms")
             .map { it.text().trim() }.filter(String::isNotBlank).toSet() - title
+        // AniSearch's regional release box is the authoritative DACH marker.
+        // A German flag inside this exact infoblock confirms a German/DACH release;
+        // publisher and date are optional metadata from the same row.
+        val regionalReleaseBlocks = document.select("ul.xlist.row.simple.infoblock")
+        val germanFlag = regionalReleaseBlocks.firstNotNullOfOrNull { block ->
+            block.selectFirst("img.flag[src*=country/de.webp], img.flag[alt=Deutsch], img.flag[title=Deutsch]")
+        }
+        val germanRelease = germanFlag?.closest("li")
+        val dachPublisher = germanRelease?.selectFirst(".company a, [class*=publisher] a")
+            ?.text()?.trim()?.takeIf(String::isNotBlank)
+        val dachReleaseText = germanRelease?.selectFirst(".released")?.text()
+            ?.substringAfter(":", "")?.substringBefore("‑")?.substringBefore("-")?.trim()
+        val dachDate = dachReleaseText?.let(::parseGermanReleaseDate)
         return AniSearchParseResult.Success(AniSearchImport(
             anisearchId = id,
             titleGerman = title,
@@ -87,7 +106,12 @@ object AniSearchHtmlParser {
             releaseYear = startDate?.take(4)?.toIntOrNull(),
             mediaType = document.selectFirst(".infoblock .type, ul.xlist .type")?.text()?.trim(),
             status = document.selectFirst(".status")?.text()?.trim(),
-            synonyms = synonyms
+            synonyms = synonyms,
+            regionalReleaseBlockPresent = regionalReleaseBlocks.isNotEmpty(),
+            dachLicensed = germanFlag != null,
+            dachPublisher = dachPublisher,
+            dachAvailableFrom = dachDate,
+            dachAvailablePeriod = dachReleaseText?.takeIf { dachDate == null && it.isNotBlank() }
         ))
     }
 
@@ -115,6 +139,13 @@ object AniSearchHtmlParser {
     private fun jsonInt(json: String, key: String): Int? = Regex(
         "\\\"${Regex.escape(key)}\\\"\\s*:\\s*(?:\\\")?(\\d+)(?:\\\")?"
     ).find(json)?.groupValues?.get(1)?.toIntOrNull()
+
+    private fun parseGermanReleaseDate(value: String): LocalDate? {
+        Regex("(\\d{2})\\.(\\d{2})\\.(\\d{4})").find(value)?.destructured?.let { (day, month, year) ->
+            return runCatching { LocalDate.of(year.toInt(), month.toInt(), day.toInt()) }.getOrNull()
+        }
+        return null
+    }
 
     private fun normalizeProvider(label: String, url: String): String? {
         val value = "$label $url".lowercase()

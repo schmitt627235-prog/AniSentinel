@@ -73,7 +73,7 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
     private var refreshJob: Job? = null
 
     private data class Filters(val genre: String?, val type: DiscoverTypeFilter, val sort: DiscoverSort, val provider: String?)
-    private data class Data(val genres: List<JustWatchGenreEntity>, val catalog: List<JustWatchCatalogTitleEntity>, val releases: List<EpisodeReleaseEntity>, val postponements: List<ReleasePostponementEntity>)
+    private data class Data(val genres: List<JustWatchGenreEntity>, val catalog: List<JustWatchCatalogTitleEntity>, val releases: List<EpisodeReleaseEntity>, val postponements: List<ReleasePostponementEntity>, val settings: de.anisentinel.app.domain.repository.AppSettings)
     private data class Operation(val loading: Boolean = true, val error: String? = null)
 
     private val filters = combine(selectedGenre, typeFilter, sort, providerFilter, ::Filters)
@@ -82,6 +82,7 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
         repository.observeKnownAnimeTitles(),
         dao.observeActiveAniWorldReleases(Instant.now().epochSecond),
         dao.observeReleasePostponements(),
+        container.settingsRepository.settings,
         ::Data
     )
 
@@ -89,6 +90,7 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
         val releaseLanguages = data.releases.groupBy { it.animeId }.mapValues { (_, rows) -> rows.mapNotNull { it.releaseLanguage }.toSet() }
         val runningAnimeIds = data.releases.mapTo(mutableSetOf()) { it.animeId }
         val discoverCatalog = data.catalog.filter { DiscoverCatalogPolicy.isVisible(it, runningAnimeIds) }
+            .filter { de.anisentinel.app.domain.provider.ProviderVisibilityPolicy.isAnimeVisible(it.csvProviders(), data.settings.disabledProviderIds) }
         val filtered = discoverCatalog.filter { row ->
             (filters.genre == null || filters.genre in row.csvGenres()) &&
                 (filters.provider == null || filters.provider in row.csvProviders()) &&
@@ -117,8 +119,8 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
             typeFilter = filters.type,
             sort = filters.sort,
             providerFilter = filters.provider,
-            providers = StreamingProviderPolicy.visible(discoverCatalog.flatMap { it.csvProviders() }),
-            titles = sorted.mapNotNull { row -> row.internalAnimeId?.let { row.toCatalogItem(it) } }
+            providers = de.anisentinel.app.domain.provider.ProviderVisibilityPolicy.visibleProviders(discoverCatalog.flatMap { it.csvProviders() }, data.settings.disabledProviderIds),
+            titles = sorted.mapNotNull { row -> row.internalAnimeId?.let { row.toCatalogItem(it, data.settings.disabledProviderIds) } }
                 .distinctBy { it.stableKey },
             error = op.error,
             postponementsByAnime = data.postponements.filter { it.isActive && it.animeId != null }
@@ -199,13 +201,14 @@ class GlobalSearchViewModel(application: Application) : AndroidViewModel(applica
         val resultIds: Set<String> = emptySet()
     )
 
-    val state = combine(query, repository.observeAllCachedTitles(), operation, dao.observeReleasePostponements()) { text, catalog, op, postponements ->
+    val state = combine(query, repository.observeAllCachedTitles(), operation, dao.observeReleasePostponements(), container.settingsRepository.settings) { text, catalog, op, postponements, settings ->
         val matches = if (!op.searched) emptyList() else catalog
             .filter { it.justWatchId in op.resultIds }
+            .filter { de.anisentinel.app.domain.provider.ProviderVisibilityPolicy.isAnimeVisible(it.csvProviders(), settings.disabledProviderIds) }
             .sortedWith(compareBy(nullsLast()) { it.popularityRank })
         GlobalSearchUiState(
             text, op.loading,
-            matches.mapNotNull { row -> row.internalAnimeId?.let { row.toCatalogItem(it) } },
+            matches.mapNotNull { row -> row.internalAnimeId?.let { row.toCatalogItem(it, settings.disabledProviderIds) } },
             op.error, op.searched,
             postponements.filter { it.isActive && it.animeId != null }.groupBy { requireNotNull(it.animeId) }
         )
@@ -231,11 +234,11 @@ class GlobalSearchViewModel(application: Application) : AndroidViewModel(applica
 
 internal fun JustWatchCatalogTitleEntity.csvGenres() = genres.split(',').filter(String::isNotBlank).toSet()
 internal fun JustWatchCatalogTitleEntity.csvProviders() = providers.split(',').filter(String::isNotBlank)
-private fun JustWatchCatalogTitleEntity.toCatalogItem(id: String) = CatalogAnimeItem(
+private fun JustWatchCatalogTitleEntity.toCatalogItem(id: String, disabledProviderIds: Set<String> = emptySet()) = CatalogAnimeItem(
     stableKey = justWatchId,
     id = id,
     title = title,
     subtitle = listOfNotNull(if (contentType == "MOVIE") "Film" else "Serie", releaseYear?.toString()).joinToString(" · "),
-    providers = StreamingProviderPolicy.visible(csvProviders()),
+    providers = de.anisentinel.app.domain.provider.ProviderVisibilityPolicy.visibleProviders(csvProviders(), disabledProviderIds),
     coverUrl = coverUrl
 )

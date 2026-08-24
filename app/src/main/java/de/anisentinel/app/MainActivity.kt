@@ -39,6 +39,14 @@ class MainActivity : ComponentActivity() {
         diagnosticDocumentResult?.invoke(uri)
         diagnosticDocumentResult = null
     }
+    private var createBackupResult: ((Uri?) -> Unit)? = null
+    private val createBackupLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        createBackupResult?.invoke(uri); createBackupResult = null
+    }
+    private var openBackupResult: ((Uri?) -> Unit)? = null
+    private val openBackupLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        openBackupResult?.invoke(uri); openBackupResult = null
+    }
 
     fun requestNotificationPermission(onResult: (Boolean) -> Unit) {
         notificationPermissionResult = onResult
@@ -48,6 +56,16 @@ class MainActivity : ComponentActivity() {
     fun openDiagnosticJson(onResult: (Uri?) -> Unit) {
         diagnosticDocumentResult = onResult
         diagnosticDocumentLauncher.launch(arrayOf("application/json"))
+    }
+
+    fun createBackup(onResult: (Uri?) -> Unit) {
+        createBackupResult = onResult
+        createBackupLauncher.launch("AniSentinel-Backup-${java.time.LocalDate.now()}.json")
+    }
+
+    fun openBackup(onResult: (Uri?) -> Unit) {
+        openBackupResult = onResult
+        openBackupLauncher.launch(arrayOf("application/json"))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

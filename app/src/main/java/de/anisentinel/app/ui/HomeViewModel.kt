@@ -32,21 +32,31 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val container = (application as AniSentinelApplication).container
     private val operation = MutableStateFlow(OperationState())
 
-    val state: StateFlow<CatalogUiState> = combine(
+    private val visibility = combine(
         container.settingsRepository.settings,
+        container.database.aniSentinelDao().observeJustWatchProviderReferences()
+    ) { settings, references -> settings to references.groupBy { it.animeId } }
+
+    val state: StateFlow<CatalogUiState> = combine(
+        visibility,
         container.aniListRepository.observeActiveAniWorldAnime(
             LocalDate.now().minusWeeks(4).atStartOfDay(ZoneId.systemDefault()).toEpochSecond()
         ),
         container.database.aniSentinelDao().observeAllEpisodeReleases(),
         container.database.aniSentinelDao().observeReleasePostponements(),
         operation
-    ) { settings, cached, releases, postponements, current ->
+    ) { visibilityState, cached, releases, postponements, current ->
+        val settings = visibilityState.first
+        val providersByAnime = visibilityState.second
         val releasesByAnime = releases.groupBy { it.animeId }
         val postponementsByAnime = postponements.filter { it.isActive && it.animeId != null }
             .groupBy { requireNotNull(it.animeId) }
         val now = java.time.Instant.now().epochSecond
         CatalogUiState(
-            anime = cached.map { anime ->
+            anime = cached.filter { anime ->
+                val providers = providersByAnime[anime.id].orEmpty().map { it.provider } + anime.provider.split('·')
+                de.anisentinel.app.domain.provider.ProviderVisibilityPolicy.isAnimeVisible(providers, settings.disabledProviderIds)
+            }.map { anime ->
                 val display = ReleaseDisplayResolver.nextFor(
                     releasesByAnime[anime.id].orEmpty(), postponementsByAnime[anime.id].orEmpty(), nowEpoch = now
                 )

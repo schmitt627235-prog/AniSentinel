@@ -158,8 +158,23 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
     private val selectedReleases = selectedDate.flatMapLatest { date ->
         combine(
             dao.observeEpisodeReleasesWithAnimeForWindow(date.startEpoch(), date.plusDays(1).startEpoch()),
-            dao.observeReleasePostponements()
-        ) { rows, postponements -> rows.mapNotNull { row ->
+            dao.observeReleasePostponements(),
+            container.settingsRepository.settings,
+            dao.observeFavorites()
+        ) { rows, postponements, settings, favorites ->
+            val favoriteIds = favorites.mapTo(mutableSetOf()) { it.id }
+            rows.filter { row ->
+                val languageVisible = when (row.release.releaseLanguage) {
+                    "GER_SUB" -> settings.calendarShowSub
+                    "GER_DUB" -> settings.calendarShowDub
+                    else -> true
+                }
+                val providers = row.providerReferences.map { it.provider } +
+                    row.episodeAvailability.map { it.providerName } + listOfNotNull(row.release.provider)
+                languageVisible && (settings.calendarShowPast || (row.release.expectedAt ?: Long.MAX_VALUE) > Instant.now().epochSecond) &&
+                    (!settings.calendarFavoritesOnly || row.release.animeId in favoriteIds) &&
+                    de.anisentinel.app.domain.provider.ProviderVisibilityPolicy.isAnimeVisible(providers, settings.disabledProviderIds)
+            }.mapNotNull { row ->
                 de.anisentinel.app.domain.watcher.ReleaseTimePolicy.resolve(
                     row.release, rows.map { it.release }, container.deviceTimeZoneProvider.currentZoneId()
                 )?.let { resolved ->
@@ -182,9 +197,10 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
                             ?: row.anime.titleNative
                             ?: "–",
                         row.release.episodeNumber, Instant.ofEpochSecond(at),
-                        latestEpisodeAvailability?.providerName
-                            ?: de.anisentinel.app.domain.provider.StreamingProviderPolicy
-                                .visible(row.providerReferences.map { it.provider })
+                        latestEpisodeAvailability?.providerName?.takeIf {
+                            de.anisentinel.app.domain.provider.ProviderVisibilityPolicy.isProviderEnabled(it, settings.disabledProviderIds)
+                        } ?: de.anisentinel.app.domain.provider.ProviderVisibilityPolicy
+                                .visibleProviders(row.providerReferences.map { it.provider }, settings.disabledProviderIds)
                                 .joinToString(" · ").takeIf { it.isNotBlank() },
                         row.release.metadataSource, row.release.sourceUrl, row.release.providerUrl,
                         ReleaseSourceType.fromMetadataSource(row.release.metadataSource),
@@ -213,7 +229,8 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
                         postponements = postponements.filter { it.isActive && it.animeId == row.release.animeId }
                     )
                 }
-            } }
+            }
+        }
     }
     private data class MonthRows(
         val releases: List<de.anisentinel.app.data.local.EpisodeReleaseEntity>,
@@ -224,9 +241,18 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
         dao.observeEpisodeReleasesForWindow(start.startEpoch(), value.plusMonths(1).atDay(1).startEpoch())
     }
     private val monthReleases = combine(
-        monthReleasesOnly,
-        dao.observeReleaseScheduleHistoryCount()
-    ) { releases, historyCount -> MonthRows(releases, historyCount) }
+        monthReleasesOnly, dao.observeReleaseScheduleHistoryCount(),
+        container.settingsRepository.settings, dao.observeFavorites()
+    ) { releases, historyCount, settings, favorites ->
+        val favoriteIds = favorites.mapTo(mutableSetOf()) { it.id }
+        MonthRows(releases.filter { release ->
+            (release.releaseLanguage != "GER_SUB" || settings.calendarShowSub) &&
+                (release.releaseLanguage != "GER_DUB" || settings.calendarShowDub) &&
+                (settings.calendarShowPast || (release.expectedAt ?: Long.MAX_VALUE) > Instant.now().epochSecond) &&
+                (!settings.calendarFavoritesOnly || release.animeId in favoriteIds) &&
+                de.anisentinel.app.domain.provider.ProviderVisibilityPolicy.isAnimeVisible(listOfNotNull(release.provider), settings.disabledProviderIds)
+        }, historyCount)
+    }
 
     private data class CalendarAuxiliary(
         val imported: ImportUiState,

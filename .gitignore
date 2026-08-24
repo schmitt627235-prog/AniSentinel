@@ -2,6 +2,7 @@
 .gradle/
 .idea/
 local.properties
+private-device-backups/
 /build/
 **/build/
 captures/
@@ -23,5 +24,7 @@ work/
 /*.xml
 /*.html
 /*.json
+*AniSentinel-Backup*.json
+*anisentinel-backup*.json
 /*-headers.txt
 local.properties

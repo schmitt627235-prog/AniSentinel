@@ -5,11 +5,13 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import org.junit.Before
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class AniSearchHttpTransportTest {
+    @Before fun resetCooldown() = AniSearchHttpTransport.resetGlobalCooldownForTests()
     @Test fun searchEncodesTitleAndUsesPublicAnimeIndex() = runBlocking {
         var requested = ""
         val transport = AniSearchHttpTransport(
@@ -31,6 +33,7 @@ class AniSearchHttpTransportTest {
         )
         val result = transport.searchAnime("rate-limit-${System.nanoTime()}")
         assertTrue(result is AniSearchFetchResult.RateLimited)
+        assertTrue(transport.searchAnime("second-title-${System.nanoTime()}") is AniSearchFetchResult.RateLimited)
         assertEquals(1, requests)
     }
 }

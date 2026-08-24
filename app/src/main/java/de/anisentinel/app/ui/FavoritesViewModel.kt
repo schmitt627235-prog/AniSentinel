@@ -51,7 +51,7 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     @Suppress("UNCHECKED_CAST")
-    val state = combine(favoriteData, filter, settings.favoritesSort, refreshing) { data, selected, storedSort, busy ->
+    val state = combine(favoriteData, filter, settings.favoritesSort, refreshing, settings.settings) { data, selected, storedSort, busy, appSettings ->
         val entities = data[0] as List<de.anisentinel.app.data.local.AnimeEntity>
         val releases = data[1] as List<EpisodeReleaseEntity>
         val references = data[2] as List<de.anisentinel.app.data.local.ProviderReferenceEntity>
@@ -61,13 +61,15 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
         val postponementsByAnime = postponements.filter { it.isActive && it.animeId != null }
             .groupBy { requireNotNull(it.animeId) }
         val now = Instant.now().epochSecond
-        val all = entities.map { entity ->
+        val allFavorites = entities.map { entity ->
             val base = entity.toDomain()
             val display = ReleaseDisplayResolver.nextFor(
                 releasesByAnime[entity.id].orEmpty(), postponementsByAnime[entity.id].orEmpty(), nowEpoch = now
             )
             base.copy(
-                provider = StreamingProviderPolicy.visible(providers[entity.id].orEmpty().map { it.provider }).joinToString(" · "),
+                provider = de.anisentinel.app.domain.provider.ProviderVisibilityPolicy.visibleProviders(
+                    providers[entity.id].orEmpty().map { it.provider }, appSettings.disabledProviderIds
+                ).joinToString(" · "),
                 expectedReleaseAt = display?.countdownTarget?.let(Instant::ofEpochSecond) ?: base.expectedReleaseAt,
                 episode = display?.identity?.episode ?: base.episode,
                 status = when {
@@ -75,6 +77,11 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
                     display != null -> de.anisentinel.app.domain.watcher.ReleaseStatusResolver().resolve(Instant.ofEpochSecond(display.countdownTarget))
                     else -> base.status
                 }
+            )
+        }
+        val all = allFavorites.filter { anime ->
+            de.anisentinel.app.domain.provider.ProviderVisibilityPolicy.isAnimeVisible(
+                providers[anime.id].orEmpty().map { it.provider }, appSettings.disabledProviderIds
             )
         }
         val sort = storedSort.toFavoritesSort()
@@ -86,7 +93,7 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
             favorites = all.filter { anime ->
                 FavoriteReleaseClassifier.matches(anime, releasesByAnime[anime.id].orEmpty(), selected, today, ZoneId.systemDefault())
             }.sortedWith(FavoritesSorter.comparator(sort)),
-            hasAnyFavorites = all.isNotEmpty(),
+            hasAnyFavorites = allFavorites.isNotEmpty(),
             refreshing = busy,
             postponementsByAnime = postponementsByAnime
         )

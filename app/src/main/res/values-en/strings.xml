@@ -109,6 +109,17 @@
     <string name="discover_subtitle">Find new anime you will love.</string>
     <string name="for_you">For you</string>
     <string name="anticipated_titles">Highly anticipated titles</string>
+    <string name="anticipated_users">users planning to watch</string>
+    <string name="anticipated_start">Planned start</string>
+    <string name="anticipated_not_dach_licensed">Not yet licensed for the DACH region</string>
+    <string name="anticipated_refresh_failed">The last refresh failed. Existing data remains available.</string>
+    <string name="anticipated_details">Future details</string>
+    <string name="anticipated_not_found">This future title is currently unavailable.</string>
+    <string name="anticipated_format">Format</string>
+    <string name="anticipated_studio">Studio</string>
+    <string name="anticipated_sequel_of">Sequel to</string>
+    <string name="anticipated_unknown">Not known yet</string>
+    <string name="anticipated_open_anisearch">Check on AniSearch</string>
     <string name="by_genre">Discover by genre</string>
     <string name="genre_action">Action</string>
     <string name="genre_adventure">Adventure</string>
@@ -410,4 +421,5 @@
     <string name="no_confirmed_dach_provider">No confirmed provider for this season in Germany yet.</string>
     <string name="provider_catalog_loading">The direct episode catalog for %1$s has not been loaded or is technically unavailable. Data from another provider will not be substituted.</string>
     <string name="episode_number_with_overall">Episode %1$d (overall %2$d)</string>
+    <string name="anticipated_titles_short">Anticipated</string>
 </resources>

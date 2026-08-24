@@ -1,6 +1,6 @@
 # AniSentinel
 
-Aktueller Diagnose-/Teststand: **v0.25.8**. JustWatch Deutschland löst Titel und Direktanbieter auf. Für eine fällige Episode prüft AniSentinel jeden unterstützten bestätigten Direktanbieter auf die konkrete Staffel, Episode und Sprachfassung; die gewählte Anbieterpräferenz steuert Darstellung und Deep-Link. AniWorld wird ab zehn Minuten nach dem erwarteten Termin als paralleler Sicherheitsbeleg verwendet, während direkte Prüfungen weiterlaufen. Fachlich identische Episoden werden quellenübergreifend abgeglichen, damit ein gültiger Beleg jede widersprüchliche Verzögerungsanzeige beendet.
+Aktueller lokaler Diagnose-/Teststand: **v0.25.16 (Build 17, versionCode 63)**. „Heiß erwartete Titel“ zeigt reale, noch nicht gestartete Anime nach AniList-Popularity, bietet dynamische Saisonfilter und führt zu einer eigenen Future-Detailseite. Die vier Einstellungsbereiche Kalender, Sync & Backup, Datenschutz und Anbieter bleiben unverändert funktionsfähig.
 
 Der Bereich **Entdecken** zeigt aus dem deutschen JustWatch-Datenbestand nur sicher als Anime erkannte Serien und Filme sowie ausdrücklich belegte Live-Action-Adaptionen. Der allgemeine JustWatch-Film- und Serienkatalog wird dort nicht angeboten.
 
@@ -28,6 +28,19 @@ Releaseinformationen verschiedener Quellen werden über eine kanonische Identit�
 - Pull-to-Refresh in den datenabhängigen Hauptansichten; bestehende Room-Daten bleiben bei Netzwerkfehlern sichtbar
 - kanonische Anime-Staffeln getrennt von providerabhängigen Staffelnummern
 - persistente Providerwahl pro Anime und Staffel; die Episodenansicht übernimmt die reale Staffel-/Saga-Struktur des gewählten Direktanbieters
+- globale, rückwärtskompatible Sichtbarkeitsfilter für Crunchyroll, ADN, Netflix, Disney+ und aniverse
+- Kalenderfilter für Sprachfassung, vergangene Termine und Favoriten
+- versionierter lokaler JSON-Export/-Import über Androids System-Dateiauswahl
+- lokale Datenschutzübersicht mit Berechtigungsstatus und bestätigungspflichtiger Löschung von Nutzerdaten
+- „Heiß erwartete Titel“ aus AniLists dokumentierter GraphQL-API: ausschließlich `NOT_YET_RELEASED`, Popularity-Ranking, 24-Stunden-Cache und ehrlicher DACH-Lizenzstatus
+
+### Heiß erwartete Titel
+
+AniList liefert für diesen getrennten Future-Bereich Nutzerinteresse, Status, geplanten Start, Cover, Format, Studio und Fortsetzungsbeziehungen. Die Sortierung entspricht absteigend der echten AniList-Popularity; die UI bezeichnet diese Zahl deshalb als vorgemerkte Nutzer und nicht als Stimmen. Laufende Titel werden nicht in dieser Liste geführt.
+
+AniSentinel sucht mit englischem, Romaji-, nativem und synonymem AniList-Titel nach dem konkreten AniSearch-Eintrag. Ein konservativer Abgleich berücksichtigt Staffel-/Cour-Aliase und verwirft falsche oder gleichwertig mehrdeutige Treffer. Nur ein sicher zugeordneter, erfolgreich geladener AniSearch-Titel mit vorhandenem regionalem `ul.xlist.row.simple.infoblock` darf einen negativen Lizenzstatus erzeugen. Netzwerk-, Such-, Match- und Parserfehler erscheinen stattdessen als „DACH-Status derzeit nicht ermittelbar“.
+
+Eine DACH-Bestätigung entsteht ausschließlich durch den deutschen Eintrag innerhalb dieses regionalen Blocks. Publisher und `Veröffentlicht` werden aus demselben Ländereintrag gelesen. `dachAvailableFrom`, `sourceObservedAt` und `firstDetectedAt` bleiben getrennt, damit ein Erkennungsdatum niemals als Verfügbarkeitsbeginn erscheint. Suchtreffer, Detail-HTML sowie positive und negative Nachweise werden begrenzt gecacht; HTTP 429 oder Zugriffssperren stoppen die Anreicherung, ohne gültige Cachewerte zu löschen.
 
 ### Release-Lifecycle und Providerwahl
 

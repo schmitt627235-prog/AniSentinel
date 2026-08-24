@@ -7,6 +7,7 @@ import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import java.time.Instant
+import kotlinx.coroutines.flow.first
 import de.anisentinel.app.AniSentinelApplication
 import de.anisentinel.app.domain.watcher.AvailabilityWatchStrategy
 
@@ -78,7 +79,11 @@ class ProviderEpisodeAvailabilitySyncWorker(context: Context, params: WorkerPara
                     releaseId, "AVAILABLE_READ_FROM_ROOM",
                     detail = "provider=${available.providerName};firstAvailableAt=${available.firstAvailableAt ?: "unknown"}"
                 )
-                if (favorite?.enabled == true && favorite.notifyAvailable) {
+                val providerVisible = de.anisentinel.app.domain.provider.ProviderVisibilityPolicy.isProviderEnabled(
+                    available.providerName,
+                    app.container.settingsRepository.settings.first().disabledProviderIds
+                )
+                if (favorite?.enabled == true && favorite.notifyAvailable && providerVisible) {
                     deliverOnce(
                         app, release, "EPISODE_AVAILABLE",
                         de.anisentinel.app.domain.watcher.NotificationEvent.EpisodeAvailable(

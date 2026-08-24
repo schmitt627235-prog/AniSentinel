@@ -1018,6 +1018,10 @@ private data class SettingsItem(val title: Int, val subtitle: Int, val icon: Ima
 fun SettingsScreen(
     scaffoldPadding: PaddingValues,
     onMenu: () -> Unit,
+    onCalendarSettings: () -> Unit,
+    onBackupSettings: () -> Unit,
+    onPrivacySettings: () -> Unit,
+    onProviderSettings: () -> Unit,
     onAboutClick: () -> Unit
 ) {
     val settingsViewModel: SettingsViewModel = viewModel()
@@ -1061,23 +1065,6 @@ fun SettingsScreen(
         }
         Unit
     }
-    val futureItems = listOf(
-        SettingsItem(
-            R.string.settings_calendar,
-            R.string.settings_calendar_subtitle,
-            Icons.Outlined.CalendarMonth
-        ),
-        SettingsItem(
-            R.string.settings_backup,
-            R.string.settings_backup_subtitle,
-            Icons.Outlined.Backup
-        ),
-        SettingsItem(
-            R.string.settings_privacy,
-            R.string.settings_privacy_subtitle,
-            Icons.Outlined.PrivacyTip
-        )
-    )
     Box(Modifier.fillMaxSize().testTag(UiTags.SETTINGS)) {
     ScreenContainer(scaffoldPadding, onMenu) { contentPadding ->
         LazyColumn(
@@ -1099,7 +1086,6 @@ fun SettingsScreen(
                             stringResource(R.string.theme_light)
                     },
                     icon = Icons.Outlined.Palette,
-                    status = stringResource(R.string.active),
                     onClick = settingsViewModel::cycleTheme
                 )
             }
@@ -1114,7 +1100,6 @@ fun SettingsScreen(
                         }
                     ),
                     icon = Icons.Outlined.Language,
-                    status = stringResource(R.string.active),
                     modifier = Modifier.testTag(UiTags.SETTINGS_LANGUAGE),
                     onClick = settingsViewModel::toggleLanguage
                 )
@@ -1125,7 +1110,6 @@ fun SettingsScreen(
                     title = stringResource(R.string.watch_profile),
                     value = localizedWatchProfile(settings.watchProfileId),
                     icon = Icons.Outlined.Shield,
-                    status = stringResource(R.string.active),
                     onClick = settingsViewModel::cycleWatchProfile
                 )
             }
@@ -1176,14 +1160,15 @@ fun SettingsScreen(
                 )
             }
             item {
-                val provider = stringResource(R.string.provider_not_checked)
                 SettingsActionCard(
                     title = stringResource(R.string.drawer_providers),
-                    value = provider,
+                    value = stringResource(
+                        R.string.settings_providers_enabled_count,
+                        de.anisentinel.app.domain.provider.ProviderVisibilityPolicy.enabledProviderIds(settings.disabledProviderIds).size,
+                        de.anisentinel.app.domain.provider.ProviderVisibilityPolicy.supportedProviderIds.size
+                    ),
                     icon = Icons.Outlined.Source,
-                    status = stringResource(R.string.coming_soon),
-                    enabled = false,
-                    onClick = {}
+                    onClick = onProviderSettings
                 )
             }
             item { SectionHeader(stringResource(R.string.monitoring_diagnostics)) }
@@ -1229,35 +1214,9 @@ fun SettingsScreen(
                 }
             }
             item { SectionHeader(stringResource(R.string.settings_group_more)) }
-            items(futureItems) { item ->
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .55f)
-                    )
-                ) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            item.icon,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .6f)
-                        )
-                        Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
-                            Text(stringResource(item.title), style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                stringResource(item.subtitle),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Text(
-                            stringResource(R.string.coming_soon),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
+            item { SettingsActionCard(stringResource(R.string.settings_calendar), stringResource(R.string.settings_calendar_subtitle), Icons.Outlined.CalendarMonth, onClick = onCalendarSettings) }
+            item { SettingsActionCard(stringResource(R.string.settings_backup), stringResource(R.string.settings_backup_subtitle), Icons.Outlined.Backup, onClick = onBackupSettings) }
+            item { SettingsActionCard(stringResource(R.string.settings_privacy), stringResource(R.string.settings_privacy_subtitle), Icons.Outlined.PrivacyTip, onClick = onPrivacySettings) }
             item {
                 Card(
                     onClick = onAboutClick,
@@ -1324,7 +1283,7 @@ private fun SettingsActionCard(
     title: String,
     value: String,
     icon: ImageVector,
-    status: String,
+    status: String? = null,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     onClick: () -> Unit
@@ -1347,14 +1306,13 @@ private fun SettingsActionCard(
                 Text(title, style = MaterialTheme.typography.titleMedium)
                 Text(value, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Text(
-                status,
-                color = if (enabled) {
-                    MaterialTheme.colorScheme.tertiary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                }
-            )
+            status?.let {
+                Text(
+                    it,
+                    color = if (enabled) MaterialTheme.colorScheme.tertiary
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }

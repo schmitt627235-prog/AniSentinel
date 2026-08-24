@@ -6,6 +6,153 @@ README.md, CHANGELOG.md und SOURCES.md bleiben als eigenständige Projektdokumen
 
 ---
 
+## AniSentinel v0.25.16 Build 17 – AniList → AniSearch → DACH
+
+### Ausgangslage und weiterverwendete Komponenten
+
+- Ausgangsstand war Build 16 (`versionCode 62`); Zielstand ist Build 17 (`versionCode 63`) bei unverändertem `versionName 0.25.16`.
+- Weiterverwendet wurden AniLists paginierte `NOT_YET_RELEASED`-Abfrage, Popularity-Sortierung, Future-Datenmodell, 24-Stunden-AniList-Cache, Compose-Liste, Detailseite, Pull-to-Refresh, der kontrollierte AniSearch-HTTP-Transport und der vorhandene HTML-Parser.
+- Start, Kalender, Favoriten, Entdecken, Einstellungen, Backup/Restore, Notifications, Providerchecks, ReleaseDisplayResolver und AniWorld-Fallback wurden nicht umgebaut.
+
+### Ergänzte Verbindung
+
+- `AniSearchFutureMatcher` erzeugt Suchvarianten aus English, Romaji, Native und sämtlichen AniList-Synonymen. `2nd Season`, `Season 2`, `Staffel 2`, `Dai 2 Ki`, `第2期`, `Part` und `Cour` werden als generische Identitätsmerkmale behandelt und nicht titelbezogen hart codiert.
+- Suchergebnisse werden gesammelt und konservativ bewertet. Explizite Staffel-/Cour-Widersprüche werden ausgeschlossen; ein Mindestwert und ein Abstand zum zweitbesten Kandidaten verhindern erzwungene Mehrdeutigkeitsmatches.
+- Sichere Matches werden AniList-ID-bezogen gecacht. Beim nächsten Aufruf wird die bekannte AniSearch-Detail-URL direkt geladen, sodass keine erneute Titelsuche nötig ist.
+- Detailmetadaten werden zusätzlich auf grobe Jahres- und Formatwidersprüche geprüft. Bei Widerspruch bleibt der Status `DACH_UNKNOWN`.
+- Die DACH-Auswertung akzeptiert ausschließlich `ul.xlist.row.simple.infoblock`. Die deutsche Flagge muss innerhalb eines solchen Blocks liegen. Publisher und `Veröffentlicht` stammen aus demselben `<li>`.
+- Ein erfolgreich ausgewerteter regionaler Block ohne deutschen Eintrag ergibt `DACH_NOT_LICENSED_YET`. Fehlender Block, unsicherer Match, HTTP-Fehler, Sperre oder Parserfehler ergeben `DACH_UNKNOWN`; gültige Cachewerte werden dabei nicht gelöscht.
+- Ein globaler Mutex erlaubt maximal eine aktive AniSearch-Anfrage. Nach HTTP 429 wird `Retry-After` übernommen oder ein exponentieller Backoff von zunächst 30 Minuten bis maximal 24 Stunden gesetzt und im vorhandenen `SourceCooldownStore` persistiert. Netzwerkfehler starten keine weiteren Aliasrequests; Varianten werden nur nach einer erfolgreichen, aber ergebnislosen Suchantwort fortgesetzt.
+- `dachAvailableFrom`, `sourceObservedAt` und `firstDetectedAt` werden getrennt persistiert. Das Prüfdatum wird nicht als deutscher Verfügbarkeitsbeginn ausgegeben.
+
+### Referenz und Lizenz
+
+- Als technische Referenz wurde `ipkpjersi/modb-app` geprüft, insbesondere die Trennung aus Konfiguration/Crawler/Konverter sowie der XPath `//ul[@class='xlist row simple infoblock']` und JSON-LD/DOM-Fallbacks.
+- Das Referenzprojekt steht unter AGPL-3.0. Es wurde kein Quellcode kopiert; AniSentinel verwendet eine eigenständige Jsoup-Implementierung und dokumentiert lediglich die übernommenen Parserkonzepte.
+
+### Validierung
+
+- Neue Tests decken Suchvariantenerzeugung, `Re:Monster 2nd Season` ↔ `Re:Monster Dai 2 Ki`, falsche Staffeln, mehrdeutige Treffer, deutschen Eintrag im regionalen Block, fehlenden Publisher, Flagge außerhalb des Blocks und einen vorhandenen Block ohne deutschen Eintrag ab.
+- Fokussierte Parser-/Future-Tests: erfolgreich.
+- Vollständige Suite: 355 Unit-/Robolectric-Tests, 0 Fehler, 0 übersprungen.
+- `assembleDebug` erfolgreich; Installation als Update auf Samsung SM-S928B erfolgreich; Gerät bestätigt `versionName 0.25.16`, `versionCode 63`.
+- Gestufte Liveprüfung begann regelkonform mit drei sichtbaren Titeln. Ein gültiger Apothekerin-Beleg kam aus Cache; AniSearch antwortete anschließend real mit HTTP 429 ohne `Retry-After`. Der globale Backoff wurde auf 1.800 Sekunden gesetzt und weitere Requests wurden als Cooldown-Treffer unterdrückt. Der Status blieb `DACH_UNKNOWN`; kein Negativstatus wurde erzeugt.
+- Wegen des realen 429 wurden die 5er- und 20er-Netzwerkstufen bewusst nicht gestartet. Die 20 dynamischen AniList-Kandidaten und der Abbruchgrund sind in `BUILD17_LIVE_STICHPROBE.md` dokumentiert. Dieses ehrliche Abbruchergebnis ersetzt keine erfolgreiche 20-Titel-Matchquote.
+- GitHub wurde nicht verändert.
+
+---
+
+## AniSentinel v0.25.16 – Heiß erwartete Titel
+
+### Umsetzung und Begründung
+
+- Der bisher deaktivierte Drawer-Eintrag besitzt nun die Route `anticipated`; „Demnächst“ entfällt.
+- `AnticipatedTitlesRepository` ruft AniLists dokumentierte GraphQL-API mit `type: ANIME`, `status: NOT_YET_RELEASED` und `sort: POPULARITY_DESC` ab. Dadurch beruht der Rang auf echtem Nutzerinteresse und nicht auf einer erfundenen Formel.
+- Ein zusätzlicher lokaler Filter verwirft alle Datensätze, deren Status nicht `NOT_YET_RELEASED` ist, sowie bekannte Startdaten, die nicht mehr in der Zukunft liegen.
+- Der 24-Stunden-Cache verhindert aggressive Abfragen. Schlägt ein Refresh fehl, wird der letzte gültige Datensatz weiter angezeigt und nicht gelöscht.
+- `UpcomingAnimeIdentity` hält AniList-/MAL-IDs, Aliase, Vorgänger und Staffelnummer getrennt. Die generische Aliasnormalisierung erkennt Schreibweisen wie `2nd Season`, `Dai 2 Ki` und `第2期`, ohne Titel-Hardcodes.
+- Liste und Detailseite zeigen reale Cover, Popularity, geplanten Start, Format, Studio und Fortsetzungsbezug. Saisonfilter werden ausschließlich aus vorhandenen Daten erzeugt.
+- DACH-Status, tatsächlicher Verfügbarkeitsbeginn, Beobachtungszeit und erster Erkennungszeitpunkt sind getrennt. Höher priorisierte spätere Bestätigungen ersetzen den vorherigen sichtbaren Negativstatus.
+- AniSearch wird nicht als offizielle API behandelt: öffentliche Such-/Detailseiten werden mit User-Agent, Cache, Rate-Limit und ehrlichem Abbruch bei Sperren ausgewertet. Ein verifizierter echter Beleg für „Die Tagebücher der Apothekerin: Staffel 3 – Cour 1“ dient als quelloffene Fixture; die Zuordnung erfolgt dennoch ausschließlich über die generische Alias-/Staffelidentität. Weitere Titel werden begrenzt im Hintergrund beziehungsweise beim Öffnen angereichert. AnimeSchedule blieb mangels verifiziertem zulässigem Abrufweg deaktiviert.
+- Die bestehende Release-, Kalender-, Provider-, Verschiebungs-, Benachrichtigungs- und Einstellungslogik wurde für dieses Feature nicht umgebaut.
+
+### Tests und Geräteprüfung
+
+- 348 Unit-/Robolectric-Tests erfolgreich, darunter Future-Filter, Popularity-Sortierung, Aliasabgleich, DACH-Negativstatus, spätere DACH-Bestätigung und Trennung von Verfügbarkeits- und Erkennungsdatum.
+- `assembleDebug` erfolgreich; Paketversion v0.25.16, Build 62.
+- Installation als Update auf dem Samsung SM-S928B erfolgreich, vorhandene App-Daten blieben bestehen.
+- Navigationspfad real geprüft: Drawer → Heiß erwartete Titel → reale Liste → The Apothecary Diaries Season 3 → Detailseite → Zurück → Liste.
+- Reale Liste zeigte u. a. dynamische Filter, Popularitätswerte, zukünftige Startdaten und den ehrlichen DACH-Status; Detailseite zeigte Format, Studio und Vorgängerbezug.
+- GitHub wurde nicht verändert.
+
+---
+
+## AniSentinel v0.25.15 – Korrektur Backup und Datenschutz
+
+- Ursache des wirkungslosen Backup-Buttons behoben: Ein Compose-Context-Wrapper wird nun sicher bis zur tatsächlichen `MainActivity` aufgelöst.
+- Export und Import öffnen real Androids Storage Access Framework über `CreateDocument(application/json)` und `OpenDocument`.
+- Sieben einzeln auswählbare Bereiche: Favoriten, allgemeine Einstellungen, Benachrichtigungen, Kalender, Anbieter, Watch-Profil sowie Theme/Sprache.
+- „Alles auswählen“ und „Alles abwählen“ für Export und Restore; ohne Auswahl bleibt die jeweilige Hauptaktion deaktiviert.
+- Neues Schema 1 enthält `appVersion`, `includedSections` und strikt getrennte Datenobjekte. Technische Caches und Gerätedaten fehlen vollständig.
+- Restore liest und validiert die gesamte Datei, zeigt danach eine Auswahlvorschau und verändert nur bestätigte Bereiche. Favoriten werden zusammengeführt.
+- Android-App-Info wird über einen auflösbaren `ACTION_APPLICATION_DETAILS_SETTINGS`-Intent geöffnet; Fehler werden abgefangen. Der Berechtigungsstatus wird bei Rückkehr neu gelesen.
+- Redundante „Aktiv“-Zusätze wurden bei bedienbaren Einstellungskarten entfernt; informative Zustände bleiben bestehen.
+
+### Tests und reales Gerät
+
+- 343 Unit-/Robolectric-Tests erfolgreich, keine Fehler.
+- `assembleDebug` erfolgreich; Ziel bleibt v0.25.15/Build 61.
+- Reales JSON-Backup im Android-Dateidialog gespeichert: 12.965 Byte, Schema 1, alle sieben erwarteten Bereiche, keine Cache-/Gerätedaten.
+- Restore-Dateidialog, Inhaltsvorschau, Alles an/ab und vollständiger Restore erfolgreich geprüft.
+- Datenschutz-Löschdialog: Abbrechen und Bestätigen geprüft. Aktive Favoriten wechselten kontrolliert von 37 auf 0 und wurden unmittelbar aus dem geprüften Backup auf 37 wiederhergestellt.
+- Android-App-Info geöffnet; Rückkehr zu AniSentinel ohne Absturz erfolgreich.
+- Anbieterfilter unverändert gelassen.
+- GitHub nicht verändert.
+
+---
+
+## AniSentinel v0.25.15 – vier Einstellungsbereiche (lokaler Prüfstand)
+
+### Auftrag und Scope
+
+Ausgehend von v0.25.14/Build 60 wurden ausschließlich die vier bereits vorhandenen Bereiche unter **Einstellungen** produktiv angebunden: Kalender, Sync & Backup, Datenschutz und Anbieter. Releaseauflösung, Staffel-/Arc-Logik, Verschiebungen, T+10-Fallback und direkte Providerparser wurden nicht umgebaut.
+
+### Kalender
+
+- Persistente DataStore-Schalter für OmU/Deutsch untertitelt, deutsche Synchro, vergangene Termine und „Nur Favoriten“.
+- Mindestens eine Sprachfassung bleibt immer aktiv.
+- Die Filter verändern nur sichtbare Kalenderdaten und löschen keine Room-Einträge.
+- Sprach-, Favoriten- und globaler Anbieterfilter werden gemeinsam angewendet.
+
+### Anbieter
+
+- Globale Schalter für Crunchyroll, ADN, Netflix, Disney+ und aniverse.
+- Neue zentrale `ProviderVisibilityPolicy` normalisiert Provider-Aliase, ermittelt aktive Anbieter und filtert Titel sowie sichtbare Providerangaben konsistent.
+- Home, Kalender, Favoriten, Entdecken und Suche verwenden dieselbe Policy.
+- `disabledProviderIds = emptySet()` bedeutet rückwärtskompatibel „alle aktiv“; die bisherige Anbieterpräferenz bleibt fachlich getrennt.
+- Ausschalten löscht weder Favoriten noch Provider-/Release-Daten. Bei Wiedereinschalten werden passende Daten wieder sichtbar.
+- Availability-Benachrichtigungen respektieren die globale Sichtbarkeit, ohne die direkte Prüfarchitektur zu verändern.
+
+### Sync & Backup
+
+- Versioniertes JSON-Schema 1 mit App-Kennung, Erstellungszeit, Nutzerpräferenzen und Favoriten.
+- Export über `ACTION_CREATE_DOCUMENT`, Import über `ACTION_OPEN_DOCUMENT`; keine Speicherberechtigung erforderlich.
+- Restore validiert zuerst das vollständige Dokument. Erst danach werden Einstellungen ersetzt und Favoriten konfliktfrei zusammengeführt.
+- Ungültiges JSON, falsches Schema oder ungültige Pflichtwerte verursachen keinen Teilimport.
+- Provider-/HTTP-Caches, Parserantworten, Diagnosezustände und externe Kalenderdaten werden nicht exportiert.
+
+### Datenschutz
+
+- Transparente Übersicht über lokal gespeicherte Favoriten, Einstellungen und wiederbeschaffbare Release-/Providerdaten.
+- Dynamischer Status der Android-Benachrichtigungsberechtigung und Link in die System-App-Einstellungen.
+- Bestätigungspflichtige Löschung von Favoriten, Einstellungen und Benachrichtigungs-/Deduplizierungszuständen; wiederbeschaffbare Release- und Providerdaten bleiben erhalten.
+- Hinweis auf ein lokales Backup vor der Löschung.
+
+### Sicherheit und Datenschutz
+
+- Backup-Dateinamen werden zusätzlich durch `.gitignore` ausgeschlossen.
+- Reale Datenbanken, WAL/SHM, ADB-Dumps, Nutzersicherungen und private Medien werden weder Bestandteil des späteren Quellpakets noch einer Veröffentlichung.
+- GitHub wurde in diesem Arbeitsdurchlauf bislang nicht verändert; die vorgeschriebene neue Freigabe steht noch aus.
+
+### Validierung
+
+- Zielstand: `versionName 0.25.15`, `versionCode 61`.
+- `compileDebugKotlin`: erfolgreich.
+- `testDebugUnitTest`: 341 Tests, 341 erfolgreich, 0 Fehler, 0 übersprungen.
+- `assembleDebug`: erfolgreich.
+- Neue Regressionstests decken Defaultmigration, Einzel-/Mehranbieterfilter, Aliasnormalisierung, Backupinhalt und atomaren Fehlerfall ab.
+- Reales Gerät: Samsung SM-S928B, Updateinstallation mit `adb install -r` erfolgreich; vorhandene App-Daten wurden nicht gelöscht.
+- Installierte Paketversion über Android bestätigt: `versionName=0.25.15`, `versionCode=61`.
+- Kalender, Sync & Backup, Datenschutz und Anbieter wurden über die reale Compose-Oberfläche geöffnet und inhaltlich geprüft.
+- Providerpersistenz: Netflix testweise deaktiviert, App vollständig beendet und neu gestartet; Zustand blieb deaktiviert. Anschließend wurde Netflix wieder aktiviert, sodass alle fünf Anbieter wie vor dem Test aktiv sind.
+- Die vor der Prüfung vorhandenen 37 Favoriten blieben beim Update und beim Providerfiltertest erhalten; die Filteraktion enthält keine Favoritenmutation.
+
+### Auswirkungen
+
+Die App erhält vier nutzbare lokale Einstellungsbereiche, ohne den stabilen Release- und Providerkern zu verändern. Nutzer können ihre sichtbaren Inhalte einschränken, den Zustand portabel sichern, lokale Daten transparent verwalten und behalten dabei alle gespeicherten Favoriten und wiederbeschaffbaren Daten.
+
+---
+
 ## Ursprünglicher Bericht: V0.25.14_FOLGEPRUEFUNG_2026-08-24.md
 
 # AniSentinel v0.25.14 – lokale Folgeprüfung

@@ -130,6 +130,22 @@ interface AniSentinelDao {
     @Query("SELECT * FROM favorites WHERE enabled = 1")
     suspend fun activeFavorites(): List<FavoriteEntity>
 
+    @Query("DELETE FROM favorites")
+    suspend fun deleteAllFavorites()
+
+    @Query("DELETE FROM notification_deliveries")
+    suspend fun deleteAllNotificationDeliveries()
+
+    @Query("DELETE FROM scheduled_release_notifications")
+    suspend fun deleteAllScheduledReleaseNotifications()
+
+    @Transaction
+    suspend fun deleteLocalUserData() {
+        deleteAllScheduledReleaseNotifications()
+        deleteAllNotificationDeliveries()
+        deleteAllFavorites()
+    }
+
     @Query("SELECT * FROM favorite_history_backfills WHERE animeId = :animeId LIMIT 1")
     suspend fun favoriteHistoryBackfill(animeId: String): FavoriteHistoryBackfillEntity?
 
