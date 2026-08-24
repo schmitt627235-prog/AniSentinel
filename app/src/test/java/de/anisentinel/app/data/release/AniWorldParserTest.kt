@@ -72,6 +72,46 @@ class AniWorldParserTest {
     }
 
     @Test
+    fun scheduleChangeWithoutDubMarkerDefaultsToSub() {
+        val html = """
+            <article class='supportFAQArticle'><p>
+              ⚠️ Example Anime<br>
+              • S01 E09<br>
+              📅 27.08. ▼ 03.09.<br>
+              Special programming<br>
+              ----------------------------------------------------------------------
+            </p></article>
+        """.trimIndent()
+
+        val change = AniWorldScheduleChangeParser().parse(
+            html, Instant.parse("2026-08-22T00:00:00Z"), zone
+        ).single()
+
+        assertEquals("Sub", change.releaseType)
+    }
+
+    @Test
+    fun delayedChangeWithMistypedEarlierMonthAdvancesToPlausibleMonth() {
+        val html = """
+            <article class='supportFAQArticle'><p>
+              ⚠️ Chainsmoker Cat<br>
+              • S01 E09<br>
+              📅 27.08. ▼ 03.08.<br>
+              Special programming<br>
+              ----------------------------------------------------------------------
+            </p></article>
+        """.trimIndent()
+
+        val change = AniWorldScheduleChangeParser().parse(
+            html, Instant.parse("2026-08-22T00:00:00Z"), zone
+        ).single()
+
+        assertEquals("2026-08-27", change.previousDate.toString())
+        assertEquals("2026-09-03", change.revisedDate.toString())
+        assertEquals("Sub", change.releaseType)
+    }
+
+    @Test
     fun normalizationDoesNotReplaceSeasonAndEpisodeMatching() {
         assertEquals(normalizeAnimeTitle("Example Season 2"), normalizeAnimeTitle("Example Staffel 2"))
         assertFalse(normalizeAnimeTitle("Example Season 2") == normalizeAnimeTitle("Example Season 3"))
@@ -93,6 +133,22 @@ class AniWorldParserTest {
         assertEquals(2, entries.size)
         assertTrue(entries.any { it.episodeNumber == 5 && it.releaseLanguage == "GER_SUB" })
         assertTrue(entries.any { it.episodeNumber == 2 && it.releaseLanguage == "GER_DUB" })
+    }
+
+    @Test
+    fun aniWorldEntryWithoutDubMarkerDefaultsToGermanSub() {
+        val html = """
+            <section class='calendarList'><h3>Montag, 03.08.2026</h3>
+              <div class='seriesListContainer'><div><a href='/anime/stream/example'>
+                <h3 class='seriesTitle'>Example</h3>
+                <small>S01E07</small><small>18:10 Uhr</small>
+              </a></div></div>
+            </section>
+        """.trimIndent()
+
+        val entry = AniWorldCalendarParser().parse(html, Instant.EPOCH, zone).single()
+
+        assertEquals("GER_SUB", entry.releaseLanguage)
     }
 
     @Test

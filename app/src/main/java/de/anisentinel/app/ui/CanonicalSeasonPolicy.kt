@@ -26,9 +26,15 @@ object CanonicalSeasonPolicy {
                     (!it.providerUrl.isNullOrBlank() || !it.sourceUrl.isNullOrBlank())
             }
             .mapNotNull { it.seasonNumber }
-        val authoritative = (
+        val candidates = (
             verified + providerConfirmed + providerHistoryConfirmed + listOfNotNull(activeSeasonNumber)
         ).filter { it > 0 }.distinct().sorted()
+        // Provider catalogues frequently expose dub/version buckets as additional seasons.
+        // A current calendar season is an independent upper bound for the real product
+        // structure, so later provider-only numbers must not become season chips.
+        val authoritative = activeSeasonNumber?.let { active ->
+            candidates.filter { it <= active }
+        } ?: candidates
         if (authoritative.isNotEmpty()) return authoritative
 
         // A single legacy season is a safe compatibility fallback. Multiple legacy-only

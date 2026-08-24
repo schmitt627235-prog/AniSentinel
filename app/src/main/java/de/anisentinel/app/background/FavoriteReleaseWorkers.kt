@@ -9,6 +9,7 @@ import de.anisentinel.app.data.local.NotificationDeliveryEntity
 import de.anisentinel.app.data.local.EpisodeReleaseEntity
 import de.anisentinel.app.domain.watcher.NotificationEvent
 import java.time.Instant
+import kotlinx.coroutines.flow.first
 
 internal suspend fun handleReleaseDue(context: Context, releaseId: String) {
         val app = context.applicationContext as AniSentinelApplication
@@ -26,8 +27,17 @@ internal suspend fun handleReleaseDue(context: Context, releaseId: String) {
         dao.favorite(release.animeId)?.takeIf { it.enabled } ?: return
         release.episodeNumber ?: return
         dao.updateReleaseStatus(releaseId, "DUE")
-        // Due is an internal state transition. Provider checks start silently; users are only
-        // notified about a newly confirmed availability or a genuine technical check failure.
+        val settings = app.container.settingsRepository.settings.first()
+        if (settings.releaseDueNotificationsEnabled) {
+            val animeTitle = dao.anime(release.animeId)?.titleGerman
+            deliverOnce(
+                app, release, "RELEASE_DUE",
+                NotificationEvent.ReleaseDue(
+                    release.animeId, release.episodeNumber, animeTitle,
+                    release.seasonNumber, release.releaseLanguage
+                )
+            )
+        }
         dao.deleteScheduledReleaseNotification(releaseId)
         val request = OneTimeWorkRequestBuilder<ProviderEpisodeAvailabilitySyncWorker>()
             .setInputData(Data.Builder().putString(FavoriteReleaseScheduler.KEY_RELEASE_ID, releaseId).build())

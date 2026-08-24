@@ -1,6 +1,7 @@
 package de.anisentinel.app.ui
 
 import de.anisentinel.app.data.local.EpisodeReleaseEntity
+import de.anisentinel.app.data.local.EpisodeProviderAvailabilityEntity
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -56,4 +57,58 @@ class ReleaseDisplayResolverTest {
         assertEquals(regularEpisode19.expectedAt, 1_787_324_400L)
         assertEquals(18, result.release.episodeNumber)
     }
+
+    @Test fun highestSemanticallyConfirmedEpisodeDrivesLastRelease() {
+        val next = release(20, 1, 3_000_000)
+        val stale = release(16, 1, 2_700_000)
+        val newest = release(19, 1, 2_900_000)
+        val result = ReleaseDisplayResolver.previousFor(
+            listOf(stale, newest, next), next, 2_950_000, checks = listOf(available(newest))
+        )!!
+        assertEquals(19, result.release.episodeNumber)
+    }
+
+    @Test fun confirmedProviderEpisodeWinsEvenWhenItsImportedTimestampLooksFutureDated() {
+        val staleCalendar = release(16, 3, 2_000_000)
+        val confirmed19 = release(19, 3, 4_000_000)
+        val result = ReleaseDisplayResolver.latestConfirmed(
+            listOf(staleCalendar, confirmed19), listOf(available(confirmed19)), 3, "GER_SUB"
+        )
+        assertEquals(19, result?.episodeNumber)
+    }
+
+    @Test fun historicalProviderReleaseWithoutSeparateCheckStillDrivesLatestRelease() {
+        val episode19 = release(19, 3, 4_000_000).copy(
+            isHistoricalImport = true,
+            metadataSource = "CRUNCHYROLL_PUBLIC_HISTORY",
+            provider = "Crunchyroll",
+            releaseStatus = "AVAILABLE_GER_SUB"
+        )
+        assertEquals(
+            19,
+            ReleaseDisplayResolver.latestConfirmed(listOf(episode19), emptyList(), 3, "GER_SUB")?.episodeNumber
+        )
+    }
+
+    @Test fun providerNeutralCalendarRowWithPersistedAvailableStatusDrivesCurrentSeason() {
+        val sub19 = release(19, 3, 4_000_000).copy(
+            provider = null,
+            metadataSource = "ANIWORLD_CALENDAR",
+            releaseStatus = "AVAILABLE",
+            releaseLanguage = "GER_SUB"
+        )
+        val dub16 = release(16, 3, 3_900_000, "GER_DUB")
+        assertEquals(
+            19,
+            ReleaseDisplayResolver.latestConfirmed(
+                listOf(dub16, sub19), emptyList(), season = 3, language = null
+            )?.episodeNumber
+        )
+    }
+
+    private fun available(release: EpisodeReleaseEntity) = EpisodeProviderAvailabilityEntity(
+        "a:${release.sourceReleaseId}", release.sourceReleaseId, "CRUNCHYROLL", "Crunchyroll",
+        release.seasonNumber, release.episodeNumber, "AVAILABLE_GER_SUB", true, false, null,
+        2_900_100, null, 2_900_100, null, 0, null, "PROVIDER_DIRECT", null, null, "TEST"
+    )
 }

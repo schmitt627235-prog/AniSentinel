@@ -25,6 +25,7 @@ class DataStoreSettingsRepository(
                 ?: ThemePreference.SYSTEM,
             languageTag = values[Keys.LANGUAGE] ?: "de",
             notificationsEnabled = values[Keys.NOTIFICATIONS] ?: true,
+            releaseDueNotificationsEnabled = values[Keys.RELEASE_DUE_NOTIFICATIONS] ?: false,
             watchProfileId = values[Keys.WATCH_PROFILE] ?: "automatic",
             preferredProviderIds = decodeProviders(values[Keys.PROVIDERS].orEmpty()),
             liveDataEnabled = values[Keys.LIVE_DATA] ?: false
@@ -42,6 +43,10 @@ class DataStoreSettingsRepository(
 
     override suspend fun setNotificationsEnabled(enabled: Boolean) {
         context.aniSentinelDataStore.edit { it[Keys.NOTIFICATIONS] = enabled }
+    }
+
+    override suspend fun setReleaseDueNotificationsEnabled(enabled: Boolean) {
+        context.aniSentinelDataStore.edit { it[Keys.RELEASE_DUE_NOTIFICATIONS] = enabled }
     }
 
     override suspend fun setWatchProfileId(id: String) {
@@ -70,6 +75,7 @@ class DataStoreSettingsRepository(
         val THEME = stringPreferencesKey("theme")
         val LANGUAGE = stringPreferencesKey("language")
         val NOTIFICATIONS = booleanPreferencesKey("notifications_enabled")
+        val RELEASE_DUE_NOTIFICATIONS = booleanPreferencesKey("release_due_notifications_enabled")
         val WATCH_PROFILE = stringPreferencesKey("watch_profile_id")
         val PROVIDERS = stringPreferencesKey("preferred_provider_ids")
         val LIVE_DATA = booleanPreferencesKey("live_data_enabled")

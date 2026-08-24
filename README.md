@@ -10,6 +10,8 @@ Der Bereich **Entdecken** zeigt aus dem deutschen JustWatch-Datenbestand nur sic
 
 AniSentinel ist eine native Android-App für deutsche Anime-Releasetermine. Sie bündelt aktuelle und historische Termine, Favoriten, Countdown-Anzeigen, Providerzuordnungen und Benachrichtigungen in einer responsiven Jetpack-Compose-Oberfläche.
 
+Releaseinformationen verschiedener Quellen werden über eine kanonische Identität aus Titel-ID, realer Staffel, Folge und Sprachfassung verbunden. AniWorld-, JustWatch- und Provider-IDs bleiben Herkunftsnachweise und dürfen weder Verschiebungen noch Verfügbarkeit auf eine andere Episode übertragen.
+
 ## Hauptfunktionen
 
 - deutscher Anime-Releasekalender mit getrennten `GER_SUB`- und `GER_DUB`-Einträgen

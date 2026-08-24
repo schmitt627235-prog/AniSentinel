@@ -92,9 +92,10 @@ class AniWorldCalendarParser {
                     listOf(image.attr("data-src"), image.attr("src"))
                 }
                 val releaseLanguage = when {
-                    flagPaths.any { it.contains("japanese-german.svg", ignoreCase = true) } -> "GER_SUB"
                     flagPaths.any { Regex("(?:^|/)german\\.svg$", RegexOption.IGNORE_CASE).containsMatchIn(it) } -> "GER_DUB"
-                    else -> return@mapNotNull null
+                    // AniWorld marks German dubs explicitly. Every calendar entry without
+                    // that dub marker is the German-subtitled release track.
+                    else -> "GER_SUB"
                 }
                 if (title.isBlank()) return@mapNotNull null
                 val coverImage = card.selectFirst("img[alt$=Cover], img[data-src*=/cover/]")
@@ -170,10 +171,19 @@ class AniWorldScheduleChangeParser {
                         val previous = resolveDate(match.groupValues[1], now, zoneId)
                         val relativeDelayMinutes = Regex("(\\d+)\\s*min", RegexOption.IGNORE_CASE)
                             .find(revisedToken)?.groupValues?.get(1)?.toIntOrNull()
-                        val revised = revisedToken.takeUnless { it == "?" || relativeDelayMinutes != null }
+                        val parsedRevised = revisedToken.takeUnless { it == "?" || relativeDelayMinutes != null }
                             ?.let { resolveDate(it, now, zoneId) }
+                        // A downward postponement cannot end before its original date. AniWorld
+                        // occasionally omits the changed month (for example 27.08 -> 03.08 although
+                        // the linked evidence says 03.09). Preserve the day and advance the month
+                        // until the direction is chronologically plausible.
+                        val revised = if (
+                            directionToken != "â–²" && previous != null && parsedRevised != null && parsedRevised < previous
+                        ) generateSequence(parsedRevised) { it.plusMonths(1) }
+                            .first { !it.isBefore(previous) }
+                        else parsedRevised
                         val type = Regex("\\((Sub\\+Dub|Dub\\+Sub|Sub|Dub)\\)", RegexOption.IGNORE_CASE).find(line)
-                            ?.groupValues?.get(1)?.replaceFirstChar(Char::uppercase) ?: titleReleaseType
+                            ?.groupValues?.get(1)?.replaceFirstChar(Char::uppercase) ?: titleReleaseType ?: "Sub"
                         val following = lines.drop(index + 1).takeWhile { it.isNotBlank() && !it.startsWith("-") && !it.startsWith("⚠") && !it.startsWith("🚨") && !it.startsWith("📅") }
                         val reason = following.firstOrNull { !it.startsWith("http") }
                         val evidence = following.firstNotNullOfOrNull { evidenceLinks[it] ?: it.takeIf { v -> v.startsWith("https://") } }

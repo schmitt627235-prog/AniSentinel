@@ -73,6 +73,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun toggleReleaseDueNotifications() {
+        viewModelScope.launch {
+            repository.setReleaseDueNotificationsEnabled(!settings.value.releaseDueNotificationsEnabled)
+        }
+    }
+
     fun toggleLanguage() {
         val next = if (settings.value.languageTag == "de") "en" else "de"
         viewModelScope.launch {

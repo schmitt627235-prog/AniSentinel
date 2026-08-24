@@ -135,15 +135,15 @@ fun AnimeDetailScreen(
         state.providerSeasonMappings.filter {
             it.available && it.region.equals("DE", true) &&
                 ProviderPreferenceUiPolicy.canonicalName(it.provider).equals(provider, true)
-        }.mapNotNull { it.providerSeasonNumber ?: it.canonicalSeasonNumber }
-            .filter { it > 0 }.distinct().sorted()
+        }.map { it.canonicalSeasonNumber }
+            .filter { it > 0 && it in canonicalAvailableSeasons }.distinct().sorted()
     }.orEmpty()
     val selectedProviderSeasonLabels = savedAnimeProvider?.let { provider ->
         state.providerSeasonMappings.filter {
             it.available && it.region.equals("DE", true) &&
                 ProviderPreferenceUiPolicy.canonicalName(it.provider).equals(provider, true)
         }.mapNotNull { mapping ->
-            (mapping.providerSeasonNumber ?: mapping.canonicalSeasonNumber).takeIf { it > 0 }
+            mapping.canonicalSeasonNumber.takeIf { it > 0 && it in canonicalAvailableSeasons }
                 ?.let { it to mapping.providerSeasonLabel }
         }.toMap()
     }.orEmpty()
@@ -223,37 +223,101 @@ fun AnimeDetailScreen(
                 }
             }
             val nowEpoch = java.time.Instant.now().epochSecond
-            val futureReleases = state.releases.filter { (it.expectedAt ?: Long.MIN_VALUE) > nowEpoch }
+            val activeUpcomingPostponement = state.postponements
+                .filter { it.isActive && (it.newExpectedAt ?: Long.MIN_VALUE) > nowEpoch }
+                .maxWithOrNull(compareBy<de.anisentinel.app.data.local.ReleasePostponementEntity> {
+                    it.newExpectedAt ?: Long.MAX_VALUE
+                }.thenBy { it.revision })
+            // Never renumber an explicitly identified postponement from provider progress.
+            // S4E17 Dub stays S4E17 Dub even when S4E19 Sub is already available.
+            val canonicalPostponement = activeUpcomingPostponement
+            val shiftedReleases = state.releases.map { release ->
+                val identity = de.anisentinel.app.domain.release.ReleaseIdentity.from(release)
+                val postponement = state.postponements
+                    .filter { it.isActive && it.newExpectedAt != null }
+                    .filter { shift ->
+                        de.anisentinel.app.domain.release.ReleaseIdentity.from(shift)
+                            ?.sameEpisodeAllowingUnspecifiedLanguage(identity) == true
+                    }
+                    .maxByOrNull { it.revision }
+                postponement?.newExpectedAt?.let { release.copy(expectedAt = it, releaseStatus = "POSTPONED") }
+                    ?: release
+            }
+            val canonicalPostponedRelease = canonicalPostponement?.let { shift ->
+                val rawShift = activeUpcomingPostponement
+                val template = state.releases.firstOrNull { it.sourceReleaseId == rawShift?.releaseId }
+                    ?: state.releases.firstOrNull {
+                        it.seasonNumber == rawShift?.seasonNumber &&
+                            it.episodeNumber == rawShift?.episodeNumber &&
+                            it.releaseLanguage == rawShift?.releaseLanguage
+                    }
+                template?.copy(
+                    sourceReleaseId = "canonical-postponement:${shift.postponementId}",
+                    episodeNumber = shift.episodeNumber,
+                    expectedAt = shift.newExpectedAt,
+                    releaseStatus = "POSTPONED"
+                )
+            }
+            val effectiveReleases = shiftedReleases + listOfNotNull(canonicalPostponedRelease)
+            val futureReleases = effectiveReleases.filter { (it.expectedAt ?: Long.MIN_VALUE) > nowEpoch }
             val focusedRelease = if (focusedEpisode != null) futureReleases.firstOrNull {
                 it.episodeNumber == focusedEpisode &&
                     (focusedSeason == null || it.seasonNumber == focusedSeason) &&
                     (focusedLanguage == null || it.releaseLanguage == focusedLanguage)
             } else null
-            val nextRelease = focusedRelease ?: futureReleases.minWithOrNull(
+            val provisionalNext = focusedRelease ?: futureReleases.minWithOrNull(
                 compareBy<de.anisentinel.app.data.local.EpisodeReleaseEntity> { it.expectedAt ?: Long.MAX_VALUE }
                     .thenByDescending { it.episodeNumber ?: Int.MIN_VALUE }
             )
+            val cycleLatestConfirmed = ReleaseDisplayResolver.latestConfirmed(
+                state.releases, state.episodeChecks,
+                provisionalNext?.seasonNumber, language = null
+            )
+            val nextRelease = if (focusedRelease != null) focusedRelease else futureReleases
+                .filter { candidate ->
+                    cycleLatestConfirmed == null ||
+                        (candidate.seasonNumber ?: 1) > (cycleLatestConfirmed.seasonNumber ?: 1) ||
+                        ((candidate.seasonNumber ?: 1) == (cycleLatestConfirmed.seasonNumber ?: 1) &&
+                            (candidate.episodeNumber ?: 0) > (cycleLatestConfirmed.episodeNumber ?: 0))
+                }
+                .minWithOrNull(
+                    compareBy<de.anisentinel.app.data.local.EpisodeReleaseEntity> { it.expectedAt ?: Long.MAX_VALUE }
+                        .thenBy { it.episodeNumber ?: Int.MAX_VALUE }
+                )
             val regularScheduleAnchor = nextRelease?.let { release ->
-                state.postponements.firstOrNull { shift ->
+                canonicalPostponement?.takeIf { shift ->
                     shift.seasonNumber == release.seasonNumber &&
                         shift.episodeNumber == release.episodeNumber &&
-                        shift.releaseLanguage == release.releaseLanguage
+                        (shift.releaseLanguage == null || shift.releaseLanguage == release.releaseLanguage)
                 }?.originalExpectedAt
             }
-            val lastRelease = ReleaseDisplayResolver.previousFor(
-                state.releases,
-                nextRelease,
-                nowEpoch,
-                regularScheduleAnchor
-            )
+            val lastRelease = cycleLatestConfirmed?.let { PreviousReleaseDisplay(it, false) }
+                ?: ReleaseDisplayResolver.previousFor(
+                    effectiveReleases, nextRelease, nowEpoch, regularScheduleAnchor, state.episodeChecks
+                )
+            val nextIdentity = nextRelease?.let(de.anisentinel.app.domain.release.ReleaseIdentity::from)
+            val matchingPostponements = listOfNotNull(canonicalPostponement).filter { shift ->
+                val shiftIdentity = de.anisentinel.app.domain.release.ReleaseIdentity.from(shift)
+                shiftIdentity != null && nextIdentity != null &&
+                    shiftIdentity.sameEpisodeAllowingUnspecifiedLanguage(nextIdentity) &&
+                    ((shift.newExpectedAt ?: Long.MIN_VALUE) > nowEpoch ||
+                        semanticAvailabilityCheck(nextRelease, effectiveReleases, state.episodeChecks) == null)
+            }
+            // An active Dub postponement remains relevant even when the next Sub episode is
+            // already further ahead. Show it as a separate fact without changing nextRelease.
+            activeUpcomingPostponement?.let { postponement ->
+                item {
+                    PostponementCard(postponement, Modifier.fillMaxWidth())
+                }
+            }
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    nextRelease?.let { release -> ReleaseHistoryCard(stringResource(R.string.next_release), release, state.releases, state.episodeChecks) }
+                    nextRelease?.let { release -> ReleaseHistoryCard(stringResource(R.string.next_release), release, effectiveReleases, state.episodeChecks) }
                     lastRelease?.let { display ->
                         ReleaseHistoryCard(
                             stringResource(if (display.inferred) R.string.previous_expected_release else R.string.last_release),
                             display.release,
-                            state.releases,
+                            effectiveReleases,
                             state.episodeChecks,
                             display.inferred
                         )
@@ -268,8 +332,8 @@ fun AnimeDetailScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(anime.title, style = MaterialTheme.typography.headlineMedium)
-                        CompactPostponementNotice(state.postponements)
-                        ReleaseCountdownLabel(anime.expectedReleaseAt)
+                        CompactPostponementNotice(matchingPostponements, includeExpiredOpenRelease = true)
+                        ReleaseCountdownLabel(nextRelease?.expectedAt?.let(java.time.Instant::ofEpochSecond))
                         StatusChip(resolvedStatus)
                         Button(
                             onClick = detailViewModel::toggleFavorite,
@@ -377,8 +441,6 @@ fun AnimeDetailScreen(
                             Text(stringResource(R.string.first_detected_at, detectedAt.localDateTimeText()))
                             state.scheduledRelease?.eventAt?.let { expectedAt ->
                                 Text(stringResource(R.string.planned_at, expectedAt.localDateTimeText()))
-                                val delayMinutes = ((detectedAt - expectedAt) / 60).coerceAtLeast(0)
-                                Text(stringResource(R.string.detected_delay_minutes, delayMinutes))
                             }
                         }
                     }
@@ -668,6 +730,12 @@ fun AnimeDetailScreen(
                     .map { it.providerName }
                     .distinct()
                 val availabilityText = when {
+                    availabilityInferredFromLaterEpisode && effectiveAvailableCheck != null ->
+                        stringResource(
+                            R.string.episode_probably_available_at,
+                            de.anisentinel.app.domain.provider.StreamingProviderPolicy
+                                .displayName(effectiveAvailableCheck.providerName)
+                        )
                     effectiveAvailableCheck != null ->
                         stringResource(
                             R.string.episode_available_at,

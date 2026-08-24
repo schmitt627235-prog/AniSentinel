@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.25.13
+
+- AniWorld-Sprachregel vereinheitlicht: explizites Dub wird GER_DUB, alle anderen AniWorld-Kalender- und Verschiebungseinträge GER_SUB.
+- Verschiebungen bleiben von aktuellem Sub-Release getrennt und nennen Staffel, Folge und Sprache.
+- Offensichtlich widersprüchliche Rückwärtsdaten bei als verzögert markierten AniWorld-Einträgen werden chronologisch plausibilisiert (z. B. Chainsmoker Cat 27.08. auf 03.09.).
+
+## v0.25.12 – episodengenaue Verschiebungen – 2026-08-24
+
+- Explizit gelieferte Verschiebungsfolgen werden niemals aus dem aktuellen Providerfortschritt umnummeriert.
+- Kompakte Verschiebungshinweise erscheinen auf Releasekarten nur für genau die dort dargestellte Episode und nennen Staffel sowie Folge.
+- Damit bleibt „Slime“ S4E17 GER_DUB am 28.08. eine Dub-Verschiebung und wird nicht fälschlich als S4E20 ausgegeben.
+
+## v0.25.11 – kanonischer aktueller Releasezustand – 2026-08-24
+
+- Providerneutral gespeicherte Kalenderzeilen mit bereits bestätigtem `AVAILABLE`-Status zählen nun global als bestätigter aktueller Release.
+- „Letzter Release“ wird innerhalb der aktuellen Staffel sprachübergreifend aus der höchsten bestätigten Episode bestimmt; ein älterer Dub-Termin verdrängt nicht mehr die neuere OmU-Folge.
+- Aktive Verschiebungen werden gegen diesen kanonischen Staffelstand aufgelöst, sodass nächster Release, Countdown und Verschiebung dieselbe Episode und denselben Ersatztermin verwenden.
+- Regressionstest für den real beobachteten Zustand „S3E19 verfügbar, S3E16 Dub ebenfalls vorhanden“ ergänzt.
+
 ## v0.25.8 – einheitliche Providerprüfung und T+10-Sicherheitsfallback – 2026-08-21
 
 - Alle von JustWatch Deutschland bestätigten und direkt unterstützten Anbieter werden je fälliger Episode geprüft; die Nutzerpräferenz steuert Darstellung und Deep-Link, nicht mehr den Umfang der Prüfung.
@@ -954,3 +973,12 @@ Alle relevanten Änderungen an AniSentinel werden in dieser Datei dokumentiert.
 - vier reale deutsche Crunchyroll-Serienseiten ohne Login auf SM-S928B mit HTTP 200 validiert
 - Regressionstests für Red River, Victoria of Many Faces, The Oblivious Saint und I Want to Love You ergänzt
 - 205 JVM-Tests, 9 Room-Migrationstests sowie Crunchyroll-/ADN-Livediagnosen erfolgreich
+# v0.25.10 – Kanonische Release-Identität – 2026-08-24
+
+- Zentrale, quellenunabhängige `ReleaseIdentity` für Anime, Staffel, Episode und Sprachfassung ergänzt; Quell-IDs gelten nicht mehr als fachliche Episodenidentität.
+- „Letzter Release“ priorisiert jetzt die höchste semantisch bestätigte Folge und den stärksten Beleg statt lediglich des jüngsten Datums.
+- Detail-Countdown und Verschiebungshinweis sind an exakt denselben nächsten Release gebunden; abgelaufene abgeschlossene Hinweise werden auf regulären Karten ausgeblendet.
+- AniSentinels Erkennungszeitpunkt wird nicht mehr als Provider-Verzögerung ausgegeben.
+- Direkte, AniWorld-, historische und aus späteren Episoden abgeleitete Belege sind fachlich unterscheidbar; Ableitungen werden in der UI als wahrscheinlich statt direkt bestätigt bezeichnet.
+- Neue standardmäßig deaktivierte Einstellung „Bei geplantem Release benachrichtigen“: ausschließlich Favoriten, genau am Termin; Providerprüfungen laufen auch bei ausgeschaltetem Hinweis weiter.
+- Doppelte Zeiteinheit „Uhr Uhr“ in Release- und Prüfzeittexten beseitigt.

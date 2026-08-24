@@ -210,6 +210,9 @@ fun AnimeCard(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
+                // A title card may focus the current Sub episode while a different Dub episode
+                // is postponed. Keep that separate fact visible; the notice itself names season,
+                // episode and language so it cannot be mistaken for the card's main release.
                 CompactPostponementNotice(postponements)
                 Text(
                     stringResource(R.string.episode_number, anime.episode),
@@ -309,9 +312,16 @@ fun CatalogAnimeCard(
 
 @Composable
 internal fun CompactPostponementNotice(
-    postponements: List<de.anisentinel.app.data.local.ReleasePostponementEntity>
+    postponements: List<de.anisentinel.app.data.local.ReleasePostponementEntity>,
+    includeExpiredOpenRelease: Boolean = false,
+    expectedEpisode: Int? = null
 ) {
-    val row = postponements.filter { it.isActive }.maxByOrNull { it.detectedAt } ?: return
+    val now = Instant.now().epochSecond
+    val row = postponements.filter {
+        it.isActive && (it.newExpectedAt == null || it.newExpectedAt > now || includeExpiredOpenRelease)
+    }.filter {
+        expectedEpisode == null || it.episodeNumber == null || it.episodeNumber == expectedEpisode
+    }.maxByOrNull { it.detectedAt } ?: return
     Surface(
         color = MaterialTheme.colorScheme.errorContainer,
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
@@ -324,6 +334,31 @@ internal fun CompactPostponementNotice(
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold
             )
+            row.episodeNumber?.let { episode ->
+                val normalizedLanguage = row.releaseLanguage ?: if (
+                    row.source.contains("ANIWORLD", ignoreCase = true)
+                ) "GER_SUB" else null
+                val language = when (normalizedLanguage) {
+                    "GER_DUB" -> stringResource(R.string.release_language_dub)
+                    "GER_SUB" -> stringResource(R.string.release_language_sub)
+                    else -> null
+                }
+                Text(
+                    language?.let {
+                        stringResource(
+                            R.string.postponement_episode_language_compact,
+                            row.seasonNumber ?: 1,
+                            episode,
+                            it
+                        )
+                    } ?: stringResource(
+                        R.string.postponement_episode_compact,
+                        row.seasonNumber ?: 1,
+                        episode
+                    ),
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
             Text(
                 row.newExpectedAt?.let {
                     stringResource(R.string.postponement_new, formatCompactPostponementTime(it))

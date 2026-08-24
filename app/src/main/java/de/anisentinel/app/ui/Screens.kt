@@ -1150,6 +1150,15 @@ fun SettingsScreen(
             }
             item {
                 SettingsActionCard(
+                    title = stringResource(R.string.release_due_notifications_title),
+                    value = stringResource(R.string.release_due_notifications_explanation),
+                    icon = Icons.Outlined.NotificationsNone,
+                    status = stringResource(if (settings.releaseDueNotificationsEnabled) R.string.active else R.string.inactive),
+                    onClick = settingsViewModel::toggleReleaseDueNotifications
+                )
+            }
+            item {
+                SettingsActionCard(
                     title = stringResource(R.string.notification_demo),
                     value = stringResource(
                         if (notificationPermissionDenied) {

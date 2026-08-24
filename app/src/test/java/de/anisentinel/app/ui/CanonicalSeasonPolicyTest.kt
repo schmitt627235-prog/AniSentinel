@@ -7,6 +7,15 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class CanonicalSeasonPolicyTest {
+
+    @Test
+    fun activeCalendarSeasonCapsProviderLanguageVariantSeasons() {
+        val mappings = (1..6).map { season -> mapping(season, "Crunchyroll") }
+        assertEquals(
+            listOf(1, 2, 3),
+            CanonicalSeasonPolicy.visibleSeasons(emptyList(), mappings, activeSeasonNumber = 3)
+        )
+    }
     @Test fun verifiedSeasonSuppressesPhantomLegacySeasons() {
         val seasons = listOf(1, 2, 3, 4).map {
             AnimeSeasonEntity("anime", it, if (it == 1) "CRUNCHYROLL_PUBLIC" else "RELEASE_BACKFILL", 1)

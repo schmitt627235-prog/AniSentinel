@@ -23,6 +23,8 @@ data class NotificationPreferences(
 )
 
 interface NotificationCopy {
+    val releaseDueTitle: String
+    fun releaseDueMessage(episode: Int): String
     val reminderTitle: String
     fun reminderMessage(episode: Int): String
     val availableTitle: String
@@ -38,6 +40,8 @@ interface NotificationCopy {
 }
 
 object GermanNotificationCopy : NotificationCopy {
+    override val releaseDueTitle = "Releasezeit erreicht"
+    override fun releaseDueMessage(episode: Int) = "Folge $episode sollte jetzt erscheinen. AniSentinel prüft die Anbieter."
     override val reminderTitle = "Release steht bevor"
     override fun reminderMessage(episode: Int) = "Folge $episode erscheint in Kürze."
     override val availableTitle = "Neue Folge verfügbar"
@@ -54,6 +58,8 @@ object GermanNotificationCopy : NotificationCopy {
 }
 
 object EnglishNotificationCopy : NotificationCopy {
+    override val releaseDueTitle = "Release time reached"
+    override fun releaseDueMessage(episode: Int) = "Episode $episode should now be released. AniSentinel is checking providers."
     override val reminderTitle = "Release coming soon"
     override fun reminderMessage(episode: Int) = "Episode $episode will be released soon."
     override val availableTitle = "New episode available"
@@ -83,7 +89,17 @@ class NotificationEngine(
         event: NotificationEvent,
         preferences: NotificationPreferences
     ): LocalNotification? = when (event) {
-        is NotificationEvent.ReleaseDue -> null
+        is NotificationEvent.ReleaseDue -> LocalNotification(
+            stableId = "release-due:${event.animeId}:${event.season ?: 0}:${event.episode}:${event.language.orEmpty()}",
+            channel = NotificationChannel.RELEASES,
+            title = copy.releaseDueTitle,
+            message = buildString {
+                appendContext(event.animeTitle, event.season)
+                append(copy.releaseDueMessage(event.episode))
+            },
+            targetAnimeId = event.animeId, targetSeason = event.season,
+            targetEpisode = event.episode, targetLanguage = event.language
+        )
         is NotificationEvent.ReleaseReminder -> if (preferences.reminders) {
             LocalNotification(
                 stableId = "reminder:${event.animeId}:${event.episode}",

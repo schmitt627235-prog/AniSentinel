@@ -43,13 +43,16 @@ class NotificationEngineTest {
     }
 
     @Test
-    fun `release due stays silent`() {
+    fun `release due carries exact semantic target when explicitly requested`() {
         val result = engine.create(
-            NotificationEvent.ReleaseDue("atlas", 11),
+            NotificationEvent.ReleaseDue("atlas", 11, "Atlas", 2, "GER_SUB"),
             NotificationPreferences()
         )
 
-        assertNull(result)
+        assertEquals("release-due:atlas:2:11:GER_SUB", result?.stableId)
+        assertEquals(2, result?.targetSeason)
+        assertEquals(11, result?.targetEpisode)
+        assertTrue(result?.message?.contains("AniSentinel prüft die Anbieter") == true)
     }
 
     @Test

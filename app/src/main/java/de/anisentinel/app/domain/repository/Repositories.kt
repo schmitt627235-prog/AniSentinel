@@ -46,6 +46,7 @@ interface SettingsRepository {
     suspend fun setTheme(theme: ThemePreference)
     suspend fun setLanguage(languageTag: String)
     suspend fun setNotificationsEnabled(enabled: Boolean)
+    suspend fun setReleaseDueNotificationsEnabled(enabled: Boolean)
     suspend fun setWatchProfileId(id: String)
     suspend fun setPreferredProviders(ids: Set<String>)
     suspend fun setLiveDataEnabled(enabled: Boolean)
@@ -128,6 +129,7 @@ data class AppSettings(
     val theme: ThemePreference = ThemePreference.SYSTEM,
     val languageTag: String = "de",
     val notificationsEnabled: Boolean = true,
+    val releaseDueNotificationsEnabled: Boolean = false,
     val watchProfileId: String = "automatic",
     val preferredProviderIds: Set<String> = emptySet(),
     val liveDataEnabled: Boolean = false

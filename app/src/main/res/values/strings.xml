@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="postponement_episode_compact">S%1$d · Folge %2$d</string>
+    <string name="postponement_episode_language_compact">S%1$d · Folge %2$d · %3$s</string>
     <string name="app_name">AniSentinel</string>
     <string name="slogan">Never miss a release.</string>
     <string name="nav_start">Start</string>
@@ -54,7 +56,7 @@
     <string name="calendar_sync_failed">Kalender konnte nicht aktualisiert werden</string>
     <string name="calendar_sync_ready">Kalenderdaten bereit</string>
     <string name="calendar_sync_error_detail">Die Aktualisierung ist momentan nicht möglich. Gespeicherte Einträge bleiben sichtbar.</string>
-    <string name="calendar_last_success">Letzter erfolgreicher Stand: %1$s Uhr</string>
+    <string name="calendar_last_success">Letzter erfolgreicher Stand: %1$s</string>
     <string name="anisearch_search_label">Anime suchen</string>
     <string name="search_anisearch">AniSearch durchsuchen</string>
     <string name="anisearch_manual_diagnostic">Manueller URL-Import (Diagnose)</string>
@@ -350,7 +352,7 @@
     <string name="provider_diagnostic_badge">Reales JustWatch-Episodenangebot; direkte Anbieterprüfung bleibt getrennt</string>
     <string name="release_countdown">Noch %1$s</string>
     <string name="release_overdue">Seit %1$d Minuten fällig – Anbieterprüfung läuft</string>
-    <string name="first_detected_at">Erstmals erkannt um %1$s Uhr</string>
+    <string name="first_detected_at">Erstmals von AniSentinel erkannt: %1$s</string>
     <string name="planned_at">Geplant: %1$s Uhr</string>
     <string name="detected_delay_minutes">Erkannte Verzögerung: %1$d Minuten</string>
     <string name="release_delay_running">Noch nicht bestätigt · Verzögerung %1$s</string>
@@ -392,14 +394,17 @@
     <string name="changelog_v14_body">Scroll-Absturz durch doppelte Listenschlüssel behoben, Entdecken entlastet und Favoritenphasen exklusiv gemacht.</string>
     <string name="changelog_v13_title">Version 0.13</string>
     <string name="changelog_v13_body">Globale JustWatch-Suche und umfangreiche Katalogfilter ergänzt.</string>
-    <string name="calendar_last_provider_check">Letzte Prüfung: %1$s Uhr</string>
+    <string name="calendar_last_provider_check">Letzte Prüfung: %1$s</string>
     <string name="calendar_available_provider">Verfügbar bei: %1$s</string>
     <string name="calendar_provider_check_failed">Direkte Providerprüfung fehlgeschlagen</string>
     <string name="calendar_fallback_status">AniWorld-Fallback: %1$s</string>
     <string name="schedule_change_reason_label">Grund: %1$s</string>
     <string name="schedule_change_source_label">Quelle: %1$s</string>
     <string name="notification_release_target">Release aus Benachrichtigung</string>
-    <string name="source_available_at">Quelle meldet verfügbar: %1$s Uhr</string>
+    <string name="release_due_notifications_title">Bei geplantem Release benachrichtigen</string>
+    <string name="release_due_notifications_explanation">Nur Favoriten: Hinweis bei Erreichen des Termins. Die Anbieterprüfung läuft unabhängig davon weiter.</string>
+    <string name="episode_probably_available_at">Wahrscheinlich verfügbar bei %1$s</string>
+    <string name="source_available_at">Quelle meldet verfügbar: %1$s</string>
     <string name="last_release">Letzter Release</string>
     <string name="previous_expected_release">Vorheriger erwarteter Termin</string>
     <string name="previous_release_time_inferred">Terminannahme aus dem aktuellen wöchentlichen Sendeplatz; noch nicht als Veröffentlichung bestätigt.</string>
