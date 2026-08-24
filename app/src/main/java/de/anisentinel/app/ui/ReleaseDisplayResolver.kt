@@ -2,14 +2,76 @@ package de.anisentinel.app.ui
 
 import de.anisentinel.app.data.local.EpisodeReleaseEntity
 import de.anisentinel.app.data.local.EpisodeProviderAvailabilityEntity
+import de.anisentinel.app.data.local.ReleasePostponementEntity
 import de.anisentinel.app.domain.release.AvailabilityEvidence
 import de.anisentinel.app.domain.release.ReleaseIdentity
 
 data class PreviousReleaseDisplay(val release: EpisodeReleaseEntity, val inferred: Boolean)
 
+data class ReleaseDisplayState(
+    val identity: ReleaseIdentity,
+    val release: EpisodeReleaseEntity,
+    val originalExpectedAt: Long?,
+    val effectiveExpectedAt: Long,
+    val postponement: ReleasePostponementEntity?,
+    val countdownTarget: Long = effectiveExpectedAt
+)
+
 object ReleaseDisplayResolver {
     private const val WEEK_SECONDS = 7 * 24 * 60 * 60L
     private const val PLAUSIBLE_SEASON_WINDOW = 26 * WEEK_SECONDS
+
+    fun effectiveReleases(releases: List<EpisodeReleaseEntity>, postponements: List<ReleasePostponementEntity>): List<EpisodeReleaseEntity> {
+        val shifted = releases.map { release ->
+            val identity = ReleaseIdentity.from(release)
+            val shift = postponements.asSequence().filter { it.isActive && it.newExpectedAt != null }
+                .filter { ReleaseIdentity.from(it)?.sameEpisodeAllowingUnspecifiedLanguage(identity) == true }
+                .maxByOrNull { it.revision }
+            shift?.newExpectedAt?.let { release.copy(expectedAt = it, releaseStatus = "POSTPONED") } ?: release
+        }
+        val represented = shifted.map { ReleaseIdentity.from(it) }
+        val synthetic = postponements.mapNotNull { shift ->
+            val identity = ReleaseIdentity.from(shift) ?: return@mapNotNull null
+            val target = shift.newExpectedAt ?: return@mapNotNull null
+            if (!shift.isActive || represented.any { it.sameEpisodeAllowingUnspecifiedLanguage(identity) }) return@mapNotNull null
+            EpisodeReleaseEntity(
+                sourceReleaseId = "canonical-postponement:${shift.postponementId}", animeId = identity.animeId,
+                episodeNumber = identity.episode, episodeTitle = null, expectedAt = target, provider = null, providerUrl = null,
+                metadataSource = shift.source, sourceUrl = shift.sourceUrl, fetchedAt = shift.lastCheckedAt,
+                seasonNumber = identity.season, releaseStatus = "POSTPONED", releaseLanguage = identity.language
+            )
+        }
+        return (shifted + synthetic).distinctBy {
+            listOf(it.animeId, it.seasonNumber ?: 1, it.episodeNumber ?: 0, it.releaseLanguage, it.expectedAt)
+        }
+    }
+
+    fun nextFor(
+        releases: List<EpisodeReleaseEntity>, postponements: List<ReleasePostponementEntity>,
+        checks: List<EpisodeProviderAvailabilityEntity> = emptyList(), nowEpoch: Long,
+        focusedSeason: Int? = null, focusedEpisode: Int? = null, focusedLanguage: String? = null
+    ): ReleaseDisplayState? {
+        val effective = effectiveReleases(releases, postponements)
+        val future = effective.filter { (it.expectedAt ?: Long.MIN_VALUE) > nowEpoch }
+        val focused = focusedEpisode?.let { episode -> future.firstOrNull {
+            it.episodeNumber == episode && (focusedSeason == null || it.seasonNumber == focusedSeason) &&
+                (focusedLanguage == null || it.releaseLanguage == focusedLanguage)
+        } }
+        val provisional = focused ?: future.minByOrNull { it.expectedAt ?: Long.MAX_VALUE }
+        val latest = latestConfirmed(releases, checks, provisional?.seasonNumber, null)
+        val selected = focused ?: future.asSequence().filter { candidate ->
+            latest == null || (candidate.seasonNumber ?: 1) > (latest.seasonNumber ?: 1) ||
+                ((candidate.seasonNumber ?: 1) == (latest.seasonNumber ?: 1) &&
+                    (candidate.episodeNumber ?: 0) > (latest.episodeNumber ?: 0))
+        }.minWithOrNull(compareBy<EpisodeReleaseEntity> { it.expectedAt ?: Long.MAX_VALUE }
+            .thenBy { it.episodeNumber ?: Int.MAX_VALUE }) ?: provisional ?: return null
+        val identity = ReleaseIdentity.from(selected)
+        val shift = postponements.asSequence().filter { it.isActive }
+            .filter { ReleaseIdentity.from(it)?.sameEpisodeAllowingUnspecifiedLanguage(identity) == true }
+            .maxByOrNull { it.revision }
+        val target = selected.expectedAt ?: return null
+        return ReleaseDisplayState(identity, selected, shift?.originalExpectedAt, target, shift)
+    }
 
     fun previousFor(
         releases: List<EpisodeReleaseEntity>,

@@ -58,16 +58,23 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
         val postponements = data[3] as List<ReleasePostponementEntity>
         val providers = references.groupBy { it.animeId }
         val releasesByAnime = releases.groupBy { it.animeId }
+        val postponementsByAnime = postponements.filter { it.isActive && it.animeId != null }
+            .groupBy { requireNotNull(it.animeId) }
         val now = Instant.now().epochSecond
         val all = entities.map { entity ->
             val base = entity.toDomain()
-            val relevant = releasesByAnime[entity.id].orEmpty().filter { it.expectedAt != null }
-                .minByOrNull { kotlin.math.abs(requireNotNull(it.expectedAt) - now) }
+            val display = ReleaseDisplayResolver.nextFor(
+                releasesByAnime[entity.id].orEmpty(), postponementsByAnime[entity.id].orEmpty(), nowEpoch = now
+            )
             base.copy(
                 provider = StreamingProviderPolicy.visible(providers[entity.id].orEmpty().map { it.provider }).joinToString(" · "),
-                status = if (relevant?.releaseStatus in listOf("POSTPONED", "RESCHEDULED")) {
-                    de.anisentinel.app.domain.model.ReleaseStatus.OFFICIALLY_POSTPONED
-                } else base.status
+                expectedReleaseAt = display?.countdownTarget?.let(Instant::ofEpochSecond) ?: base.expectedReleaseAt,
+                episode = display?.identity?.episode ?: base.episode,
+                status = when {
+                    display?.postponement != null -> de.anisentinel.app.domain.model.ReleaseStatus.OFFICIALLY_POSTPONED
+                    display != null -> de.anisentinel.app.domain.watcher.ReleaseStatusResolver().resolve(Instant.ofEpochSecond(display.countdownTarget))
+                    else -> base.status
+                }
             )
         }
         val sort = storedSort.toFavoritesSort()
@@ -81,8 +88,7 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
             }.sortedWith(FavoritesSorter.comparator(sort)),
             hasAnyFavorites = all.isNotEmpty(),
             refreshing = busy,
-            postponementsByAnime = postponements.filter { it.isActive && it.animeId != null }
-                .groupBy { requireNotNull(it.animeId) }
+            postponementsByAnime = postponementsByAnime
         )
     }.stateIn(
         viewModelScope,

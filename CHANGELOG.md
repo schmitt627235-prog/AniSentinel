@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.25.14
+
+- Gemeinsamen `ReleaseDisplayState` für Home, Favoriten und Detail eingeführt; Episode, Verschiebung und Countdown stammen aus derselben kanonischen Releaseidentität.
+- Veraltete ältere Kalenderzeilen können einen verschobenen, neueren Release nicht mehr auf der Startseite verdrängen.
+- Detail-Verschiebungskarte komprimiert, technische Sprachcodes durch verständliche Texte ersetzt.
+- Anime2You-Verweise werden als gemeinsame Herkunft via AniWorld statt als unabhängige Doppelbestätigung dargestellt.
+- Regressionstests für Bookworm-artige Daten, identische Home-/Detailauflösung sowie getrennte Sub-/Dub-Verschiebungen ergänzt.
+
 ## 0.25.13
 
 - AniWorld-Sprachregel vereinheitlicht: explizites Dub wird GER_DUB, alle anderen AniWorld-Kalender- und Verschiebungseinträge GER_SUB.

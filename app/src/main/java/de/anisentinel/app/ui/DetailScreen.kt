@@ -228,86 +228,26 @@ fun AnimeDetailScreen(
                 .maxWithOrNull(compareBy<de.anisentinel.app.data.local.ReleasePostponementEntity> {
                     it.newExpectedAt ?: Long.MAX_VALUE
                 }.thenBy { it.revision })
-            // Never renumber an explicitly identified postponement from provider progress.
-            // S4E17 Dub stays S4E17 Dub even when S4E19 Sub is already available.
-            val canonicalPostponement = activeUpcomingPostponement
-            val shiftedReleases = state.releases.map { release ->
-                val identity = de.anisentinel.app.domain.release.ReleaseIdentity.from(release)
-                val postponement = state.postponements
-                    .filter { it.isActive && it.newExpectedAt != null }
-                    .filter { shift ->
-                        de.anisentinel.app.domain.release.ReleaseIdentity.from(shift)
-                            ?.sameEpisodeAllowingUnspecifiedLanguage(identity) == true
-                    }
-                    .maxByOrNull { it.revision }
-                postponement?.newExpectedAt?.let { release.copy(expectedAt = it, releaseStatus = "POSTPONED") }
-                    ?: release
-            }
-            val canonicalPostponedRelease = canonicalPostponement?.let { shift ->
-                val rawShift = activeUpcomingPostponement
-                val template = state.releases.firstOrNull { it.sourceReleaseId == rawShift?.releaseId }
-                    ?: state.releases.firstOrNull {
-                        it.seasonNumber == rawShift?.seasonNumber &&
-                            it.episodeNumber == rawShift?.episodeNumber &&
-                            it.releaseLanguage == rawShift?.releaseLanguage
-                    }
-                template?.copy(
-                    sourceReleaseId = "canonical-postponement:${shift.postponementId}",
-                    episodeNumber = shift.episodeNumber,
-                    expectedAt = shift.newExpectedAt,
-                    releaseStatus = "POSTPONED"
-                )
-            }
-            val effectiveReleases = shiftedReleases + listOfNotNull(canonicalPostponedRelease)
-            val futureReleases = effectiveReleases.filter { (it.expectedAt ?: Long.MIN_VALUE) > nowEpoch }
-            val focusedRelease = if (focusedEpisode != null) futureReleases.firstOrNull {
-                it.episodeNumber == focusedEpisode &&
-                    (focusedSeason == null || it.seasonNumber == focusedSeason) &&
-                    (focusedLanguage == null || it.releaseLanguage == focusedLanguage)
-            } else null
-            val provisionalNext = focusedRelease ?: futureReleases.minWithOrNull(
-                compareBy<de.anisentinel.app.data.local.EpisodeReleaseEntity> { it.expectedAt ?: Long.MAX_VALUE }
-                    .thenByDescending { it.episodeNumber ?: Int.MIN_VALUE }
+            val effectiveReleases = ReleaseDisplayResolver.effectiveReleases(state.releases, state.postponements)
+            val displayState = ReleaseDisplayResolver.nextFor(
+                state.releases, state.postponements, state.episodeChecks, nowEpoch,
+                focusedSeason, focusedEpisode, focusedLanguage
             )
+            val nextRelease = displayState?.release
             val cycleLatestConfirmed = ReleaseDisplayResolver.latestConfirmed(
                 state.releases, state.episodeChecks,
-                provisionalNext?.seasonNumber, language = null
+                nextRelease?.seasonNumber, language = null
             )
-            val nextRelease = if (focusedRelease != null) focusedRelease else futureReleases
-                .filter { candidate ->
-                    cycleLatestConfirmed == null ||
-                        (candidate.seasonNumber ?: 1) > (cycleLatestConfirmed.seasonNumber ?: 1) ||
-                        ((candidate.seasonNumber ?: 1) == (cycleLatestConfirmed.seasonNumber ?: 1) &&
-                            (candidate.episodeNumber ?: 0) > (cycleLatestConfirmed.episodeNumber ?: 0))
-                }
-                .minWithOrNull(
-                    compareBy<de.anisentinel.app.data.local.EpisodeReleaseEntity> { it.expectedAt ?: Long.MAX_VALUE }
-                        .thenBy { it.episodeNumber ?: Int.MAX_VALUE }
-                )
-            val regularScheduleAnchor = nextRelease?.let { release ->
-                canonicalPostponement?.takeIf { shift ->
-                    shift.seasonNumber == release.seasonNumber &&
-                        shift.episodeNumber == release.episodeNumber &&
-                        (shift.releaseLanguage == null || shift.releaseLanguage == release.releaseLanguage)
-                }?.originalExpectedAt
-            }
             val lastRelease = cycleLatestConfirmed?.let { PreviousReleaseDisplay(it, false) }
                 ?: ReleaseDisplayResolver.previousFor(
-                    effectiveReleases, nextRelease, nowEpoch, regularScheduleAnchor, state.episodeChecks
+                    effectiveReleases, nextRelease, nowEpoch, displayState?.originalExpectedAt, state.episodeChecks
                 )
-            val nextIdentity = nextRelease?.let(de.anisentinel.app.domain.release.ReleaseIdentity::from)
-            val matchingPostponements = listOfNotNull(canonicalPostponement).filter { shift ->
-                val shiftIdentity = de.anisentinel.app.domain.release.ReleaseIdentity.from(shift)
-                shiftIdentity != null && nextIdentity != null &&
-                    shiftIdentity.sameEpisodeAllowingUnspecifiedLanguage(nextIdentity) &&
-                    ((shift.newExpectedAt ?: Long.MIN_VALUE) > nowEpoch ||
-                        semanticAvailabilityCheck(nextRelease, effectiveReleases, state.episodeChecks) == null)
-            }
+            val matchingPostponements = listOfNotNull(displayState?.postponement)
             // An active Dub postponement remains relevant even when the next Sub episode is
             // already further ahead. Show it as a separate fact without changing nextRelease.
             activeUpcomingPostponement?.let { postponement ->
                 item {
-                    PostponementCard(postponement, Modifier.fillMaxWidth())
+                    PostponementCard(postponement, Modifier.fillMaxWidth(), showTitle = false, showDiagnostics = false)
                 }
             }
             item {

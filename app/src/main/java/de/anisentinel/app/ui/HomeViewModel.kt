@@ -37,18 +37,34 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         container.aniListRepository.observeActiveAniWorldAnime(
             LocalDate.now().minusWeeks(4).atStartOfDay(ZoneId.systemDefault()).toEpochSecond()
         ),
+        container.database.aniSentinelDao().observeAllEpisodeReleases(),
         container.database.aniSentinelDao().observeReleasePostponements(),
         operation
-    ) { settings, cached, postponements, current ->
+    ) { settings, cached, releases, postponements, current ->
+        val releasesByAnime = releases.groupBy { it.animeId }
+        val postponementsByAnime = postponements.filter { it.isActive && it.animeId != null }
+            .groupBy { requireNotNull(it.animeId) }
+        val now = java.time.Instant.now().epochSecond
         CatalogUiState(
-            anime = cached,
+            anime = cached.map { anime ->
+                val display = ReleaseDisplayResolver.nextFor(
+                    releasesByAnime[anime.id].orEmpty(), postponementsByAnime[anime.id].orEmpty(), nowEpoch = now
+                )
+                display?.let {
+                    anime.copy(
+                        expectedReleaseAt = java.time.Instant.ofEpochSecond(it.countdownTarget),
+                        episode = it.identity.episode,
+                        status = if (it.postponement != null) de.anisentinel.app.domain.model.ReleaseStatus.OFFICIALLY_POSTPONED
+                            else de.anisentinel.app.domain.watcher.ReleaseStatusResolver().resolve(java.time.Instant.ofEpochSecond(it.countdownTarget))
+                    )
+                } ?: anime
+            },
             liveMode = true,
             loading = current.loading && cached.isEmpty(),
             refreshing = current.loading && cached.isNotEmpty(),
             error = current.error,
             showingCachedData = cached.isNotEmpty() && current.error != null,
-            postponementsByAnime = postponements.filter { it.isActive && it.animeId != null }
-                .groupBy { requireNotNull(it.animeId) }
+            postponementsByAnime = postponementsByAnime
         )
     }.stateIn(
         viewModelScope,

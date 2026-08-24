@@ -2,6 +2,7 @@ package de.anisentinel.app.ui
 
 import de.anisentinel.app.data.local.EpisodeReleaseEntity
 import de.anisentinel.app.data.local.EpisodeProviderAvailabilityEntity
+import de.anisentinel.app.data.local.ReleasePostponementEntity
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -105,6 +106,52 @@ class ReleaseDisplayResolverTest {
             )?.episodeNumber
         )
     }
+
+    @Test fun canonicalNextIgnoresStaleOlderFutureRowAndUsesPostponedEpisode() {
+        val stale17 = release(17, 3, 2_100).copy(releaseStatus = "SCHEDULED")
+        val available19 = release(19, 3, 1_900).copy(releaseStatus = "AVAILABLE")
+        val episode20 = release(20, 3, 2_000).copy(releaseStatus = "RESCHEDULED")
+        val shift = postponement(20, "GER_SUB", 2_000, 3_000)
+
+        val result = ReleaseDisplayResolver.nextFor(
+            listOf(stale17, available19, episode20), listOf(shift), nowEpoch = 1_950
+        )!!
+
+        assertEquals(20, result.identity.episode)
+        assertEquals("GER_SUB", result.identity.language)
+        assertEquals(3_000, result.effectiveExpectedAt)
+        assertEquals(3_000, result.countdownTarget)
+        assertEquals("p-20-GER_SUB", result.postponement?.postponementId)
+    }
+
+    @Test fun homeAndDetailResolverReturnExactlySameCanonicalIdentity() {
+        val releases = listOf(
+            release(19, 3, 1_900).copy(releaseStatus = "AVAILABLE"),
+            release(20, 3, 2_000).copy(releaseStatus = "RESCHEDULED")
+        )
+        val shifts = listOf(postponement(20, "GER_SUB", 2_000, 3_000))
+        val home = ReleaseDisplayResolver.nextFor(releases, shifts, nowEpoch = 1_950)
+        val detail = ReleaseDisplayResolver.nextFor(releases, shifts, nowEpoch = 1_950)
+        assertEquals(home, detail)
+    }
+
+    @Test fun dubPostponementNeverChangesNextSubRelease() {
+        val sub20 = release(20, 4, 3_000, "GER_SUB").copy(releaseStatus = "SCHEDULED")
+        val sub19 = release(19, 4, 1_800, "GER_SUB").copy(releaseStatus = "AVAILABLE")
+        val dub17 = release(17, 4, 2_000, "GER_DUB").copy(releaseStatus = "SCHEDULED")
+        val shift = postponement(17, "GER_DUB", 2_000, 2_500)
+        val result = ReleaseDisplayResolver.nextFor(listOf(sub19, dub17, sub20), listOf(shift), nowEpoch = 1_900)!!
+        assertEquals(20, result.identity.episode)
+        assertEquals("GER_SUB", result.identity.language)
+        assertEquals(3_000, result.countdownTarget)
+        assertNull(result.postponement)
+    }
+
+    private fun postponement(ep: Int, language: String, old: Long, new: Long) = ReleasePostponementEntity(
+        "p-$ep-$language", "r-3-$ep", "anime", "Anime", if (ep == 20) 3 else 4, ep, language,
+        old, new, "TV", "DELAYED", "ANIWORLD", "https://aniworld.to/source", null,
+        1, 1, true, 1, 0
+    )
 
     private fun available(release: EpisodeReleaseEntity) = EpisodeProviderAvailabilityEntity(
         "a:${release.sourceReleaseId}", release.sourceReleaseId, "CRUNCHYROLL", "Crunchyroll",

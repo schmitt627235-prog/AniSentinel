@@ -479,10 +479,11 @@
     <string name="postponement_original">Ursprünglicher Termin: %1$s</string>
     <string name="postponement_new">Neuer Termin: %1$s</string>
     <string name="postponement_new_unknown">Neuer Termin noch nicht bekannt</string>
+    <string name="postponement_range">%1$s → %2$s</string>
     <string name="postponement_reason">Grund: %1$s</string>
     <string name="postponement_source">Quelle: AniWorld – Animeverschiebungen</string>
-    <string name="postponement_multi_source">Zweifach bestätigt: AniWorld · Anime2You</string>
-    <string name="postponement_single_source">AniWorld bestätigt · Anime2You-Gegenbestätigung nicht gefunden</string>
+    <string name="postponement_source_origin">Quelle: AniWorld / Anime2You</string>
+    <string name="postponement_independent_confirmation">Zusätzlich durch eine unabhängige Primärquelle bestätigt</string>
     <string name="hiatus_badge">PAUSE</string>
     <string name="hiatus_return_known">Wiederaufnahme: %1$s</string>
     <string name="hiatus_return_unknown">Wiederaufnahme: noch nicht bekannt</string>

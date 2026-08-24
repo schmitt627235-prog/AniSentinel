@@ -87,7 +87,12 @@ private fun PostponementHeader(title: String, onBack: () -> Unit) {
 }
 
 @Composable
-fun PostponementCard(row: ReleasePostponementEntity, modifier: Modifier = Modifier) {
+fun PostponementCard(
+    row: ReleasePostponementEntity,
+    modifier: Modifier = Modifier,
+    showTitle: Boolean = true,
+    showDiagnostics: Boolean = true
+) {
     val cadence = de.anisentinel.app.domain.watcher.ReleaseCadencePolicy.classify(
         row.originalExpectedAt, row.newExpectedAt
     )
@@ -96,7 +101,7 @@ fun PostponementCard(row: ReleasePostponementEntity, modifier: Modifier = Modifi
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
         border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.error))
     ) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(stringResource(R.string.postponed_badge), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.titleMedium)
             if (cadence.kind != de.anisentinel.app.domain.watcher.ScheduleInterruptionKind.ONE_OFF_SHIFT) {
                 Text(stringResource(R.string.hiatus_badge), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.titleLarge)
@@ -105,26 +110,26 @@ fun PostponementCard(row: ReleasePostponementEntity, modifier: Modifier = Modifi
                         ?: stringResource(R.string.hiatus_return_unknown)
                 )
             }
-            Text(row.title, style = MaterialTheme.typography.titleLarge)
+            if (showTitle) Text(row.title, style = MaterialTheme.typography.titleLarge)
+            val language = when (row.releaseLanguage ?: if (row.source.contains("ANIWORLD", true)) "GER_SUB" else null) {
+                "GER_DUB" -> stringResource(R.string.release_language_dub)
+                "GER_SUB" -> stringResource(R.string.release_language_sub)
+                else -> null
+            }
             val identity = listOfNotNull(
-                row.seasonNumber?.let { "S$it" }, row.episodeNumber?.let { "E$it" }, row.releaseLanguage
+                row.seasonNumber?.let { "S$it" }, row.episodeNumber?.let { stringResource(R.string.episode_number, it) }, language
             ).joinToString(" · ")
             if (identity.isNotBlank()) Text(identity)
-            row.originalExpectedAt?.let { Text(stringResource(R.string.postponement_original, formatPostponementTime(it))) }
-            Text(
-                row.newExpectedAt?.let { stringResource(R.string.postponement_new, formatPostponementTime(it)) }
-                    ?: stringResource(R.string.postponement_new_unknown),
+            if (row.originalExpectedAt != null && row.newExpectedAt != null) Text(
+                stringResource(R.string.postponement_range, formatPostponementTime(row.originalExpectedAt), formatPostponementTime(row.newExpectedAt)),
                 color = MaterialTheme.colorScheme.error
-            )
+            ) else Text(row.newExpectedAt?.let { stringResource(R.string.postponement_new, formatPostponementTime(it)) }
+                ?: stringResource(R.string.postponement_new_unknown), color = MaterialTheme.colorScheme.error)
             row.reason?.takeIf(String::isNotBlank)?.let { Text(stringResource(R.string.postponement_reason, it)) }
-            Text(stringResource(R.string.postponement_source), color = MaterialTheme.colorScheme.secondary)
-            Text(
-                stringResource(
-                    if (row.confirmationStatus == "MULTI_SOURCE_CONFIRMED") R.string.postponement_multi_source
-                    else R.string.postponement_single_source
-                ),
-                color = MaterialTheme.colorScheme.onErrorContainer,
-                style = MaterialTheme.typography.bodySmall
+            Text(stringResource(R.string.postponement_source_origin), color = MaterialTheme.colorScheme.secondary)
+            if (showDiagnostics && row.confirmationStatus == "INDEPENDENTLY_CONFIRMED") Text(
+                stringResource(R.string.postponement_independent_confirmation),
+                color = MaterialTheme.colorScheme.onErrorContainer, style = MaterialTheme.typography.bodySmall
             )
         }
     }

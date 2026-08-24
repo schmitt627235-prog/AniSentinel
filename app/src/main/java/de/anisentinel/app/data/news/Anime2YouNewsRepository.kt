@@ -95,7 +95,9 @@ class Anime2YouNewsRepository(
             val confirmations = editorial.filter { Anime2YouPostponementMatcher.matches(postponement, it) }
             if (confirmations.size == 1) {
                 dao.upsertReleasePostponements(listOf(postponement.copy(
-                    confirmationStatus = "MULTI_SOURCE_CONFIRMED",
+                    // AniWorld commonly carries the same Anime2You report. This records
+                    // provenance, not an independent second confirmation.
+                    confirmationStatus = "SHARED_ORIGIN_ANIME2YOU",
                     secondarySource = "ANIME2YOU",
                     secondarySourceUrl = confirmations.single().sourceUrl
                 )))
