@@ -147,8 +147,46 @@ class ReleaseDisplayResolverTest {
         assertNull(result.postponement)
     }
 
-    private fun postponement(ep: Int, language: String, old: Long, new: Long) = ReleasePostponementEntity(
-        "p-$ep-$language", "r-3-$ep", "anime", "Anime", if (ep == 20) 3 else 4, ep, language,
+    @Test fun multipleActivePostponementsKeepTheirOwnEpisodeAndLanguageIdentity() {
+        val availableSub19 = release(19, 4, 1_800, "GER_SUB").copy(releaseStatus = "AVAILABLE")
+        val scheduledSub20 = release(20, 4, 3_000, "GER_SUB").copy(releaseStatus = "SCHEDULED")
+        val scheduledDub17 = release(17, 4, 2_000, "GER_DUB").copy(releaseStatus = "SCHEDULED")
+        val scheduledDub18 = release(18, 4, 2_100, "GER_DUB").copy(releaseStatus = "SCHEDULED")
+        val shifts = listOf(
+            postponement(17, "GER_DUB", 2_000, 2_500),
+            postponement(18, "GER_DUB", 2_100, 2_700),
+            postponement(20, "GER_SUB", 3_000, 3_500, season = 4)
+        )
+
+        val effective = ReleaseDisplayResolver.effectiveReleases(
+            listOf(availableSub19, scheduledDub17, scheduledDub18, scheduledSub20),
+            shifts
+        )
+        val shifted = effective.associateBy { Triple(it.seasonNumber, it.episodeNumber, it.releaseLanguage) }
+
+        assertEquals(2_500L, shifted[Triple(4, 17, "GER_DUB")]?.expectedAt)
+        assertEquals(2_700L, shifted[Triple(4, 18, "GER_DUB")]?.expectedAt)
+        assertEquals(3_500L, shifted[Triple(4, 20, "GER_SUB")]?.expectedAt)
+
+        val main = ReleaseDisplayResolver.nextFor(
+            listOf(availableSub19, scheduledDub17, scheduledDub18, scheduledSub20),
+            shifts,
+            nowEpoch = 1_900
+        )!!
+        assertEquals(20, main.identity.episode)
+        assertEquals("GER_SUB", main.identity.language)
+        assertEquals(3_500L, main.countdownTarget)
+        assertEquals("p-20-GER_SUB", main.postponement?.postponementId)
+    }
+
+    private fun postponement(
+        ep: Int,
+        language: String,
+        old: Long,
+        new: Long,
+        season: Int = if (ep == 20) 3 else 4
+    ) = ReleasePostponementEntity(
+        "p-$ep-$language", "r-$season-$ep", "anime", "Anime", season, ep, language,
         old, new, "TV", "DELAYED", "ANIWORLD", "https://aniworld.to/source", null,
         1, 1, true, 1, 0
     )

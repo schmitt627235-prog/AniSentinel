@@ -53,3 +53,11 @@ Baue AniSentinel schrittweise als wartbare native Android-App. Priorität haben 
 - Parser mit gespeicherten Fixtures testbar.
 - Netzwerkfehler führen nicht zu falschen „nicht verfügbar“-Meldungen.
 - Hintergrundarbeit kann vollständig deaktiviert werden.
+
+## GitHub-Veröffentlichungen
+- Jede neue Veröffentlichung benötigt in demselben Arbeitsdurchlauf eine neue ausdrückliche Freigabe des Nutzers.
+- Frühere Freigaben gelten ausschließlich für den damals konkret geprüften Stand und niemals für spätere Änderungen oder Versionen.
+- Vor der Freigabe sind lokale Änderungen, Tests, Builds, Geräteprüfungen und vorbereitete Berichte erlaubt.
+- Vor der Freigabe sind Git-Commits, Pushes, Remote-Branches, Pull Requests, Tags, GitHub-Releases und Asset-Uploads verboten.
+- Nach lokaler Validierung muss Codex stoppen, den vorgesehenen Versionsstand, erfolgreiche Tests, offene Punkte und die geplanten GitHub-Dateien nennen und ausdrücklich nach der Veröffentlichungserlaubnis fragen.
+- Private Gerätedaten, Room-Datenbanken, WAL/SHM-Dateien, ADB-Dumps, App-Datensicherungen, Cookies, Tokens, Secrets, Browserprofile, private Medien, `local.properties` und Build-Caches dürfen niemals veröffentlicht werden.
