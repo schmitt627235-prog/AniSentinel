@@ -18,7 +18,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
-enum class FavoritesFilter { ALL, CURRENT, UPCOMING, COMPLETED }
+enum class FavoritesFilter { ALL, CURRENT, UPCOMING, COMPLETED, SEASON }
 enum class FavoritesSort {
     NEXT_RELEASE, LATEST_RELEASE, TITLE_ASC, TITLE_DESC, PROVIDER_ASC, PROVIDER_DESC
 }
@@ -30,7 +30,8 @@ data class FavoritesUiState(
     val favorites: List<Anime> = emptyList(),
     val hasAnyFavorites: Boolean = false,
     val refreshing: Boolean = false,
-    val postponementsByAnime: Map<String, List<ReleasePostponementEntity>> = emptyMap()
+    val postponementsByAnime: Map<String, List<ReleasePostponementEntity>> = emptyMap(),
+    val seasonMetadata: Map<String, Pair<String?, Int?>> = emptyMap()
 )
 
 class FavoritesViewModel(application: Application) : AndroidViewModel(application) {
@@ -45,9 +46,10 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
         repository.observeFavorites(),
         dao.observeFavoriteReleasesForClassification(),
         dao.observeJustWatchProviderReferences(),
-        dao.observeReleasePostponements()
-    ) { entities, releases, references, postponements ->
-        arrayOf(entities, releases, references, postponements)
+        dao.observeReleasePostponements(),
+        dao.observeCatalog(AnticipatedTitlesViewModel.UPCOMING_FAVORITES)
+    ) { entities, releases, references, postponements, upcoming ->
+        arrayOf(entities, releases, references, postponements, upcoming)
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -56,6 +58,8 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
         val releases = data[1] as List<EpisodeReleaseEntity>
         val references = data[2] as List<de.anisentinel.app.data.local.ProviderReferenceEntity>
         val postponements = data[3] as List<ReleasePostponementEntity>
+        val upcoming = data[4] as List<de.anisentinel.app.data.local.AnimeEntity>
+        val seasonFavoriteIds = upcoming.mapTo(mutableSetOf()) { it.id }
         val providers = references.groupBy { it.animeId }
         val releasesByAnime = releases.groupBy { it.animeId }
         val postponementsByAnime = postponements.filter { it.isActive && it.animeId != null }
@@ -91,11 +95,16 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
             filter = selected,
             sort = sort,
             favorites = all.filter { anime ->
-                FavoriteReleaseClassifier.matches(anime, releasesByAnime[anime.id].orEmpty(), selected, today, ZoneId.systemDefault())
+                when (selected) {
+                    FavoritesFilter.SEASON -> anime.id in seasonFavoriteIds
+                    FavoritesFilter.ALL -> true
+                    else -> anime.id !in seasonFavoriteIds && FavoriteReleaseClassifier.matches(anime, releasesByAnime[anime.id].orEmpty(), selected, today, ZoneId.systemDefault())
+                }
             }.sortedWith(FavoritesSorter.comparator(sort)),
             hasAnyFavorites = allFavorites.isNotEmpty(),
             refreshing = busy,
-            postponementsByAnime = postponementsByAnime
+            postponementsByAnime = postponementsByAnime,
+            seasonMetadata = upcoming.associate { it.id to (it.season to it.seasonYear) }
         )
     }.stateIn(
         viewModelScope,
@@ -181,6 +190,26 @@ object FavoriteReleaseClassifier {
                 // release-cycle state, not a claim that the anime itself has permanently ended.
                 dates.any { it.isBefore(today) } && dates.none { !it.isBefore(today) }
             }
+            FavoritesFilter.SEASON -> false
         }
+    }
+}
+
+object UpcomingSeasonPolicy {
+    fun cycleStart(season: String?, year: Int?): Int? = when {
+        year == null -> null
+        season == "WINTER" -> year - 1
+        season in setOf("SPRING", "SUMMER", "FALL") -> year
+        else -> null
+    }
+
+    fun cycleLabel(start: Int): String = "Season $start/${(start + 1).toString().takeLast(2)}"
+
+    fun seasonLabel(season: String?, year: Int?): String = when (season) {
+        "SPRING" -> "Frühling ${year ?: ""}".trim()
+        "SUMMER" -> "Sommer ${year ?: ""}".trim()
+        "FALL" -> "Herbst ${year ?: ""}".trim()
+        "WINTER" -> "Winter ${year ?: ""}".trim()
+        else -> "Termin noch offen"
     }
 }

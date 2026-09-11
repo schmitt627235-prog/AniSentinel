@@ -51,6 +51,9 @@ interface AniSentinelDao {
     @Query("SELECT * FROM announcements ORDER BY publishedAt DESC")
     fun observeAnnouncements(): Flow<List<AnnouncementEntity>>
 
+    @Query("SELECT MAX(fetchedAt) FROM announcements WHERE sources LIKE '%Anime2You%'")
+    suspend fun latestAnime2YouNewsFetch(): Long?
+
     @Query("SELECT * FROM announcements WHERE announcementId = :announcementId LIMIT 1")
     fun observeAnnouncement(announcementId: String): Flow<AnnouncementEntity?>
 

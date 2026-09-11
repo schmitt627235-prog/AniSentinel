@@ -1,6 +1,7 @@
 package de.anisentinel.app.data.anticipated
 
 import android.content.Context
+import android.util.Log
 import de.anisentinel.app.data.anilist.AniListGraphQlHttpClient
 import de.anisentinel.app.data.anilist.GraphQlHttpResult
 import de.anisentinel.app.data.anisearch.AniSearchFetchResult
@@ -60,7 +61,11 @@ data class AnticipatedTitle(
     val dachSourcePriority: Int = Int.MIN_VALUE,
     val sourceObservedAt: Long,
     val firstDetectedAt: Long,
-    val updatedAt: Long
+    val updatedAt: Long,
+    val favourites: Int = 0,
+    val episodes: Int? = null,
+    val nextAiringEpisode: Int? = null,
+    val nextAiringAt: Long? = null
 )
 
 sealed interface AnticipatedLoadResult {
@@ -121,6 +126,16 @@ object AniSearchFutureMatcher {
         if (best.confidence < 85) return null
         if (scored.getOrNull(1)?.let { best.confidence - it.confidence < 8 } == true) return null
         return best
+    }
+
+    /** Detail pages may use a translated title, but explicit installment metadata must agree. */
+    fun hasInstallmentConflict(title: AnticipatedTitle, detailTitles: Iterable<String>): Boolean {
+        val expectedSeason = title.identity.seasonNumber ?: installment(title.identity.titles)
+        val actualSeason = installment(detailTitles)
+        if (expectedSeason != null && actualSeason != null && expectedSeason != actualSeason) return true
+        val expectedPart = part(title.identity.titles)
+        val actualPart = part(detailTitles)
+        return expectedPart != null && actualPart != null && expectedPart != actualPart
     }
 
     private fun score(title: AnticipatedTitle, candidate: String): Int? {
@@ -200,17 +215,13 @@ class AnticipatedTitlesRepository(
     private val aniSearch: AniSearchHttpTransport = AniSearchHttpTransport(
         context,
         cooldownStore = SourceCooldownStore(context.applicationContext)
-    )
+    ),
+    private val aniListRequest: (suspend (String, String) -> GraphQlHttpResult)? = null
 ) {
     private val cache = context.getSharedPreferences("anticipated_titles_cache", Context.MODE_PRIVATE)
-    private val verifiedSeeds by lazy {
-        runCatching { org.json.JSONArray(context.assets.open("anticipated_dach_verified.json").bufferedReader().use { it.readText() }) }
-            .getOrNull()
-    }
-
     suspend fun load(force: Boolean = false): AnticipatedLoadResult {
         val now = clock.instant().epochSecond
-        val cached = cache.getString("json_v3", null)
+        val cached = cache.getString("json_v3", null) ?: bundledFallback()
         val cachedAt = cache.getLong("stored_at_v3", 0)
         if (!force && cached != null && now - cachedAt < 86_400) return parse(cached, cachedAt, true)
         return when (val response = fetchAllPages()) {
@@ -223,24 +234,52 @@ class AnticipatedTitlesRepository(
         }
     }
 
-    private suspend fun fetchAllPages(): GraphQlHttpResult {
+    private fun bundledFallback(): String? = runCatching {
+        context.assets.open("anticipated_titles_fallback.json").bufferedReader(Charsets.UTF_8).use { it.readText() }
+            .takeIf(String::isNotBlank)
+    }.getOrNull()
+
+    internal suspend fun fetchAllPages(): GraphQlHttpResult {
         val combined = JSONArray()
         for (page in 1..20) {
-            val body = JSONObject().put("query", QUERY.replace("PAGE_NUMBER", page.toString())).toString()
-            val response = client.execute("ANTICIPATED_POPULARITY_PAGE_$page", body)
-            if (response !is GraphQlHttpResult.Success) return response
-            val pageObject = runCatching { JSONObject(response.body).getJSONObject("data").getJSONObject("Page") }
-                .getOrElse { return GraphQlHttpResult.NetworkFailure(de.anisentinel.app.data.anilist.NetworkFailureType.IO, "INVALID_ANTICIPATED_PAGE") }
+            val body = requestBody(page)
+            val response = aniListRequest?.invoke("ANTICIPATED_POPULARITY_PAGE_$page", body)
+                ?: client.execute("ANTICIPATED_POPULARITY_PAGE_$page", body)
+            if (response !is GraphQlHttpResult.Success) {
+                val diagnostic = when (response) {
+                    is GraphQlHttpResult.HttpFailure -> "http=${response.statusCode} retryAfter=${response.retryAfterSeconds} body=${response.body.orEmpty().take(500)}"
+                    is GraphQlHttpResult.NetworkFailure -> "network=${response.type} message=${response.message.orEmpty().take(500)}"
+                    is GraphQlHttpResult.Success -> "http=${response.statusCode}"
+                }
+                Log.w(TAG, "ANILIST_ANTICIPATED page=$page result=${response::class.simpleName} $diagnostic retained=${combined.length()}")
+                return if (combined.length() > 0) combinedResponse(combined, partial = true) else response
+            }
+            val pageObject = runCatching {
+                val root = JSONObject(response.body)
+                if (root.has("errors")) error("ANILIST_GRAPHQL_ERROR")
+                root.getJSONObject("data").getJSONObject("Page")
+            }.getOrElse {
+                return if (combined.length() > 0) combinedResponse(combined, partial = true)
+                else GraphQlHttpResult.NetworkFailure(de.anisentinel.app.data.anilist.NetworkFailureType.IO, "INVALID_ANTICIPATED_PAGE")
+            }
             val pageItems = pageObject.getJSONArray("media")
             for (index in 0 until pageItems.length()) combined.put(pageItems.get(index))
+            Log.i(TAG, "ANILIST_ANTICIPATED page=$page http=${response.statusCode} received=${pageItems.length()} total=${combined.length()}")
             if (!pageObject.optJSONObject("pageInfo")?.optBoolean("hasNextPage", false).orFalse()) break
         }
-        return GraphQlHttpResult.Success(
-            JSONObject().put("data", JSONObject().put("Page", JSONObject().put("media", combined))).toString(),
-            200,
-            emptyMap()
-        )
+        return combinedResponse(combined, partial = false)
     }
+
+    internal fun requestBody(page: Int): String = JSONObject()
+        .put("query", QUERY)
+        .put("variables", JSONObject().put("page", page))
+        .toString()
+
+    private fun combinedResponse(media: JSONArray, partial: Boolean) = GraphQlHttpResult.Success(
+            JSONObject().put("data", JSONObject().put("Page", JSONObject().put("media", media))).toString(),
+            200,
+            if (partial) mapOf("X-AniSentinel-Partial" to listOf("true")) else emptyMap()
+        )
 
     suspend fun enrichDach(title: AnticipatedTitle): AnticipatedTitle {
         if (title.dachLicenseStatus == DachLicenseStatus.CONFIRMED) return title
@@ -336,6 +375,7 @@ class AnticipatedTitlesRepository(
         val actualSeries = "series" in actualType || "serie" in actualType || actualType == "tv"
         if (expectedMovie && actualSeries) return false
         if (!expectedMovie && title.format != null && actualMovie) return false
+        if (AniSearchFutureMatcher.hasInstallmentConflict(title, value.synonyms + value.titleGerman)) return false
         return true
     }
 
@@ -384,7 +424,11 @@ class AnticipatedTitlesRepository(
                     popularity = item.optInt("popularity"), trending = item.optInt("trending"),
                     studio = item.optJSONObject("studios")?.optJSONArray("nodes")?.let { if (it.length() > 0) it.getJSONObject(0).optString("name") else null },
                     format = item.optString("format").takeIf(String::isNotBlank), sequelOfTitle = prequel?.optJSONObject("title")?.optString("romaji"),
-                    sourceObservedAt = observedAt, firstDetectedAt = observedAt, updatedAt = observedAt
+                    sourceObservedAt = observedAt, firstDetectedAt = observedAt, updatedAt = observedAt,
+                    favourites = item.optInt("favourites"),
+                    episodes = item.optInt("episodes").takeIf { it > 0 },
+                    nextAiringEpisode = item.optJSONObject("nextAiringEpisode")?.optInt("episode")?.takeIf { it > 0 },
+                    nextAiringAt = item.optJSONObject("nextAiringEpisode")?.optLong("airingAt")?.takeIf { it > 0 }
                 )
                 cache.getString("dach_$id", null)?.let { raw -> runCatching {
                     val saved = JSONObject(raw)
@@ -411,27 +455,13 @@ class AnticipatedTitlesRepository(
                         )
                     ).copy(firstDetectedAt = saved.optLong("firstDetectedAt", saved.getLong("observedAt")))
                 } }
-                verifiedSeeds?.let { seeds ->
-                    for (seedIndex in 0 until seeds.length()) {
-                        val seed = seeds.getJSONObject(seedIndex)
-                        val seedTitles = seed.getJSONArray("titles").let { values -> (0 until values.length()).map(values::getString) }
-                        if (!UpcomingIdentityResolver.sameFutureTitle(anticipated.identity.titles, seedTitles)) continue
-                        val verifiedAt = seed.getLong("verifiedAt")
-                        anticipated = AnticipatedDachResolver.apply(
-                            anticipated.copy(
-                                identity = anticipated.identity.copy(aniSearchId = seed.getString("aniSearchId"), titles = anticipated.identity.titles + seedTitles),
-                                germanTitle = seed.getString("germanTitle"),
-                                dachAvailablePeriod = seed.optString("availablePeriod").takeIf(String::isNotBlank)
-                            ),
-                            AnticipatedDachEvidence(seed.getString("provider"), null, seed.getString("source"), verifiedAt, 70)
-                        )
-                        break
-                    }
-                }
                 add(anticipated)
             }
         }
-        AnticipatedLoadResult.Success(AnticipatedRanking.rank(items, LocalDate.now(clock)), fromCache)
+        AnticipatedRanking.rank(items, LocalDate.now(clock)).let { ranked ->
+            Log.i(TAG, "ANILIST_ANTICIPATED mapped=${items.size} displayed=${ranked.size} fromCache=$fromCache")
+            AnticipatedLoadResult.Success(ranked, fromCache)
+        }
     }.getOrElse { AnticipatedLoadResult.Failure("INVALID_ANILIST_RESPONSE") }
 
     private fun fuzzyDate(json: JSONObject): LocalDate? {
@@ -455,11 +485,13 @@ class AnticipatedTitlesRepository(
     }
 
     companion object {
+        private const val TAG = "AniSentinelAniList"
         private const val QUERY = """
-          query { Page(page: PAGE_NUMBER, perPage: 50) { pageInfo { hasNextPage } media(type: ANIME, isAdult: false, status: NOT_YET_RELEASED, sort: POPULARITY_DESC) {
-            id idMal status popularity trending format season seasonYear description(asHtml: false)
+          query AnticipatedTitles(${'$'}page: Int!) { Page(page: ${'$'}page, perPage: 50) { pageInfo { hasNextPage } media(type: ANIME, isAdult: false, status: NOT_YET_RELEASED, sort: POPULARITY_DESC) {
+            id idMal status popularity favourites trending format episodes season seasonYear description(asHtml: false)
             title { romaji english native } synonyms coverImage { extraLarge }
             startDate { year month day } studios(isMain: true) { nodes { name } }
+            nextAiringEpisode { episode airingAt }
             relations { edges { relationType node { id title { romaji } } } }
           } } }
         """

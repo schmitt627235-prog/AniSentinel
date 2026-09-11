@@ -1,6 +1,6 @@
 # AniSentinel
 
-Aktueller lokaler Diagnose-/Teststand: **v0.25.16 (Build 17, versionCode 63)**. „Heiß erwartete Titel“ zeigt reale, noch nicht gestartete Anime nach AniList-Popularity, bietet dynamische Saisonfilter und führt zu einer eigenen Future-Detailseite. Die vier Einstellungsbereiche Kalender, Sync & Backup, Datenschutz und Anbieter bleiben unverändert funktionsfähig.
+Aktueller Diagnose-/Teststand: **v0.25.16 (Build 18, versionCode 64)**. „Heiß erwartete Titel“ zeigt reale, noch nicht gestartete Anime nach AniList-Popularity, bietet dynamische Saisonfilter und führt zu einer eigenen Future-Detailseite. Die vier Einstellungsbereiche Kalender, Sync & Backup, Datenschutz und Anbieter bleiben funktionsfähig.
 
 Der Bereich **Entdecken** zeigt aus dem deutschen JustWatch-Datenbestand nur sicher als Anime erkannte Serien und Filme sowie ausdrücklich belegte Live-Action-Adaptionen. Der allgemeine JustWatch-Film- und Serienkatalog wird dort nicht angeboten.
 
@@ -30,7 +30,7 @@ Releaseinformationen verschiedener Quellen werden über eine kanonische Identit�
 - persistente Providerwahl pro Anime und Staffel; die Episodenansicht übernimmt die reale Staffel-/Saga-Struktur des gewählten Direktanbieters
 - globale, rückwärtskompatible Sichtbarkeitsfilter für Crunchyroll, ADN, Netflix, Disney+ und aniverse
 - Kalenderfilter für Sprachfassung, vergangene Termine und Favoriten
-- versionierter lokaler JSON-Export/-Import über Androids System-Dateiauswahl
+- versionierter lokaler JSON-Export/-Import über Androids System-Dateiauswahl, einschließlich eines auswählbaren AniList-Bestands für „Heiß erwartete Titel“
 - lokale Datenschutzübersicht mit Berechtigungsstatus und bestätigungspflichtiger Löschung von Nutzerdaten
 - „Heiß erwartete Titel“ aus AniLists dokumentierter GraphQL-API: ausschließlich `NOT_YET_RELEASED`, Popularity-Ranking, 24-Stunden-Cache und ehrlicher DACH-Lizenzstatus
 
@@ -38,7 +38,9 @@ Releaseinformationen verschiedener Quellen werden über eine kanonische Identit�
 
 AniList liefert für diesen getrennten Future-Bereich Nutzerinteresse, Status, geplanten Start, Cover, Format, Studio und Fortsetzungsbeziehungen. Die Sortierung entspricht absteigend der echten AniList-Popularity; die UI bezeichnet diese Zahl deshalb als vorgemerkte Nutzer und nicht als Stimmen. Laufende Titel werden nicht in dieser Liste geführt.
 
-AniSentinel sucht mit englischem, Romaji-, nativem und synonymem AniList-Titel nach dem konkreten AniSearch-Eintrag. Ein konservativer Abgleich berücksichtigt Staffel-/Cour-Aliase und verwirft falsche oder gleichwertig mehrdeutige Treffer. Nur ein sicher zugeordneter, erfolgreich geladener AniSearch-Titel mit vorhandenem regionalem `ul.xlist.row.simple.infoblock` darf einen negativen Lizenzstatus erzeugen. Netzwerk-, Such-, Match- und Parserfehler erscheinen stattdessen als „DACH-Status derzeit nicht ermittelbar“.
+Der Liveabruf erfolgt über AniLists offiziellen GraphQL-Endpunkt. Da AniList die öffentliche API zeitweise mit HTTP 403 und dem Hinweis auf schwere Stabilitätsprobleme deaktiviert, enthält die APK zusätzlich den letzten erfolgreich geprüften AniList-Grundbestand. Eine frische Installation zeigt dadurch auch während eines API-Ausfalls Titel statt `Alle (0)`. Ein späterer erfolgreicher Liveabruf ersetzt diesen Bestand automatisch; Pull-to-Refresh bleibt ein echter Aktualisierungsversuch. Der aktuelle Bestand kann außerdem im lokalen Backup mitgesichert und nach einer Neuinstallation wiederhergestellt werden.
+
+Die automatische AniSearch-Anreicherung ist derzeit aus dem regulären Produktivabruf genommen. Reale Gerätetests erhielten bereits beim ersten normalen Inhaltsrequest HTTP 429, ohne `Retry-After`; weitere Requests wurden von AniSentinel korrekt durch einen globalen Cooldown verhindert. Für Anime-Metadaten steht zudem keine allgemein freigegebene offizielle API bereit. AniSentinel versucht deshalb weder, das Limit zu umgehen, noch AniSearch durch Browser-Imitation, Proxys oder wiederholte Requests zu belasten. Der vorbereitete konservative Titel-, Staffel- und Cour-Abgleich bleibt gekapselt im Quellcode und wird wieder produktiv eingebunden, sobald für das Projekt ein zulässiger AniSearch-API-Zugang bereitsteht.
 
 Eine DACH-Bestätigung entsteht ausschließlich durch den deutschen Eintrag innerhalb dieses regionalen Blocks. Publisher und `Veröffentlicht` werden aus demselben Ländereintrag gelesen. `dachAvailableFrom`, `sourceObservedAt` und `firstDetectedAt` bleiben getrennt, damit ein Erkennungsdatum niemals als Verfügbarkeitsbeginn erscheint. Suchtreffer, Detail-HTML sowie positive und negative Nachweise werden begrenzt gecacht; HTTP 429 oder Zugriffssperren stoppen die Anreicherung, ohne gültige Cachewerte zu löschen.
 
@@ -134,10 +136,12 @@ Fehlende Termine oder Sprachfassungen werden nicht geraten. Ein japanischer Auss
 | [ANIVERSE bei Prime Video](https://www.primevideo.com/-/de_DE/channel/0bc7238a-ac57-4e04-a3f3-1be6f9aefa32) | öffentliche Prime-Titelseite; Bestätigung nur mit konkreter Episode und ANIVERSE-Channelnachweis |
 | [Anime2You](https://www.anime2you.de/feed/) | öffentlicher RSS-Feed für News und Releasesignale |
 | [JustWatch Deutschland](https://www.justwatch.com/de) | Katalog- und Providerzuordnung, nicht Episodenbestätigung |
+| [AniList](https://anilist.co) | zukünftige Anime und Popularitätsreihenfolge über GraphQL; geprüfter APK-/Backup-Bestand als Ausfallsicherung |
+| [AniSearch](https://www.anisearch.de) | automatische DACH-Anreicherung derzeit pausiert; Wiederaufnahme bei freigegebenem API-Zugang |
 
 [crunchy-labs/crunchyroll-rs](https://github.com/crunchy-labs/crunchyroll-rs) und [anidl/multi-downloader-nx](https://github.com/anidl/multi-downloader-nx) dienten ausschließlich als technische Recherchegrundlagen. AniSentinel ist weder Bestandteil noch offizieller Client dieser Projekte oder der genannten Anbieter. Wiedergabe-, Download-, Entschlüsselungs- und DRM-Logik wurde nicht übernommen.
 
-Ältere AniList-, AnimeRadar- und AniSearch-Komponenten sind als gekapselte Entwicklungs- und Diagnosepfade im Quellcode vorhanden, aber nicht die aktive deutsche Release- oder Providerbestätigung.
+AniSearch- und ältere AnimeRadar-Komponenten sind als gekapselte Entwicklungs- und Diagnosepfade im Quellcode vorhanden, aber nicht die aktive deutsche Release- oder Providerbestätigung. AniList ist ausschließlich für den getrennten Bereich „Heiß erwartete Titel“ aktiv und bestimmt keine deutschen Episoden- oder Providerbestätigungen.
 
 ## Screenshots
 

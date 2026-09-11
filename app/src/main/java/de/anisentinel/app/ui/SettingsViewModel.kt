@@ -48,7 +48,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val _diagnosticImport = MutableStateFlow(DiagnosticImportUiState())
     val diagnosticImport: StateFlow<DiagnosticImportUiState> = _diagnosticImport.asStateFlow()
     private val dao = (application as AniSentinelApplication).container.database.aniSentinelDao()
-    private val backupManager = de.anisentinel.app.data.settings.LocalBackupManager(repository, dao)
+    private val backupManager = de.anisentinel.app.data.settings.LocalBackupManager(getApplication(), repository, dao)
     private val _backupState = MutableStateFlow(BackupUiState())
     val backupState: StateFlow<BackupUiState> = _backupState.asStateFlow()
     val monitoringDiagnostics = combine(

@@ -160,6 +160,7 @@ private fun backupSectionLabel(section: BackupSection) = stringResource(when (se
     BackupSection.PROVIDERS -> R.string.backup_section_providers
     BackupSection.WATCH_PROFILE -> R.string.backup_section_watch
     BackupSection.THEME_LANGUAGE -> R.string.backup_section_theme_language
+    BackupSection.ANTICIPATED_TITLES -> R.string.backup_section_anticipated_titles
 })
 
 private fun backupMessage(code: String): String = when {

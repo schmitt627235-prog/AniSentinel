@@ -1,7 +1,9 @@
 package de.anisentinel.app.data.settings
 
+import android.content.Context
 import de.anisentinel.app.BuildConfig
 import de.anisentinel.app.data.local.AniSentinelDao
+import de.anisentinel.app.data.local.AnimeEntity
 import de.anisentinel.app.data.local.FavoriteEntity
 import de.anisentinel.app.domain.provider.ProviderVisibilityPolicy
 import de.anisentinel.app.domain.repository.AppSettings
@@ -16,7 +18,7 @@ import org.json.JSONObject
 enum class BackupSection(val wireName: String) {
     FAVORITES("favorites"), GENERAL("generalSettings"), NOTIFICATIONS("notificationSettings"),
     CALENDAR("calendarSettings"), PROVIDERS("providerSettings"), WATCH_PROFILE("watchProfile"),
-    THEME_LANGUAGE("themeLanguage");
+    THEME_LANGUAGE("themeLanguage"), ANTICIPATED_TITLES("anticipatedTitles");
     companion object {
         val all = entries.toSet()
         fun fromWire(value: String) = entries.firstOrNull { it.wireName == value }
@@ -31,7 +33,13 @@ sealed interface BackupResult {
     data class Invalid(val reason: String) : BackupResult
 }
 
-class LocalBackupManager(private val settingsRepository: DataStoreSettingsRepository, private val dao: AniSentinelDao) {
+class LocalBackupManager(
+    private val context: Context,
+    private val settingsRepository: DataStoreSettingsRepository,
+    private val dao: AniSentinelDao
+) {
+    private val anticipatedCache get() = context.getSharedPreferences("anticipated_titles_cache", Context.MODE_PRIVATE)
+
     suspend fun export(output: OutputStream, sections: Set<BackupSection>): BackupResult {
         if (sections.isEmpty()) return BackupResult.Invalid("NO_SECTIONS_SELECTED")
         val settings = settingsRepository.settings.first()
@@ -51,6 +59,10 @@ class LocalBackupManager(private val settingsRepository: DataStoreSettingsReposi
         if (BackupSection.WATCH_PROFILE in sections) data.put("watchProfile", JSONObject().put("watchProfileId", settings.watchProfileId))
         if (BackupSection.THEME_LANGUAGE in sections) data.put("themeLanguage", JSONObject()
             .put("theme", settings.theme.name).put("languageTag", settings.languageTag))
+        if (BackupSection.ANTICIPATED_TITLES in sections) data.put("anticipatedTitles", JSONObject().apply {
+            anticipatedCache.getString("json_v3", null)?.let { put("json", it) }
+            put("storedAt", anticipatedCache.getLong("stored_at_v3", 0L))
+        })
         val root = JSONObject().put("schemaVersion", 1).put("app", "AniSentinel")
             .put("appVersion", BuildConfig.VERSION_NAME).put("createdAt", Instant.now().toString())
             .put("includedSections", JSONArray(sections.sortedBy { it.ordinal }.map { it.wireName })).put("data", data)
@@ -91,10 +103,25 @@ class LocalBackupManager(private val settingsRepository: DataStoreSettingsReposi
         if (BackupSection.THEME_LANGUAGE in selected) preview.data.getJSONObject("themeLanguage").let {
             settings = settings.copy(theme = ThemePreference.valueOf(it.getString("theme")), languageTag = it.getString("languageTag"))
         }
-        if (selected.any { it != BackupSection.FAVORITES }) settingsRepository.replaceUserSettings(settings)
+        if (selected.any { it !in setOf(BackupSection.FAVORITES, BackupSection.ANTICIPATED_TITLES) }) settingsRepository.replaceUserSettings(settings)
+        if (BackupSection.ANTICIPATED_TITLES in selected) preview.data.getJSONObject("anticipatedTitles").let { cache ->
+            val json = cache.optString("json").takeIf(String::isNotBlank)
+            val editor = anticipatedCache.edit().remove("json_v3").remove("stored_at_v3")
+            if (json != null) editor.putString("json_v3", json).putLong("stored_at_v3", cache.getLong("storedAt"))
+            editor.apply()
+        }
         var count = 0
         if (BackupSection.FAVORITES in selected) preview.data.getJSONArray("favorites").let { favorites ->
-            count = favorites.length(); for (i in 0 until favorites.length()) dao.upsertFavorite(favorites.getJSONObject(i).favorite()!!)
+            val restoredFavorites = (0 until favorites.length()).map { favorites.getJSONObject(it).favorite()!! }
+            restoredFavorites.forEach { favorite ->
+                // Favorites reference anime(id). A user-data backup may be restored before
+                // the catalogue is downloaded, so its required parent can still be absent.
+                if (dao.anime(favorite.animeId) == null) {
+                    dao.upsertAnime(listOf(favorite.placeholderAnime()))
+                }
+                dao.upsertFavorite(favorite)
+            }
+            count = restoredFavorites.size
         }
         return BackupResult.Success(count)
     }
@@ -110,6 +137,10 @@ class LocalBackupManager(private val settingsRepository: DataStoreSettingsReposi
                 BackupSection.PROVIDERS -> data.getJSONObject("providerSettings").run { getJSONArray("preferredProviderIds").strings(); require(getJSONArray("disabledProviderIds").strings().all(ProviderVisibilityPolicy.supportedProviderIds::contains)) }
                 BackupSection.WATCH_PROFILE -> require(data.getJSONObject("watchProfile").getString("watchProfileId").isNotBlank())
                 BackupSection.THEME_LANGUAGE -> data.getJSONObject("themeLanguage").run { ThemePreference.valueOf(getString("theme")); require(getString("languageTag").isNotBlank()) }
+                BackupSection.ANTICIPATED_TITLES -> data.getJSONObject("anticipatedTitles").run {
+                    optString("json").takeIf(String::isNotBlank)?.let { JSONObject(it) }
+                    require(getLong("storedAt") >= 0L)
+                }
             }
         }
     }.isSuccess
@@ -119,5 +150,21 @@ class LocalBackupManager(private val settingsRepository: DataStoreSettingsReposi
         .put("notifyAvailable", notifyAvailable).put("notifyDelayed", notifyDelayed)
         .put("notifyPostponed", notifyPostponed).put("createdAt", createdAt)
     private fun JSONObject.favorite() = runCatching { FavoriteEntity(getString("animeId").also { require(it.isNotBlank()) }, getBoolean("enabled"), getString("languagePreference").also { require(it in setOf("SUB","DUB","BOTH")) }, optString("monitoringProfileId").takeIf(String::isNotBlank), getBoolean("notifyAvailable"), getBoolean("notifyDelayed"), getBoolean("notifyPostponed"), getLong("createdAt")) }.getOrNull()
+    private fun FavoriteEntity.placeholderAnime() = AnimeEntity(
+        id = animeId,
+        anilistId = animeId.removePrefix("anilist-").toIntOrNull(),
+        anisearchId = null,
+        titleGerman = animeId,
+        titleEnglish = null,
+        titleRomaji = null,
+        titleNative = null,
+        description = "",
+        coverUrl = null,
+        bannerUrl = null,
+        season = null,
+        seasonYear = null,
+        totalEpisodes = null,
+        updatedAt = 0L
+    )
     private fun JSONArray.strings() = buildSet { for (i in 0 until length()) add(getString(i)) }
 }

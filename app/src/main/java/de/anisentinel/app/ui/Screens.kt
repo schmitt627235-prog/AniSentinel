@@ -788,8 +788,30 @@ fun FavoritesScreen(
     val favoritesState by favoritesViewModel.state.collectAsState()
     ScreenContainer(scaffoldPadding, onMenu) { contentPadding ->
         AniSentinelPullToRefresh(favoritesState.refreshing, favoritesViewModel::refresh) {
-        val tabs = listOf(R.string.tab_all, R.string.tab_current, R.string.tab_upcoming, R.string.tab_completed)
+        val tabs = listOf("Alle", "Aktuell", "Demnächst", "Abgeschlossen", "Season")
         val filters = FavoritesFilter.entries
+        var selectedCycle by remember { mutableStateOf<Int?>(null) }
+        var selectedSeason by remember { mutableStateOf<String?>(null) }
+        val availableCycles = favoritesState.favorites.mapNotNull { anime ->
+            val metadata = favoritesState.seasonMetadata[anime.id]
+            UpcomingSeasonPolicy.cycleStart(metadata?.first, metadata?.second)
+        }.distinct().sorted()
+        val effectiveCycle = selectedCycle?.takeIf { it in availableCycles } ?: availableCycles.firstOrNull()
+        val availableSeasons = favoritesState.favorites.mapNotNull { anime ->
+            val metadata = favoritesState.seasonMetadata[anime.id]
+            val label = UpcomingSeasonPolicy.seasonLabel(metadata?.first, metadata?.second)
+            val cycle = UpcomingSeasonPolicy.cycleStart(metadata?.first, metadata?.second)
+            label.takeIf { cycle == effectiveCycle || label == "Termin noch offen" }
+        }.distinct()
+        val displayedFavorites = if (favoritesState.filter != FavoritesFilter.SEASON) favoritesState.favorites else favoritesState.favorites.filter { anime ->
+            val metadata = favoritesState.seasonMetadata[anime.id]
+            val label = UpcomingSeasonPolicy.seasonLabel(metadata?.first, metadata?.second)
+            val seasonMatches = selectedSeason == null || label == selectedSeason
+            val cycleMatches = if (label == "Termin noch offen") {
+                selectedSeason == "Termin noch offen" || effectiveCycle == null
+            } else UpcomingSeasonPolicy.cycleStart(metadata?.first, metadata?.second) == effectiveCycle
+            cycleMatches && seasonMatches
+        }
         LazyColumn(
             modifier = Modifier.testTag(UiTags.FAVORITES_LIST),
             contentPadding = contentPadding,
@@ -804,7 +826,7 @@ fun FavoritesScreen(
                     tabs.forEachIndexed { index, tab ->
                         AssistChip(
                             onClick = { favoritesViewModel.selectFilter(filters[index]) },
-                            label = { Text(stringResource(tab)) },
+                            label = { Text(tab) },
                             leadingIcon = {
                                 Icon(
                                     if (index == 3) Icons.Outlined.CheckCircle else Icons.Outlined.FavoriteBorder,
@@ -815,6 +837,22 @@ fun FavoritesScreen(
                                 AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
                             } else AssistChipDefaults.assistChipColors()
                         )
+                    }
+                }
+            }
+            if (favoritesState.filter == FavoritesFilter.SEASON) {
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            availableCycles.forEach { cycle ->
+                                FilterChip(selected = effectiveCycle == cycle, onClick = { selectedCycle = cycle; selectedSeason = null }, label = { Text(UpcomingSeasonPolicy.cycleLabel(cycle)) })
+                            }
+                        }
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            availableSeasons.forEach { label ->
+                                FilterChip(selected = selectedSeason == label, onClick = { selectedSeason = label }, label = { Text(label) })
+                            }
+                        }
                     }
                 }
             }
@@ -875,6 +913,7 @@ fun FavoritesScreen(
                                         FavoritesFilter.CURRENT -> R.string.favorites_empty_current
                                         FavoritesFilter.UPCOMING -> R.string.favorites_empty_upcoming
                                         FavoritesFilter.COMPLETED -> R.string.favorites_empty_completed
+                                        FavoritesFilter.SEASON -> R.string.favorites_empty_upcoming
                                     }),
                                     style = MaterialTheme.typography.titleMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -884,7 +923,7 @@ fun FavoritesScreen(
                     }
                 }
             }
-            items(favoritesState.favorites) {
+            items(displayedFavorites) {
                 AnimeCard(
                     it,
                     Modifier.fillMaxWidth(),

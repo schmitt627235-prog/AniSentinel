@@ -72,6 +72,19 @@ class FavoriteReleaseClassifierTest {
         assertTrue(FavoriteReleaseClassifier.matches(anime, listOf(historical, future), FavoritesFilter.UPCOMING, today, zone))
     }
 
+    @Test fun seasonCycleGroupsAutumnAndFollowingWinter() {
+        assertEquals(2026, UpcomingSeasonPolicy.cycleStart("FALL", 2026))
+        assertEquals(2026, UpcomingSeasonPolicy.cycleStart("WINTER", 2027))
+        assertEquals("Season 2026/27", UpcomingSeasonPolicy.cycleLabel(2026))
+        assertEquals("Herbst 2026", UpcomingSeasonPolicy.seasonLabel("FALL", 2026))
+        assertEquals("Winter 2027", UpcomingSeasonPolicy.seasonLabel("WINTER", 2027))
+    }
+
+    @Test fun missingSeasonRemainsVisibleAsOpenDate() {
+        assertNull(UpcomingSeasonPolicy.cycleStart(null, null))
+        assertEquals("Termin noch offen", UpcomingSeasonPolicy.seasonLabel(null, null))
+    }
+
     private fun release(id: String, date: LocalDate, hour: Int = 12, minute: Int = 0, episode: Int = 1) =
         EpisodeReleaseEntity(
             id, "a", episode, null, date.atTime(hour, minute).atZone(zone).toEpochSecond(),

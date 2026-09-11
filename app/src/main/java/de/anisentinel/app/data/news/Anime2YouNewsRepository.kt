@@ -1,11 +1,15 @@
 package de.anisentinel.app.data.news
 
+import android.util.Log
 import de.anisentinel.app.data.local.AniSentinelDao
 import de.anisentinel.app.data.local.AnnouncementEntity
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 import java.security.MessageDigest
+import java.text.Normalizer
 import java.time.Instant
+import java.time.OffsetDateTime
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -54,7 +58,83 @@ class Anime2YouNewsRepository(
 
     fun observeNews(): Flow<List<AnnouncementEntity>> = dao.observeAnnouncements()
 
+    private data class CachedTitleNews(val storedAt: Long, val items: List<AnnouncementEntity>)
+    private val titleNewsCache = mutableMapOf<String, CachedTitleNews>()
+
+    suspend fun searchForTitle(
+        titles: Iterable<String>,
+        now: Instant = Instant.now(),
+        force: Boolean = false
+    ): Anime2YouTitleNewsResult = mutex.withLock {
+        val queries = Anime2YouTitleVariants.build(titles)
+        if (queries.isEmpty()) return@withLock Anime2YouTitleNewsResult.Success(emptyList(), Anime2YouSearchMetrics())
+        val cacheKey = "v${Anime2YouTitleNewsCachePolicy.VERSION}:" + queries.map(Anime2YouTitleNormalizer::normalize).sorted().joinToString("|")
+        titleNewsCache[cacheKey]?.takeIf { !force && Anime2YouTitleNewsCachePolicy.isFresh(it.storedAt, now.epochSecond, it.items.size) }?.let {
+            Log.d(TAG, "ANIME2YOU_CACHE_HIT key=$cacheKey count=${it.items.size}")
+            return@withLock Anime2YouTitleNewsResult.Success(it.items, Anime2YouSearchMetrics(cacheHit = true, accepted = it.items.size))
+        }
+        Log.d(TAG, "ANIME2YOU_CACHE_HIT key=$cacheKey hit=false")
+        val merged = linkedMapOf<String, AnnouncementCandidate>()
+        var raw = 0
+        var parsed = 0
+        var rejected = 0
+        var successfulResponses = 0
+        var lastFailure: String? = null
+        queries.take(MAX_TITLE_QUERIES).forEach { query ->
+            Log.d(TAG, "ANIME2YOU_QUERY query=$query")
+            when (val response = transport.search(query)) {
+                is Anime2YouHttpResult.Failure -> lastFailure = response.reason
+                is Anime2YouHttpResult.Success -> {
+                    successfulResponses++
+                    Log.d(TAG, "ANIME2YOU_HTTP_STATUS status=${response.status} bytes=${response.body.toByteArray().size} url=${response.url}")
+                    val searchPage = runCatching { Anime2YouSearchParser.parse(response.body) }.getOrElse {
+                        lastFailure = "PARSE_ERROR:${it.message}"
+                        Log.d(TAG, "ANIME2YOU_REJECTED_RESULTS reason=PARSE_ERROR")
+                        return@forEach
+                    }
+                    raw += searchPage.rawCount
+                    parsed += searchPage.items.size
+                    searchPage.items.forEach { candidate ->
+                        val reason = Anime2YouTitleNewsMatcher.rejectionReason(candidate.title, candidate.summary, queries)
+                        val url = Anime2YouSearchParser.canonicalUrl(candidate.sourceUrl)
+                        when {
+                            reason != null -> {
+                                rejected++
+                                Log.d(TAG, "ANIME2YOU_REJECTED_RESULTS reason=$reason title=${candidate.title}")
+                            }
+                            url == null -> {
+                                rejected++
+                                Log.d(TAG, "ANIME2YOU_REJECTED_RESULTS reason=INVALID_URL title=${candidate.title}")
+                            }
+                            url in merged -> Log.d(TAG, "ANIME2YOU_REJECTED_RESULTS reason=DUPLICATE url=$url")
+                            else -> merged[url] = candidate.copy(sourceUrl = url)
+                        }
+                    }
+                }
+            }
+        }
+        Log.d(TAG, "ANIME2YOU_RAW_RESULTS count=$raw")
+        Log.d(TAG, "ANIME2YOU_PARSED_RESULTS count=$parsed")
+        Log.d(TAG, "ANIME2YOU_ACCEPTED_RESULTS count=${merged.size}")
+        if (successfulResponses == 0 || (merged.isEmpty() && lastFailure != null)) {
+            return@withLock Anime2YouTitleNewsResult.Failure(lastFailure ?: "NETWORK_ERROR")
+        }
+        val entities = merged.values.map { it.toEntity(now) }.sortedByDescending { it.publishedAt }
+        if (entities.isNotEmpty()) {
+            dao.upsertAnnouncements(entities)
+            titleNewsCache[cacheKey] = CachedTitleNews(now.epochSecond, entities)
+        }
+        Anime2YouTitleNewsResult.Success(
+            entities,
+            Anime2YouSearchMetrics(raw, parsed, entities.size, rejected, cacheHit = false)
+        )
+    }
+
     suspend fun refresh(now: Instant = Instant.now(), force: Boolean = false): NewsSyncResult = mutex.withLock {
+        val cachedAt = dao.latestAnime2YouNewsFetch()
+        if (!force && Anime2YouNewsCachePolicy.isFresh(cachedAt, now.epochSecond)) {
+            return@withLock NewsSyncResult.Success(0, 0, Instant.ofEpochSecond(requireNotNull(cachedAt)))
+        }
         if (!force && lastAttemptAt?.isAfter(now.minusSeconds(15 * 60)) == true) {
             return@withLock NewsSyncResult.Success(0, 0, now)
         }
@@ -105,6 +185,117 @@ class Anime2YouNewsRepository(
         }
         NewsSyncResult.Success(candidates.size, stored, now)
     }
+
+    companion object {
+        private const val TAG = "AniSentinel-Anime2You"
+        private const val MAX_TITLE_QUERIES = 8
+    }
+}
+
+data class Anime2YouSearchMetrics(
+    val raw: Int = 0,
+    val parsed: Int = 0,
+    val accepted: Int = 0,
+    val rejected: Int = 0,
+    val cacheHit: Boolean = false
+)
+
+sealed interface Anime2YouTitleNewsResult {
+    data class Success(val items: List<AnnouncementEntity>, val metrics: Anime2YouSearchMetrics) : Anime2YouTitleNewsResult
+    data class Failure(val reason: String) : Anime2YouTitleNewsResult
+}
+
+object Anime2YouNewsCachePolicy {
+    private const val MAX_AGE_SECONDS = 15 * 60L
+    fun isFresh(fetchedAt: Long?, now: Long): Boolean =
+        fetchedAt != null && fetchedAt <= now && now - fetchedAt < MAX_AGE_SECONDS
+}
+
+object Anime2YouTitleNewsCachePolicy {
+    const val VERSION = 2
+    private const val MAX_AGE_SECONDS = 6 * 60 * 60L
+    fun isFresh(storedAt: Long, now: Long, resultCount: Int, version: Int = VERSION): Boolean =
+        version == VERSION && resultCount > 0 && storedAt <= now && now - storedAt < MAX_AGE_SECONDS
+}
+
+object Anime2YouTitleNormalizer {
+    fun normalize(value: String): String = Normalizer.normalize(value, Normalizer.Form.NFKC)
+        .lowercase(Locale.GERMAN)
+        .replace('×', 'x')
+        .replace(Regex("<[^>]+>"), " ")
+        .replace(Regex("[^\\p{L}\\p{N}]+"), " ")
+        .replace(Regex("\\s+"), " ")
+        .trim()
+}
+
+object Anime2YouTitleVariants {
+    fun build(titles: Iterable<String>): List<String> = buildSet {
+        titles.map(String::trim).filter { it.length >= 2 && !it.equals("null", true) }.forEach { title ->
+            add(title)
+            title.replace(Regex("^(?:the|a|an)\\s+", RegexOption.IGNORE_CASE), "")
+                .trim().takeIf { it.length >= 2 && it != title }?.let(::add)
+        }
+    }.distinctBy(Anime2YouTitleNormalizer::normalize).filter { Anime2YouTitleNormalizer.normalize(it).length >= 2 }
+}
+
+object Anime2YouTitleNewsMatcher {
+    fun matching(items: Iterable<AnnouncementEntity>, titles: Iterable<String>): List<AnnouncementEntity> {
+        val aliases = Anime2YouTitleVariants.build(titles).map(Anime2YouTitleNormalizer::normalize).filter { it.length >= 4 }.distinct()
+        if (aliases.isEmpty()) return emptyList()
+        return items.asSequence()
+            .filter { "Anime2You" in it.sources.lines() }
+            .filter { item ->
+                val text = Anime2YouTitleNormalizer.normalize("${item.title} ${item.summary.orEmpty()}")
+                aliases.any { alias -> text.contains(alias) || alias.contains(text) }
+            }
+            .distinctBy { it.announcementId }
+            .sortedByDescending { it.publishedAt }
+            .toList()
+    }
+
+    fun rejectionReason(title: String, summary: String?, aliases: Iterable<String>): String? {
+        val normalizedAliases = Anime2YouTitleVariants.build(aliases).map(Anime2YouTitleNormalizer::normalize).filter { it.length >= 4 }
+        val text = Anime2YouTitleNormalizer.normalize("$title ${summary.orEmpty()}")
+        return if (normalizedAliases.any { text.contains(it) || it.contains(text) }) null else "TITLE_MISMATCH"
+    }
+}
+
+sealed interface Anime2YouHttpResult {
+    data class Success(val status: Int, val body: String, val url: String) : Anime2YouHttpResult
+    data class Failure(val reason: String) : Anime2YouHttpResult
+}
+
+internal data class Anime2YouSearchPage(val rawCount: Int, val items: List<AnnouncementCandidate>)
+
+internal object Anime2YouSearchParser {
+    fun parse(html: String): Anime2YouSearchPage {
+        val document = Jsoup.parse(html, "https://www.anime2you.de/")
+        val links = document.select("h3.entry-title a[href], h2.entry-title a[href]")
+        val items = links.mapNotNull { link ->
+            val title = link.text().trim()
+            val url = canonicalUrl(link.absUrl("href")) ?: return@mapNotNull null
+            if (title.isBlank()) return@mapNotNull null
+            val module = link.closest(".tdb_module_loop, .td_module_wrap") ?: link.parent()
+            val published = module?.selectFirst("time[datetime]")?.attr("datetime")?.let(::parseIsoDate)
+                ?: Instant.EPOCH
+            val summary = module?.selectFirst(".td-excerpt, .td_module_wrap .td-excerpt")?.text()?.trim()?.takeIf(String::isNotBlank)
+            val image = module?.selectFirst("[data-img-url]")?.attr("data-img-url")?.takeIf(String::isNotBlank)
+            AnnouncementCandidate(
+                externalId = url, title = title, summary = summary, type = Anime2YouRssParser.classify(title.lowercase(Locale.GERMAN)),
+                seasonNumber = Regex("(?:staffel|season)\\s*(\\d+)", RegexOption.IGNORE_CASE).find(title)?.groupValues?.getOrNull(1)?.toIntOrNull(),
+                publishedAt = published, source = "Anime2You", sourceUrl = url, imageUrl = image
+            )
+        }.distinctBy { it.sourceUrl }
+        return Anime2YouSearchPage(links.size, items)
+    }
+
+    fun canonicalUrl(value: String): String? = runCatching {
+        val url = URL(value)
+        if (url.protocol != "https" || !url.host.equals("www.anime2you.de", true) || !url.path.startsWith("/news/")) null
+        else "https://www.anime2you.de${url.path.trimEnd('/')}/"
+    }.getOrNull()
+
+    private fun parseIsoDate(value: String): Instant? = runCatching { OffsetDateTime.parse(value).toInstant() }.getOrNull()
 }
 
 internal object Anime2YouPostponementMatcher {
@@ -132,6 +323,31 @@ class Anime2YouNewsTransport(
 ) {
     @Volatile var lastError: String? = null
         private set
+
+    suspend fun search(query: String): Anime2YouHttpResult = withContext(Dispatchers.IO) {
+        val target = "https://www.anime2you.de/?s=${URLEncoder.encode(query, Charsets.UTF_8.name())}"
+        runCatching {
+            val connection = URL(target).openConnection() as HttpURLConnection
+            connection.connectTimeout = 12_000
+            connection.readTimeout = 18_000
+            connection.instanceFollowRedirects = true
+            connection.setRequestProperty("User-Agent", "AniSentinel/0.25.16 (+https://github.com/schmitt627235-prog/AniSentinel)")
+            connection.setRequestProperty("Accept", "text/html")
+            connection.setRequestProperty("Accept-Language", "de-DE,de;q=0.9,en;q=0.7")
+            connection.useCaches = true
+            val code = connection.responseCode
+            val finalUrl = connection.url.toString()
+            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+            val bytes = stream?.use { it.readBytes() } ?: ByteArray(0)
+            if (bytes.size > 3_000_000) error("RESPONSE_TOO_LARGE")
+            Log.d("AniSentinel-Anime2You", "ANIME2YOU_HTTP_STATUS status=$code bytes=${bytes.size} url=$finalUrl")
+            if (code !in 200..299) Anime2YouHttpResult.Failure("HTTP_$code")
+            else Anime2YouHttpResult.Success(code, bytes.toString(Charsets.UTF_8), finalUrl)
+        }.getOrElse { error ->
+            Log.d("AniSentinel-Anime2You", "ANIME2YOU_HTTP_STATUS error=${error.message} url=$target")
+            Anime2YouHttpResult.Failure(error.message ?: "NETWORK_ERROR")
+        }
+    }
 
     suspend fun fetch(): String? = withContext(Dispatchers.IO) {
         repeat(3) { attempt ->

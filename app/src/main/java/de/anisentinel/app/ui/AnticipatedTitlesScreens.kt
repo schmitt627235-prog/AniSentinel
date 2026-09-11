@@ -13,6 +13,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Favorite
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -32,8 +34,13 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import de.anisentinel.app.R
+import de.anisentinel.app.AniSentinelApplication
 import de.anisentinel.app.data.anticipated.*
 import de.anisentinel.app.data.image.CoverImageLoader
+import de.anisentinel.app.data.local.AnimeEntity
+import de.anisentinel.app.data.local.AnnouncementEntity
+import de.anisentinel.app.data.local.CatalogEntryEntity
+import de.anisentinel.app.data.news.Anime2YouTitleNewsResult
 import java.text.NumberFormat
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,71 +48,99 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.flow.collectLatest
+import java.time.ZoneId
 
-data class AnticipatedUiState(val loading: Boolean = true, val titles: List<AnticipatedTitle> = emptyList(), val error: String? = null)
+data class AnticipatedUiState(
+    val loading: Boolean = true,
+    val titles: List<AnticipatedTitle> = emptyList(),
+    val favoriteAniListIds: Set<Int> = emptySet(),
+    val titleNews: Map<Int, List<AnnouncementEntity>> = emptyMap(),
+    val newsFailures: Set<Int> = emptySet(),
+    val error: String? = null
+)
 
 class AnticipatedTitlesViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = AnticipatedTitlesRepository(application)
+    private val container = (application as AniSentinelApplication).container
+    private val dao = container.database.aniSentinelDao()
     private val _state = MutableStateFlow(AnticipatedUiState())
     val state: StateFlow<AnticipatedUiState> = _state
-    private val enrichmentMutex = Mutex()
-    private val attemptedDachIds = mutableSetOf<Int>()
-    init { refresh() }
+    init {
+        viewModelScope.launch {
+            container.favoritesRepository.observeFavorites().collectLatest { favorites ->
+                _state.value = _state.value.copy(favoriteAniListIds = favorites.mapNotNull { it.anilistId }.toSet())
+            }
+        }
+        refresh()
+    }
     fun refresh(force: Boolean = false) = viewModelScope.launch {
-        if (force) attemptedDachIds.clear()
         _state.value = _state.value.copy(loading = true)
         _state.value = when (val result = repository.load(force)) {
-            is AnticipatedLoadResult.Success -> AnticipatedUiState(false, result.titles)
+            is AnticipatedLoadResult.Success -> {
+                syncFavoriteMetadata(result.titles)
+                _state.value.copy(loading = false, titles = result.titles, error = null)
+            }
             is AnticipatedLoadResult.Failure -> _state.value.copy(loading = false, error = result.reason)
         }
-        if (_state.value.error == null) enrichVisible(_state.value.titles.take(5).map { it.identity.aniListId })
-    }
-    fun enrichDach(aniListId: Int) = viewModelScope.launch {
-        val current = _state.value.titles.firstOrNull { it.identity.aniListId == aniListId } ?: return@launch
-        val enriched = repository.enrichDach(current)
-        _state.value = _state.value.copy(titles = _state.value.titles.map { if (it.identity.aniListId == aniListId) enriched else it })
     }
 
     fun refreshDetail(aniListId: Int) = viewModelScope.launch {
-        attemptedDachIds.remove(aniListId)
         _state.value = _state.value.copy(loading = true, error = null)
         when (val result = repository.load(force = true)) {
             is AnticipatedLoadResult.Failure -> {
                 _state.value = _state.value.copy(loading = false, error = result.reason)
             }
             is AnticipatedLoadResult.Success -> {
-                val requested = result.titles.firstOrNull { it.identity.aniListId == aniListId }
-                val enriched = requested?.let { repository.enrichDach(it) }
-                _state.value = AnticipatedUiState(
-                    loading = false,
-                    titles = result.titles.map { if (it.identity.aniListId == aniListId && enriched != null) enriched else it }
-                )
-                attemptedDachIds.add(aniListId)
+                syncFavoriteMetadata(result.titles)
+                _state.value = _state.value.copy(loading = false, titles = result.titles, error = null)
             }
+        }
+        _state.value.titles.firstOrNull { it.identity.aniListId == aniListId }?.let { refreshNews(it, force = true) }
+    }
+
+    fun loadNews(title: AnticipatedTitle) = viewModelScope.launch { refreshNews(title, force = false) }
+
+    fun toggleFavorite(title: AnticipatedTitle) = viewModelScope.launch {
+        val enabled = title.identity.aniListId !in _state.value.favoriteAniListIds
+        val anime = title.toAnimeEntity()
+        if (enabled) {
+            dao.upsertAnime(listOf(anime))
+            dao.upsertCatalogEntries(listOf(CatalogEntryEntity(UPCOMING_FAVORITES, anime.id, 0, java.time.Instant.now().epochSecond)))
+        }
+        container.favoritesRepository.setFavoriteEnabled(anime.id, enabled, "BOTH", "standard")
+    }
+
+    private suspend fun syncFavoriteMetadata(titles: List<AnticipatedTitle>) {
+        val activeIds = dao.activeFavorites().mapTo(mutableSetOf()) { it.animeId }
+        val updates = titles.filter { "anilist:${it.identity.aniListId}" in activeIds }.map(AnticipatedTitle::toAnimeEntity)
+        if (updates.isNotEmpty()) dao.upsertAnime(updates)
+    }
+
+    private suspend fun refreshNews(title: AnticipatedTitle, force: Boolean) {
+        val id = title.identity.aniListId
+        when (val result = container.newsRepository.searchForTitle(title.identity.titles, force = force)) {
+            is Anime2YouTitleNewsResult.Success -> _state.value = _state.value.copy(
+                titleNews = _state.value.titleNews + (id to result.items),
+                newsFailures = _state.value.newsFailures - id
+            )
+            is Anime2YouTitleNewsResult.Failure -> _state.value = _state.value.copy(newsFailures = _state.value.newsFailures + id)
         }
     }
 
-    /**
-     * Resolve DACH evidence lazily for cards the user can actually see. Requests are
-     * serialized and deduplicated so scrolling does not turn into an AniSearch crawl.
-     */
-    fun enrichVisible(aniListIds: List<Int>) = viewModelScope.launch {
-        enrichmentMutex.withLock {
-            aniListIds.distinct().forEach { id ->
-                val current = _state.value.titles.firstOrNull { it.identity.aniListId == id } ?: return@forEach
-                if (current.dachLicenseStatus == DachLicenseStatus.CONFIRMED || !attemptedDachIds.add(id)) return@forEach
-                val enriched = repository.enrichDach(current)
-                _state.value = _state.value.copy(
-                    titles = _state.value.titles.map { if (it.identity.aniListId == id) enriched else it }
-                )
-                if (enriched.dachCheckMessage?.contains("Anfragelimit") == true ||
-                    enriched.dachCheckMessage?.contains("blockiert") == true
-                ) return@withLock
-            }
-        }
-    }
+    companion object { const val UPCOMING_FAVORITES = "UPCOMING_FAVORITES" }
+}
+
+private fun AnticipatedTitle.toAnimeEntity(): AnimeEntity {
+    val now = java.time.Instant.now().epochSecond
+    return AnimeEntity(
+        id = "anilist:${identity.aniListId}", anilistId = identity.aniListId, anisearchId = null,
+        titleGerman = englishTitle ?: title, titleEnglish = englishTitle, titleRomaji = title,
+        titleNative = nativeTitle, description = description.orEmpty(), coverUrl = coverUrl, bannerUrl = null,
+        season = season, seasonYear = seasonYear, totalEpisodes = episodes, updatedAt = now,
+        nextAiringAt = startDate?.atStartOfDay(ZoneId.systemDefault())?.toEpochSecond(),
+        nextEpisode = nextAiringEpisode, sourceUpdatedAt = sourceObservedAt, cachedAt = now
+    )
 }
 
 @Composable
@@ -115,16 +150,6 @@ fun AnticipatedTitlesScreen(padding: PaddingValues, onMenu: () -> Unit, onOpen: 
     val groups = remember(state.titles) { listOf("Alle") + state.titles.map(::futurePeriod).distinct() }
     val visible = if (filter == "Alle") state.titles else state.titles.filter { futurePeriod(it) == filter }
     val listState = rememberLazyListState()
-    val visibleAniListIds by remember {
-        derivedStateOf {
-            listState.layoutInfo.visibleItemsInfo.mapNotNull { item ->
-                (item.key as? Int)
-            }
-        }
-    }
-    LaunchedEffect(visibleAniListIds) {
-        if (visibleAniListIds.isNotEmpty()) vm.enrichVisible(visibleAniListIds)
-    }
     AniSentinelPullToRefresh(state.loading, { vm.refresh(force = true) }, Modifier.fillMaxSize().padding(padding)) {
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -139,7 +164,12 @@ fun AnticipatedTitlesScreen(padding: PaddingValues, onMenu: () -> Unit, onOpen: 
         }
         if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
         state.error?.let { Text(stringResource(R.string.anticipated_refresh_failed), color = MaterialTheme.colorScheme.error) }
-        LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            state = listState,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(vertical = 12.dp)
+        ) {
             items(visible, key = { it.identity.aniListId }) { title ->
                 val rank = visible.indexOfFirst { it.identity.aniListId == title.identity.aniListId } + 1
                 Card(Modifier.fillMaxWidth().clickable { onOpen(title.identity.aniListId) }) {
@@ -150,7 +180,12 @@ fun AnticipatedTitlesScreen(padding: PaddingValues, onMenu: () -> Unit, onOpen: 
                             Text(title.germanTitle ?: title.englishTitle ?: title.title, style = MaterialTheme.typography.titleMedium)
                             Text("🔥 ${formatPopularity(title.popularity)} ${stringResource(R.string.anticipated_users)}")
                             Text("${stringResource(R.string.anticipated_start)}: ${futureStart(title)}")
-                            Text(AnticipatedDachFormatter.format(title), color = MaterialTheme.colorScheme.secondary)
+                            IconButton(onClick = { vm.toggleFavorite(title) }) {
+                                Icon(
+                                    if (title.identity.aniListId in state.favoriteAniListIds) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder,
+                                    contentDescription = if (title.identity.aniListId in state.favoriteAniListIds) "Entfavorisieren" else "Favorisieren"
+                                )
+                            }
                         }
                     }
                 }
@@ -164,10 +199,8 @@ fun AnticipatedTitlesScreen(padding: PaddingValues, onMenu: () -> Unit, onOpen: 
 fun AnticipatedTitleDetailScreen(padding: PaddingValues, aniListId: Int, onBack: () -> Unit) {
     val vm: AnticipatedTitlesViewModel = viewModel(); val state by vm.state.collectAsState()
     val uriHandler = LocalUriHandler.current
-    LaunchedEffect(aniListId, state.titles.isNotEmpty()) {
-        if (state.titles.isNotEmpty()) vm.enrichDach(aniListId)
-    }
     val title = state.titles.firstOrNull { it.identity.aniListId == aniListId }
+    LaunchedEffect(title?.identity?.aniListId) { title?.let(vm::loadNews) }
     AniSentinelPullToRefresh(
         refreshing = state.loading,
         onRefresh = { vm.refreshDetail(aniListId) },
@@ -184,17 +217,28 @@ fun AnticipatedTitleDetailScreen(padding: PaddingValues, aniListId: Int, onBack:
         InfoCard(stringResource(R.string.anticipated_format), title.format ?: stringResource(R.string.anticipated_unknown))
         InfoCard(stringResource(R.string.anticipated_studio), title.studio ?: stringResource(R.string.anticipated_unknown))
         title.sequelOfTitle?.let { InfoCard(stringResource(R.string.anticipated_sequel_of), it) }
-        InfoCard("DACH", AnticipatedDachFormatter.format(title))
-        val aniSearchUrl = title.dachSource
-            ?: title.identity.aniSearchId?.let { "https://www.anisearch.de/anime/$it" }
-            ?: "https://www.anisearch.de/anime/index"
-        Button(
-            onClick = { runCatching { uriHandler.openUri(aniSearchUrl) } },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(stringResource(R.string.anticipated_open_anisearch))
+        Button(onClick = { vm.toggleFavorite(title) }, modifier = Modifier.fillMaxWidth()) {
+            Text(if (aniListId in state.favoriteAniListIds) "Favorisiert" else "Favorisieren")
         }
+        InfoCard("Verfügbarkeit", "AniWorld: Noch nicht verfügbar\nMonitoring: ${if (aniListId in state.favoriteAniListIds) "Aktiv" else "Inaktiv"}")
         title.description?.let { InfoCard(stringResource(R.string.synopsis), it.replace(Regex("<[^>]+>"), "")) }
+        Text("Aktuelle News", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        val news = state.titleNews[aniListId].orEmpty()
+        if (aniListId in state.newsFailures) {
+            Text("News konnten derzeit nicht geladen werden.", color = MaterialTheme.colorScheme.error)
+        } else if (news.isEmpty()) {
+            Text("Derzeit keine aktuellen News zu diesem Titel gefunden.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else news.forEach { item ->
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Anime2You · ${java.time.Instant.ofEpochSecond(item.publishedAt).atZone(ZoneId.systemDefault()).toLocalDate().format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))}")
+                    Text(item.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    item.summary?.take(240)?.let { Text(it) }
+                    val url = item.sourceUrls.lines().firstOrNull { it.startsWith("https://www.anime2you.de/") }
+                    if (url != null) TextButton(onClick = { uriHandler.openUri(url) }) { Text("Artikel öffnen") }
+                }
+            }
+        }
     }
     }
 }

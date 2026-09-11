@@ -2,6 +2,16 @@
 
 ## 0.25.16
 
+- **Aktueller Build 18 / versionCode 64:** Eine frische Installation zeigt „Heiß erwartete Titel“ auch während der derzeitigen AniList-GraphQL-Störung aus einem mitgelieferten, zuletzt erfolgreich geprüften AniList-Grundbestand. Erfolgreiche Liveantworten ersetzen ihn automatisch.
+- Der AniList-Bestand ist als eigener Bereich im JSON-Backup auswählbar und wird nach einer Neuinstallation wiederhergestellt.
+- Backup-Restore-Absturz behoben: Fehlende Anime-Elterndatensätze werden vor ihren Favoriten angelegt, sodass Room-Fremdschlüssel nach einer Neuinstallation nicht mehr verletzt werden.
+- Anime2You-News werden titelbezogen über die reale WordPress-Suche statt ausschließlich aus dem begrenzten neuesten RSS-Feed ermittelt; Varianten, Normalisierung, URL-Deduplizierung und technische Fehlerzustände wurden ergänzt.
+- Die automatische AniSearch-DACH-Anreicherung ist im regulären Produktivabruf pausiert: Der erste reale Inhaltsrequest erhielt HTTP 429 ohne `Retry-After`. Es findet keine Umgehung statt. Bei einem zulässigen projektspezifischen API-Zugang wird die vorbereitete Integration wieder aktiviert.
+- **Build 18 / versionCode 64:** AniSearch-DACH-Abruf auf eine wiederverwendete Cookie-Session mit kontrollierten Redirects und einmaligem Index-Warm-up umgestellt.
+- Für jede echte AniSearch-Anfrage gelten nun global mindestens sechs Sekunden Abstand, höchstens eine aktive Anfrage sowie ein sofortiger globaler Stopp bei HTTP 429 einschließlich `Retry-After` beziehungsweise konservativem Backoff.
+- Der produktive DACH-Seed wurde entfernt; DACH-Bestätigungen entstehen nur noch durch die generische Live-/Cache-Pipeline.
+- Cachetreffer umgehen neue Netzwerkzugriffe; explizite Staffel-/Cour-Widersprüche werden zusätzlich auf der Detailseite verworfen.
+- Session-, Cookie-, Abstand-, Parallelitäts-, 429-, Cache-, Regionalblock- und Japan-/DACH-Zeittrennung sind durch Regressionstests abgesichert.
 - **Build 17 / versionCode 63:** AniList→AniSearch→DACH-Verknüpfung vervollständigt.
 - Alle englischen, Romaji-, nativen und synonymen AniList-Titel werden als deduplizierte Suchvarianten genutzt; generische Season-/Staffel-/Dai-Ki-/Part-/Cour-Aliase bleiben erhalten.
 - Konservative Trefferwertung verwirft Staffel-/Cour-Widersprüche und gleichwertig mehrdeutige Kandidaten statt einen falschen AniSearch-Titel zu erzwingen.

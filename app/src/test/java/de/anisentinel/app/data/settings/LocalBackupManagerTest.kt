@@ -24,20 +24,23 @@ class LocalBackupManagerTest {
     private lateinit var database: AniSentinelDatabase
     private lateinit var settings: DataStoreSettingsRepository
     private lateinit var manager: LocalBackupManager
+    private lateinit var context: Context
 
     @Before
     fun setUp() = runBlocking {
-        val context = ApplicationProvider.getApplicationContext<Context>()
+        context = ApplicationProvider.getApplicationContext()
         database = Room.inMemoryDatabaseBuilder(context, AniSentinelDatabase::class.java)
             .allowMainThreadQueries().build()
         settings = DataStoreSettingsRepository(context)
         settings.resetUserSettings()
-        manager = LocalBackupManager(settings, database.aniSentinelDao())
+        context.getSharedPreferences("anticipated_titles_cache", Context.MODE_PRIVATE).edit().clear().commit()
+        manager = LocalBackupManager(context, settings, database.aniSentinelDao())
     }
 
     @After
     fun tearDown() = runBlocking {
         settings.resetUserSettings()
+        context.getSharedPreferences("anticipated_titles_cache", Context.MODE_PRIVATE).edit().clear().commit()
         database.close()
     }
 
@@ -92,6 +95,54 @@ class LocalBackupManagerTest {
     @Test
     fun emptySelectionCannotCreateBackup() = runBlocking {
         assertEquals(BackupResult.Invalid("NO_SECTIONS_SELECTED"), manager.export(ByteArrayOutputStream(), emptySet()))
+    }
+
+    @Test
+    fun favoritesRestoreAfterFreshInstallCreatesMissingAnimeParent() = runBlocking {
+        val backup = """
+            {
+              "schemaVersion": 1,
+              "app": "AniSentinel",
+              "createdAt": "2026-09-11T12:00:00Z",
+              "includedSections": ["favorites"],
+              "data": {
+                "favorites": [{
+                  "animeId": "anilist-12345",
+                  "enabled": true,
+                  "languagePreference": "BOTH",
+                  "monitoringProfileId": "automatic",
+                  "notifyAvailable": true,
+                  "notifyDelayed": true,
+                  "notifyPostponed": true,
+                  "createdAt": 1
+                }]
+              }
+            }
+        """.trimIndent()
+        val preview = (manager.inspect(ByteArrayInputStream(backup.toByteArray())) as BackupResult.Preview).backup
+
+        assertEquals(BackupResult.Success(1), manager.restore(preview, setOf(BackupSection.FAVORITES)))
+
+        val dao = database.aniSentinelDao()
+        assertEquals("anilist-12345", dao.anime("anilist-12345")?.id)
+        assertEquals(12345, dao.anime("anilist-12345")?.anilistId)
+        assertEquals(listOf("anilist-12345"), dao.activeFavorites().map { it.animeId })
+    }
+
+    @Test
+    fun anticipatedTitlesCacheSurvivesExportAndFreshInstallRestore() = runBlocking {
+        val cache = context.getSharedPreferences("anticipated_titles_cache", Context.MODE_PRIVATE)
+        val aniListJson = """{"data":{"Page":{"media":[{"id":12345}]}}}"""
+        cache.edit().putString("json_v3", aniListJson).putLong("stored_at_v3", 1_787_602_168L).commit()
+        val output = ByteArrayOutputStream()
+
+        assertEquals(BackupResult.Success(0), manager.export(output, setOf(BackupSection.ANTICIPATED_TITLES)))
+        val preview = (manager.inspect(ByteArrayInputStream(output.toByteArray())) as BackupResult.Preview).backup
+        cache.edit().clear().commit()
+
+        assertEquals(BackupResult.Success(0), manager.restore(preview, setOf(BackupSection.ANTICIPATED_TITLES)))
+        assertEquals(aniListJson, cache.getString("json_v3", null))
+        assertEquals(1_787_602_168L, cache.getLong("stored_at_v3", 0L))
     }
 
     private fun testAnime() = AnimeEntity(

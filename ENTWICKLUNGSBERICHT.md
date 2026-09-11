@@ -6,6 +6,18 @@ README.md, CHANGELOG.md und SOURCES.md bleiben als eigenständige Projektdokumen
 
 ---
 
+## AniSentinel v0.25.16 Build 18 – aktueller Abschlussstand
+
+- „Heiß erwartete Titel“ nutzt weiterhin AniLists offizielle GraphQL-API mit `NOT_YET_RELEASED` und `POPULARITY_DESC`. Der reale Gerätetest vom 11.09.2026 lieferte für Seite 1 HTTP 403 mit AniLists eigener Meldung, die öffentliche API sei wegen schwerer Stabilitätsprobleme vorübergehend deaktiviert.
+- Damit Neuinstallationen und GitHub-Builds während dieser externen Störung nicht `Alle (0)` anzeigen, enthält die APK den letzten erfolgreich geprüften AniList-Grundbestand: 699 empfangene Rohdatensätze, davon 694 nach dem bestehenden Future-Filter sichtbar. Ein erfolgreicher Liveabruf überschreibt den lokalen Cache weiterhin regulär.
+- Der AniList-Bestand wurde als eigener, auswählbarer Backupbereich ergänzt. Alte Schema-1-Backups ohne diesen Bereich bleiben lesbar.
+- Der nach einer Neuinstallation reproduzierte Restore-Absturz war eine Room-Fremdschlüsselverletzung: Favoriten wurden importiert, obwohl der referenzierte Anime-Elterndatensatz noch nicht erneut geladen war. Der Restore legt nur bei fehlendem Elternsatz einen minimalen Platzhalter an und speichert danach den Favoriten; bestehende vollständige Anime werden nicht überschrieben.
+- Anime2You-News werden nun pro Titel über `https://www.anime2you.de/?s=<Titelvariante>` gesucht. Englische, Romaji-, native, synonyme und alternative Titel werden normalisiert, seriell geprüft, anhand kanonischer News-URLs zusammengeführt und mit Ablehnungsgründen protokolliert. Negative oder technisch fehlgeschlagene Ergebnisse werden nicht als gültiger Negativcache behandelt.
+- AniSearch wurde aus dem regulären automatischen Produktivabruf genommen. Beim kontrollierten Gerätetest antwortete bereits der erste echte Inhaltsrequest mit HTTP 429 ohne `Retry-After`; AniSentinel setzte daraufhin 1.800 Sekunden globalen Cooldown und unterband Folgezugriffe. Da für Anime-Metadaten keine allgemein freigegebene offizielle API vorliegt, werden weder Rate-Limit noch Bot-Schutz umgangen. Sobald ein zulässiger projektspezifischer AniSearch-API-Zugang vorliegt, kann der erhaltene Parser-, Matching-, Cache- und DACH-Auswertungspfad wieder aktiviert werden.
+- Gezielte Tests für Backup/Restore, AniList-Future-Daten und Anime2You bestanden. `assembleDebug` war erfolgreich; die Debug-APK wurde per `adb install -r` auf dem Samsung SM-S928B installiert. Ein simulierter Erststart ohne privaten AniList-Cache zeigte auf dem Gerät `Alle (694)`.
+
+---
+
 ## AniSentinel v0.25.16 Build 17 – AniList → AniSearch → DACH
 
 ### Ausgangslage und weiterverwendete Komponenten

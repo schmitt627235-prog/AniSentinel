@@ -541,6 +541,7 @@
     <string name="backup_section_providers">Anbieter-Auswahl</string>
     <string name="backup_section_watch">Watch-Profil / Sprachpräferenzen</string>
     <string name="backup_section_theme_language">Theme / Sprache</string>
+    <string name="backup_section_anticipated_titles">Heiß erwartete Titel</string>
     <string name="privacy_local_data">Lokale Daten</string>
     <string name="privacy_local_data_explanation">Favoriten und Einstellungen werden lokal gespeichert. Release- und Providerdaten werden lokal gecacht. AniSentinel besitzt kein Login, Playback, DRM oder Downloads und überträgt keine Nutzerdaten an Werbenetzwerke.</string>
     <string name="privacy_notifications_allowed">Benachrichtigungen: Erlaubt</string>

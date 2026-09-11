@@ -16,5 +16,10 @@ class SourceCooldownStore(private val context: Context) {
         context.sourceCooldownDataStore.edit { it[key(source)] = epochSeconds }
     }
 
+    /** Clears only the named source. This must never be used as an automatic retry mechanism. */
+    suspend fun clear(source: String) {
+        context.sourceCooldownDataStore.edit { it.remove(key(source)) }
+    }
+
     private fun key(source: String) = longPreferencesKey("next_allowed_${source.lowercase()}")
 }

@@ -6,8 +6,73 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import de.anisentinel.app.data.anisearch.AniSearchSearchHit
+import androidx.test.core.app.ApplicationProvider
+import org.json.JSONArray
+import org.json.JSONObject
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import de.anisentinel.app.data.anilist.GraphQlHttpResult
+import kotlinx.coroutines.runBlocking
 
+@RunWith(RobolectricTestRunner::class)
 class AnticipatedTitlesTest {
+    @Test fun anticipatedQueryRequestsFutureAnimeByPopularityAndRequiredFields() {
+        val repository = AnticipatedTitlesRepository(ApplicationProvider.getApplicationContext())
+        val body = JSONObject(repository.requestBody(3))
+        val query = body.getString("query")
+        assertEquals(3, body.getJSONObject("variables").getInt("page"))
+        assertTrue(query.contains("type: ANIME"))
+        assertTrue(query.contains("status: NOT_YET_RELEASED"))
+        assertTrue(query.contains("sort: POPULARITY_DESC"))
+        listOf("favourites", "episodes", "nextAiringEpisode", "seasonYear", "startDate").forEach {
+            assertTrue("Query must contain $it", query.contains(it))
+        }
+    }
+
+    @Test fun paginationMergesAllSuccessfulPages() = runBlocking {
+        val requestedPages = mutableListOf<Int>()
+        val repository = AnticipatedTitlesRepository(
+            ApplicationProvider.getApplicationContext(),
+            aniListRequest = { _, body ->
+                val page = JSONObject(body).getJSONObject("variables").getInt("page")
+                requestedPages += page
+                GraphQlHttpResult.Success(pageResponse(page, hasNext = page == 1), 200, emptyMap())
+            }
+        )
+        val result = repository.fetchAllPages() as GraphQlHttpResult.Success
+        val media = JSONObject(result.body).getJSONObject("data").getJSONObject("Page").getJSONArray("media")
+        assertEquals(listOf(1, 2), requestedPages)
+        assertEquals(listOf(1, 2), (0 until media.length()).map { media.getJSONObject(it).getInt("id") })
+    }
+
+    @Test fun laterRateLimitKeepsAlreadyReceivedAniListTitles() = runBlocking {
+        val repository = AnticipatedTitlesRepository(
+            ApplicationProvider.getApplicationContext(),
+            aniListRequest = { _, body ->
+                val page = JSONObject(body).getJSONObject("variables").getInt("page")
+                if (page == 1) GraphQlHttpResult.Success(pageResponse(1, hasNext = true), 200, emptyMap())
+                else GraphQlHttpResult.HttpFailure(429, null, 60, 0, null, null)
+            }
+        )
+        val result = repository.fetchAllPages() as GraphQlHttpResult.Success
+        val parsed = repository.parse(result.body, observedAt = 123) as AnticipatedLoadResult.Success
+        assertEquals(listOf("Title 1"), parsed.titles.map { it.title })
+        assertEquals(listOf("true"), result.headers["X-AniSentinel-Partial"])
+        assertEquals(DachLicenseStatus.UNKNOWN, parsed.titles.single().dachLicenseStatus)
+    }
+
+    @Test fun mapsExtendedAniListFieldsWithoutDachData() {
+        val repository = AnticipatedTitlesRepository(ApplicationProvider.getApplicationContext())
+        val parsed = repository.parse(pageResponse(7, hasNext = false), observedAt = 123) as AnticipatedLoadResult.Success
+        val title = parsed.titles.single()
+        assertEquals(70_000, title.popularity)
+        assertEquals(7_000, title.favourites)
+        assertEquals(24, title.episodes)
+        assertEquals(8, title.nextAiringEpisode)
+        assertEquals(1_800_000_007L, title.nextAiringAt)
+        assertEquals(DachLicenseStatus.UNKNOWN, title.dachLicenseStatus)
+    }
+
     @Test fun rankingKeepsOnlyFutureAndUsesPopularity() {
         val items = listOf(title(1, "A", "NOT_YET_RELEASED", 100_000), title(2, "B", "RELEASING", 200_000), title(3, "C", "NOT_YET_RELEASED", 50_000))
         assertEquals(listOf("A", "C"), AnticipatedRanking.rank(items, LocalDate.of(2026, 8, 24)).map { it.title })
@@ -60,6 +125,35 @@ class AnticipatedTitlesTest {
         )))
     }
 
+    @Test fun detailInstallmentConflictIsRejectedGenerically() {
+        val value = title(1, "Example Season 3 Cour 1", "NOT_YET_RELEASED", 1).copy(
+            identity = UpcomingAnimeIdentity("anilist:1", 1, null, null, setOf("Example Season 3 Cour 1"), null, 3)
+        )
+        assertTrue(AniSearchFutureMatcher.hasInstallmentConflict(value, setOf("Beispiel Staffel 2 Cour 1")))
+        assertTrue(AniSearchFutureMatcher.hasInstallmentConflict(value, setOf("Beispiel Staffel 3 Cour 2")))
+        assertFalse(AniSearchFutureMatcher.hasInstallmentConflict(value, setOf("Vollständig übersetzter Titel")))
+    }
+
+    @Test fun aniListJapanStartNeverBecomesDachAvailability() {
+        val media = JSONObject().apply {
+            put("id", 42); put("idMal", JSONObject.NULL)
+            put("title", JSONObject().put("romaji", "Generic Future").put("english", "Generic Future").put("native", "未来"))
+            put("synonyms", JSONArray())
+            put("startDate", JSONObject().put("year", 2027).put("month", 1).put("day", 8))
+            put("relations", JSONObject().put("edges", JSONArray()))
+            put("coverImage", JSONObject())
+            put("status", "NOT_YET_RELEASED"); put("popularity", 100); put("trending", 10)
+            put("season", "WINTER"); put("seasonYear", 2027); put("format", "TV")
+            put("studios", JSONObject().put("nodes", JSONArray()))
+        }
+        val json = JSONObject().put("data", JSONObject().put("Page", JSONObject().put("media", JSONArray().put(media)))).toString()
+        val repository = AnticipatedTitlesRepository(ApplicationProvider.getApplicationContext())
+        val parsed = repository.parse(json, observedAt = 123) as AnticipatedLoadResult.Success
+        assertEquals(LocalDate.of(2027, 1, 8), parsed.titles.single().startDate)
+        assertEquals(null, parsed.titles.single().dachAvailableFrom)
+        assertEquals(DachLicenseStatus.UNKNOWN, parsed.titles.single().dachLicenseStatus)
+    }
+
     @Test fun dachUsesAvailabilityDateNotDetectionDate() {
         val confirmed = title(1,"A","NOT_YET_RELEASED",1).copy(dachLicenseStatus=DachLicenseStatus.CONFIRMED, dachProvider="Crunchyroll", dachAvailableFrom=LocalDate.of(2026,10,3), sourceObservedAt=1_795_000_000, firstDetectedAt=1_795_000_000)
         assertEquals("DACH · ab 03.10.2026 · Anbieter: Crunchyroll · Bestätigt", AnticipatedDachFormatter.format(confirmed))
@@ -82,4 +176,22 @@ class AnticipatedTitlesTest {
         coverUrl=null, description=null, season="FALL", seasonYear=2026, startDate=LocalDate.of(2026,10,1), status=status,
         popularity=popularity, trending=0, studio=null, format="TV", sourceObservedAt=1, firstDetectedAt=1, updatedAt=1
     )
+
+    private fun pageResponse(id: Int, hasNext: Boolean): String {
+        val media = JSONObject().apply {
+            put("id", id); put("idMal", JSONObject.NULL)
+            put("title", JSONObject().put("romaji", "Title $id").put("english", "Title $id").put("native", "Title $id"))
+            put("synonyms", JSONArray())
+            put("startDate", JSONObject().put("year", 2027).put("month", 1).put("day", id.coerceAtMost(28)))
+            put("relations", JSONObject().put("edges", JSONArray()))
+            put("coverImage", JSONObject())
+            put("status", "NOT_YET_RELEASED"); put("popularity", id * 10_000); put("favourites", id * 1_000); put("trending", id)
+            put("season", "WINTER"); put("seasonYear", 2027); put("format", "TV"); put("episodes", 24)
+            put("nextAiringEpisode", JSONObject().put("episode", 8).put("airingAt", 1_800_000_000L + id))
+            put("studios", JSONObject().put("nodes", JSONArray()))
+        }
+        return JSONObject().put("data", JSONObject().put("Page", JSONObject()
+            .put("pageInfo", JSONObject().put("hasNextPage", hasNext))
+            .put("media", JSONArray().put(media)))).toString()
+    }
 }
