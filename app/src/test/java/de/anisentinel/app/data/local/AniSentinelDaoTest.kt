@@ -375,6 +375,26 @@ class AniSentinelDaoTest {
     }
 
     @Test
+    fun `seasonal favorite catalog keeps more than one hundred distinct entries`() = runBlocking {
+        val anime = (1..120).map { index ->
+            anime("anticipated-$index", "Anticipated $index").copy(anilistId = index)
+        }
+        dao.upsertAnime(anime)
+        dao.replaceCatalogEntries(
+            "UPCOMING_FAVORITES",
+            anime.mapIndexed { position, item ->
+                CatalogEntryEntity("UPCOMING_FAVORITES", item.id, position, 100)
+            }
+        )
+
+        assertEquals(120, dao.catalogEntryCount("UPCOMING_FAVORITES"))
+        assertEquals(
+            anime.map { it.id },
+            dao.observeCatalog("UPCOMING_FAVORITES").first().map { it.id }
+        )
+    }
+
+    @Test
     fun `release window returns only matching real dates`() = runBlocking {
         dao.upsertAnime(
             listOf(

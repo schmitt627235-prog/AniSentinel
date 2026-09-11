@@ -892,6 +892,15 @@ interface AniSentinelDao {
         upsertCatalogEntries(entries)
     }
 
+    @Transaction
+    suspend fun replaceCatalogEntries(
+        catalogType: String,
+        entries: List<CatalogEntryEntity>
+    ) {
+        deleteCatalogEntries(catalogType)
+        upsertCatalogEntries(entries)
+    }
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertAnimeIfAbsent(anime: AnimeEntity)
 

@@ -106,15 +106,29 @@ class AnticipatedTitlesViewModel(application: Application) : AndroidViewModel(ap
         val anime = title.toAnimeEntity()
         if (enabled) {
             dao.upsertAnime(listOf(anime))
-            dao.upsertCatalogEntries(listOf(CatalogEntryEntity(UPCOMING_FAVORITES, anime.id, 0, java.time.Instant.now().epochSecond)))
         }
         container.favoritesRepository.setFavoriteEnabled(anime.id, enabled, "BOTH", "standard")
+        // Rebuild the complete mapping so every future favorite receives its own stable
+        // position. Using position 0 for every title violated the catalog's unique index
+        // and caused all but the first seasonal favorite to be dropped.
+        syncFavoriteMetadata(_state.value.titles)
     }
 
     private suspend fun syncFavoriteMetadata(titles: List<AnticipatedTitle>) {
         val activeIds = dao.activeFavorites().mapTo(mutableSetOf()) { it.animeId }
-        val updates = titles.filter { "anilist:${it.identity.aniListId}" in activeIds }.map(AnticipatedTitle::toAnimeEntity)
+        val indexedUpdates = titles.mapIndexedNotNull { position, title ->
+            title.takeIf { "anilist:${it.identity.aniListId}" in activeIds }
+                ?.let { position to it.toAnimeEntity() }
+        }
+        val updates = indexedUpdates.map { it.second }
         if (updates.isNotEmpty()) dao.upsertAnime(updates)
+        val fetchedAt = java.time.Instant.now().epochSecond
+        dao.replaceCatalogEntries(
+            UPCOMING_FAVORITES,
+            indexedUpdates.map { (position, anime) ->
+                CatalogEntryEntity(UPCOMING_FAVORITES, anime.id, position, fetchedAt)
+            }
+        )
     }
 
     private suspend fun refreshNews(title: AnticipatedTitle, force: Boolean) {

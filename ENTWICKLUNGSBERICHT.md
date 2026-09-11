@@ -8,6 +8,7 @@ README.md, CHANGELOG.md und SOURCES.md bleiben als eigenständige Projektdokumen
 
 ## AniSentinel v0.25.16 Build 18 – aktueller Abschlussstand
 
+- **Season-Favoriten-Hotfix vom 11.09.2026:** Die Katalogtabelle erzwingt eine eindeutige Position je Katalog, beim Favorisieren eines erwarteten Titels wurde jedoch immer Position `0` verwendet. Deshalb war in „Favoriten → Season“ nur ein Eintrag sichtbar. AniSentinel baut die Zuordnung nun aus allen aktiven AniList-Favoriten mit ihren tatsächlichen Listenpositionen vollständig neu auf; das repariert auch vorhandene Bestände beim nächsten Laden. Ein Room-Regressionstest mit 120 Einträgen bestand. Debug-APK und gezielter Testlauf waren erfolgreich, das Update wurde per `adb install -r` installiert und ohne Datenlöschung gestartet.
 - „Heiß erwartete Titel“ nutzt weiterhin AniLists offizielle GraphQL-API mit `NOT_YET_RELEASED` und `POPULARITY_DESC`. Der reale Gerätetest vom 11.09.2026 lieferte für Seite 1 HTTP 403 mit AniLists eigener Meldung, die öffentliche API sei wegen schwerer Stabilitätsprobleme vorübergehend deaktiviert.
 - Damit Neuinstallationen und GitHub-Builds während dieser externen Störung nicht `Alle (0)` anzeigen, enthält die APK den letzten erfolgreich geprüften AniList-Grundbestand: 699 empfangene Rohdatensätze, davon 694 nach dem bestehenden Future-Filter sichtbar. Ein erfolgreicher Liveabruf überschreibt den lokalen Cache weiterhin regulär.
 - Der AniList-Bestand wurde als eigener, auswählbarer Backupbereich ergänzt. Alte Schema-1-Backups ohne diesen Bereich bleiben lesbar.

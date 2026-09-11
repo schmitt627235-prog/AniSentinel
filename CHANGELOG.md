@@ -2,6 +2,9 @@
 
 ## 0.25.16
 
+- **Build-18-Hotfix:** Saisonale Favoriten erhalten nun eindeutige Katalogpositionen. Zuvor wurde jeder vorgemerkte Zukunftstitel auf Position `0` geschrieben, wodurch in „Favoriten → Season“ nur ein Titel übrig blieb.
+- Die Season-Zuordnung wird bei jedem erfolgreichen Laden der erwarteten Titel aus allen aktiven AniList-Favoriten neu aufgebaut. Dadurch wird auch ein bereits fehlerhafter lokaler Bestand automatisch repariert.
+- Ein Regressionstest bestätigt Speicherung, Reihenfolge und Abruf von 120 saisonalen Favoriten.
 - **Aktueller Build 18 / versionCode 64:** Eine frische Installation zeigt „Heiß erwartete Titel“ auch während der derzeitigen AniList-GraphQL-Störung aus einem mitgelieferten, zuletzt erfolgreich geprüften AniList-Grundbestand. Erfolgreiche Liveantworten ersetzen ihn automatisch.
 - Der AniList-Bestand ist als eigener Bereich im JSON-Backup auswählbar und wird nach einer Neuinstallation wiederhergestellt.
 - Backup-Restore-Absturz behoben: Fehlende Anime-Elterndatensätze werden vor ihren Favoriten angelegt, sodass Room-Fremdschlüssel nach einer Neuinstallation nicht mehr verletzt werden.
