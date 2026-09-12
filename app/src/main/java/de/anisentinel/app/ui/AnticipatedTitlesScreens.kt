@@ -56,6 +56,7 @@ data class AnticipatedUiState(
     val titles: List<AnticipatedTitle> = emptyList(),
     val favoriteAniListIds: Set<Int> = emptySet(),
     val titleNews: Map<Int, List<AnnouncementEntity>> = emptyMap(),
+    val newsLoading: Set<Int> = emptySet(),
     val newsFailures: Set<Int> = emptySet(),
     val error: String? = null
 )
@@ -99,7 +100,7 @@ class AnticipatedTitlesViewModel(application: Application) : AndroidViewModel(ap
         _state.value.titles.firstOrNull { it.identity.aniListId == aniListId }?.let { refreshNews(it, force = true) }
     }
 
-    fun loadNews(title: AnticipatedTitle) = viewModelScope.launch { refreshNews(title, force = false) }
+    fun loadNews(title: AnticipatedTitle) = viewModelScope.launch { refreshNews(title, force = true) }
 
     fun toggleFavorite(title: AnticipatedTitle) = viewModelScope.launch {
         val enabled = title.identity.aniListId !in _state.value.favoriteAniListIds
@@ -133,12 +134,34 @@ class AnticipatedTitlesViewModel(application: Application) : AndroidViewModel(ap
 
     private suspend fun refreshNews(title: AnticipatedTitle, force: Boolean) {
         val id = title.identity.aniListId
-        when (val result = container.newsRepository.searchForTitle(title.identity.titles, force = force)) {
+        _state.value = _state.value.copy(newsLoading = _state.value.newsLoading + id)
+        // Persist the AniList identity first. JustWatch is enrichment only and must never
+        // create a second anime record for the same upcoming title.
+        dao.upsertAnime(listOf(title.toAnimeEntity()))
+        val enrichment = container.justWatchCatalogRepository.enrichUpcoming(
+            animeId = "anilist:$id",
+            aliases = title.identity.titles,
+            year = title.startDate?.year ?: title.seasonYear,
+            format = title.format,
+            seasonNumber = title.identity.seasonNumber
+        )
+        val enriched = if (enrichment == null) title else title.copy(
+            germanTitle = enrichment.germanTitle,
+            identity = title.identity.copy(titles = title.identity.titles + enrichment.germanTitle),
+            justWatchProviders = enrichment.providers,
+            justWatchUrl = enrichment.justWatchUrl
+        )
+        _state.value = _state.value.copy(titles = _state.value.titles.map { if (it.identity.aniListId == id) enriched else it })
+        when (val result = container.newsRepository.searchForTitle(enriched.identity.titles, force = force)) {
             is Anime2YouTitleNewsResult.Success -> _state.value = _state.value.copy(
                 titleNews = _state.value.titleNews + (id to result.items),
-                newsFailures = _state.value.newsFailures - id
+                newsFailures = _state.value.newsFailures - id,
+                newsLoading = _state.value.newsLoading - id
             )
-            is Anime2YouTitleNewsResult.Failure -> _state.value = _state.value.copy(newsFailures = _state.value.newsFailures + id)
+            is Anime2YouTitleNewsResult.Failure -> _state.value = _state.value.copy(
+                newsFailures = _state.value.newsFailures + id,
+                newsLoading = _state.value.newsLoading - id
+            )
         }
     }
 
@@ -149,7 +172,9 @@ private fun AnticipatedTitle.toAnimeEntity(): AnimeEntity {
     val now = java.time.Instant.now().epochSecond
     return AnimeEntity(
         id = "anilist:${identity.aniListId}", anilistId = identity.aniListId, anisearchId = null,
-        titleGerman = englishTitle ?: title, titleEnglish = englishTitle, titleRomaji = title,
+        // AnimeEntity predates nullable localized titles. An empty value means that no
+        // verified German title is known; English/Romaji remain in their own fields.
+        titleGerman = germanTitle.orEmpty(), titleEnglish = englishTitle, titleRomaji = title,
         titleNative = nativeTitle, description = description.orEmpty(), coverUrl = coverUrl, bannerUrl = null,
         season = season, seasonYear = seasonYear, totalEpisodes = episodes, updatedAt = now,
         nextAiringAt = startDate?.atStartOfDay(ZoneId.systemDefault())?.toEpochSecond(),
@@ -234,17 +259,27 @@ fun AnticipatedTitleDetailScreen(padding: PaddingValues, aniListId: Int, onBack:
         Button(onClick = { vm.toggleFavorite(title) }, modifier = Modifier.fillMaxWidth()) {
             Text(if (aniListId in state.favoriteAniListIds) "Favorisiert" else "Favorisieren")
         }
-        InfoCard("Verfügbarkeit", "AniWorld: Noch nicht verfügbar\nMonitoring: ${if (aniListId in state.favoriteAniListIds) "Aktiv" else "Inaktiv"}")
+        InfoCard("Verfügbarkeit", buildString {
+            if (title.justWatchProviders.isEmpty()) append("Streaminganbieter derzeit noch nicht bestätigt")
+            else append("Streaming DACH: ${title.justWatchProviders.sorted().joinToString(" · ")}")
+            append("\nMonitoring: ${if (aniListId in state.favoriteAniListIds) "Aktiv" else "Inaktiv"}")
+        })
         title.description?.let { InfoCard(stringResource(R.string.synopsis), it.replace(Regex("<[^>]+>"), "")) }
         Text("Aktuelle News", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         val news = state.titleNews[aniListId].orEmpty()
-        if (aniListId in state.newsFailures) {
+        if (aniListId in state.newsLoading) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 3.dp)
+                Text("Release-News werden automatisch aktualisiert.")
+            }
+        } else if (aniListId in state.newsFailures) {
             Text("News konnten derzeit nicht geladen werden.", color = MaterialTheme.colorScheme.error)
         } else if (news.isEmpty()) {
-            Text("Derzeit keine aktuellen News zu diesem Titel gefunden.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Derzeit keine release-relevanten News zu diesem Titel gefunden.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else news.forEach { item ->
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(releaseNewsLabels(item.type).joinToString(" · "), color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Bold)
                     Text("Anime2You · ${java.time.Instant.ofEpochSecond(item.publishedAt).atZone(ZoneId.systemDefault()).toLocalDate().format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))}")
                     Text(item.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     item.summary?.take(240)?.let { Text(it) }
@@ -254,6 +289,19 @@ fun AnticipatedTitleDetailScreen(padding: PaddingValues, aniListId: Int, onBack:
             }
         }
     }
+    }
+}
+
+private fun releaseNewsLabels(value: String): List<String> = value.split('+').mapNotNull {
+    when (it) {
+        "RELEASE_DATE" -> "Starttermin"
+        "POSTPONEMENT" -> "Verschoben"
+        "STREAMING_PROVIDER" -> "Streaminganbieter"
+        "DACH_LICENSE" -> "DACH-Lizenz"
+        "NO_DACH_STREAMING_LICENSE" -> "Keine DACH-Streaminglizenz"
+        "PHYSICAL_RELEASE_ONLY" -> "DVD / Blu-ray"
+        "TRAILER_TEASER" -> "Trailer / Teaser"
+        else -> null
     }
 }
 

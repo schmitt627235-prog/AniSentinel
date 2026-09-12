@@ -46,8 +46,14 @@ internal data class AnnouncementCandidate(
     val source: String,
     val sourceUrl: String,
     val imageUrl: String? = null,
-    val animeId: String? = null
+    val animeId: String? = null,
+    val releaseCategories: Set<ReleaseNewsCategory> = emptySet()
 )
+
+enum class ReleaseNewsCategory {
+    RELEASE_DATE, POSTPONEMENT, STREAMING_PROVIDER, DACH_LICENSE,
+    NO_DACH_STREAMING_LICENSE, PHYSICAL_RELEASE_ONLY, TRAILER_TEASER
+}
 
 class Anime2YouNewsRepository(
     private val dao: AniSentinelDao,
@@ -66,9 +72,10 @@ class Anime2YouNewsRepository(
         now: Instant = Instant.now(),
         force: Boolean = false
     ): Anime2YouTitleNewsResult = mutex.withLock {
-        val queries = Anime2YouTitleVariants.build(titles)
+        val aliases = Anime2YouTitleVariants.build(titles)
+        val queries = Anime2YouTitleVariants.searchQueries(aliases)
         if (queries.isEmpty()) return@withLock Anime2YouTitleNewsResult.Success(emptyList(), Anime2YouSearchMetrics())
-        val cacheKey = "v${Anime2YouTitleNewsCachePolicy.VERSION}:" + queries.map(Anime2YouTitleNormalizer::normalize).sorted().joinToString("|")
+        val cacheKey = "v${Anime2YouTitleNewsCachePolicy.VERSION}:" + aliases.map(Anime2YouTitleNormalizer::normalize).sorted().joinToString("|")
         titleNewsCache[cacheKey]?.takeIf { !force && Anime2YouTitleNewsCachePolicy.isFresh(it.storedAt, now.epochSecond, it.items.size) }?.let {
             Log.d(TAG, "ANIME2YOU_CACHE_HIT key=$cacheKey count=${it.items.size}")
             return@withLock Anime2YouTitleNewsResult.Success(it.items, Anime2YouSearchMetrics(cacheHit = true, accepted = it.items.size))
@@ -95,7 +102,7 @@ class Anime2YouNewsRepository(
                     raw += searchPage.rawCount
                     parsed += searchPage.items.size
                     searchPage.items.forEach { candidate ->
-                        val reason = Anime2YouTitleNewsMatcher.rejectionReason(candidate.title, candidate.summary, queries)
+                        val reason = Anime2YouTitleNewsMatcher.rejectionReason(candidate.title, candidate.summary, aliases)
                         val url = Anime2YouSearchParser.canonicalUrl(candidate.sourceUrl)
                         when {
                             reason != null -> {
@@ -107,7 +114,37 @@ class Anime2YouNewsRepository(
                                 Log.d(TAG, "ANIME2YOU_REJECTED_RESULTS reason=INVALID_URL title=${candidate.title}")
                             }
                             url in merged -> Log.d(TAG, "ANIME2YOU_REJECTED_RESULTS reason=DUPLICATE url=$url")
-                            else -> merged[url] = candidate.copy(sourceUrl = url)
+                            else -> {
+                                when (val article = transport.article(url)) {
+                                    is Anime2YouHttpResult.Failure -> {
+                                        rejected++
+                                        lastFailure = article.reason
+                                        Log.d(TAG, "ANIME2YOU_REJECTED_RESULTS reason=ARTICLE_${article.reason} url=$url")
+                                    }
+                                    is Anime2YouHttpResult.Success -> {
+                                        val detail = Anime2YouArticleParser.parse(article.body, url)
+                                        val detailReason = Anime2YouTitleNewsMatcher.rejectionReason(
+                                            detail.title, detail.text, aliases
+                                        )
+                                        val categories = Anime2YouReleaseNewsClassifier.classify(detail.title, detail.text)
+                                        if (detailReason != null) {
+                                            rejected++
+                                            Log.d(TAG, "ANIME2YOU_REJECTED_RESULTS reason=$detailReason url=$url")
+                                        } else if (categories.isEmpty()) {
+                                            rejected++
+                                            Log.d(TAG, "ANIME2YOU_REJECTED_RESULTS reason=NOT_RELEASE_RELEVANT url=$url")
+                                        } else {
+                                            merged[url] = candidate.copy(
+                                                title = detail.title.ifBlank { candidate.title },
+                                                summary = detail.relevantSummary,
+                                                publishedAt = detail.publishedAt ?: candidate.publishedAt,
+                                                sourceUrl = url,
+                                                releaseCategories = categories
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -212,7 +249,7 @@ object Anime2YouNewsCachePolicy {
 }
 
 object Anime2YouTitleNewsCachePolicy {
-    const val VERSION = 2
+    const val VERSION = 3
     private const val MAX_AGE_SECONDS = 6 * 60 * 60L
     fun isFresh(storedAt: Long, now: Long, resultCount: Int, version: Int = VERSION): Boolean =
         version == VERSION && resultCount > 0 && storedAt <= now && now - storedAt < MAX_AGE_SECONDS
@@ -222,10 +259,33 @@ object Anime2YouTitleNormalizer {
     fun normalize(value: String): String = Normalizer.normalize(value, Normalizer.Form.NFKC)
         .lowercase(Locale.GERMAN)
         .replace('×', 'x')
+        .replace(Regex("\\brussiya(?=-go\\b)"), "russia")
         .replace(Regex("<[^>]+>"), " ")
         .replace(Regex("[^\\p{L}\\p{N}]+"), " ")
         .replace(Regex("\\s+"), " ")
         .trim()
+        .let(::canonicalizeInstallment)
+
+    private fun canonicalizeInstallment(value: String): String {
+        var normalized = value
+            .replace(Regex("\\b(?:erste[rsn]?) staffel\\b"), "season 1")
+            .replace(Regex("\\b(?:zweite[rsn]?) staffel\\b"), "season 2")
+            .replace(Regex("\\b(?:dritte[rsn]?) staffel\\b"), "season 3")
+            .replace(Regex("\\b(?:vierte[rsn]?) staffel\\b"), "season 4")
+            .replace(Regex("\\b(?:second|zweite[rsn]?) season\\b"), "season 2")
+            .replace(Regex("\\b(?:third|dritte[rsn]?) season\\b"), "season 3")
+            .replace(Regex("\\b(?:fourth|vierte[rsn]?) season\\b"), "season 4")
+            .replace(Regex("\\bdai\\s+san\\s+maku\\b"), "season 3")
+            .replace(Regex("\\b(\\d+)(?:st|nd|rd|th) season\\b"), "season ${'$'}1")
+            .replace(Regex("\\bstaffel\\s*(\\d+)\\b"), "season ${'$'}1")
+            .replace(Regex("\\berste[rsn]?\\b"), "1")
+            .replace(Regex("\\bzweite[rsn]?\\b"), "2")
+            .replace(Regex("\\bdritte[rsn]?\\b"), "3")
+            .replace(Regex("\\bvierte[rsn]?\\b"), "4")
+            .replace(Regex("\\bstaffel\\b"), "season")
+        normalized = normalized.replace(Regex("\\s+"), " ").trim()
+        return normalized
+    }
 }
 
 object Anime2YouTitleVariants {
@@ -234,8 +294,38 @@ object Anime2YouTitleVariants {
             add(title)
             title.replace(Regex("^(?:the|a|an)\\s+", RegexOption.IGNORE_CASE), "")
                 .trim().takeIf { it.length >= 2 && it != title }?.let(::add)
+            val shortName = title.substringBefore(':').trim()
+            val installment = installmentNumber(title)
+            if (shortName != title && shortName.length >= 3 && installment != null) {
+                add("$shortName Season $installment")
+            }
         }
-    }.distinctBy(Anime2YouTitleNormalizer::normalize).filter { Anime2YouTitleNormalizer.normalize(it).length >= 2 }
+    // Keep genuinely different search spellings (for example "2nd Season" and "Season 2").
+    // Anime2You's WordPress search may return different results for them; semantic
+    // installment canonicalization is only used later when validating a result.
+    }.distinctBy { it.lowercase(Locale.GERMAN).replace(Regex("\\s+"), " ").trim() }
+        .filter { Anime2YouTitleNormalizer.normalize(it).length >= 2 }
+
+    fun searchQueries(aliases: Iterable<String>): List<String> = buildSet {
+        val values = aliases.toList()
+        addAll(values)
+        values.forEach { title ->
+            title.replace(
+                Regex("(?i)\\s+(?:(?:season|staffel)\\s*\\d+|\\d+(?:st|nd|rd|th)\\s+season|(?:second|third|fourth)\\s+season|第\\s*\\d+\\s*期)\\s*$"),
+                ""
+            ).trim().takeIf { it.length >= 4 && it != title }?.let(::add)
+        }
+    }.distinctBy { it.lowercase(Locale.GERMAN).replace(Regex("\\s+"), " ").trim() }
+
+    private fun installmentNumber(title: String): Int? {
+        val direct = Regex("(?i)(?:season|staffel)\\s*(\\d+)|(\\d+)(?:st|nd|rd|th)\\s+season")
+            .find(title)?.groupValues?.drop(1)?.firstNotNullOfOrNull(String::toIntOrNull)
+        if (direct != null) return direct
+        return when {
+            Regex("(?i)\\bdai\\s+san\\s+maku\\b").containsMatchIn(title) -> 3
+            else -> null
+        }
+    }
 }
 
 object Anime2YouTitleNewsMatcher {
@@ -246,7 +336,7 @@ object Anime2YouTitleNewsMatcher {
             .filter { "Anime2You" in it.sources.lines() }
             .filter { item ->
                 val text = Anime2YouTitleNormalizer.normalize("${item.title} ${item.summary.orEmpty()}")
-                aliases.any { alias -> text.contains(alias) || alias.contains(text) }
+                aliases.any { alias -> matchesAlias(text, alias) }
             }
             .distinctBy { it.announcementId }
             .sortedByDescending { it.publishedAt }
@@ -256,13 +346,104 @@ object Anime2YouTitleNewsMatcher {
     fun rejectionReason(title: String, summary: String?, aliases: Iterable<String>): String? {
         val normalizedAliases = Anime2YouTitleVariants.build(aliases).map(Anime2YouTitleNormalizer::normalize).filter { it.length >= 4 }
         val text = Anime2YouTitleNormalizer.normalize("$title ${summary.orEmpty()}")
-        return if (normalizedAliases.any { text.contains(it) || it.contains(text) }) null else "TITLE_MISMATCH"
+        val expectedSeasons = normalizedAliases.mapNotNull(::installmentNumber).toSet()
+        val actualSeason = installmentNumber(text)
+        if (expectedSeasons.size == 1 && actualSeason != null && actualSeason !in expectedSeasons) return "TITLE_MISMATCH"
+        // If the AniList title identifies a concrete installment, the article must identify the
+        // same installment as well. An unnumbered franchise article is not safe to assign to it.
+        if (expectedSeasons.singleOrNull() != null && actualSeason == null) return "TITLE_MISMATCH"
+        return if (normalizedAliases.any { matchesAlias(text, it) }) null else "TITLE_MISMATCH"
+    }
+
+    private fun installmentNumber(normalized: String): Int? {
+        val tokens = normalized.split(' ')
+        val seasonIndex = tokens.indexOf("season").takeIf { it >= 0 } ?: return null
+        return (1..12).asSequence().flatMap { distance ->
+            sequenceOf(seasonIndex - distance, seasonIndex + distance)
+        }.filter { it in tokens.indices }.mapNotNull { tokens[it].toIntOrNull() }.firstOrNull()
+    }
+
+    private fun matchesAlias(text: String, alias: String): Boolean {
+        if (text.contains(alias) || alias.contains(text)) return true
+        val aliasTokens = alias.split(' ').filter { it.length >= 2 }.toSet()
+        if (aliasTokens.size < 2) return false
+        val textTokens = text.split(' ').toSet()
+        if (aliasTokens.all(textTokens::contains)) return true
+        val noise = setOf("the", "a", "an", "in", "of", "and", "her", "his", "season", "staffel")
+        val core = aliasTokens.filterNot { it in noise || it.all(Char::isDigit) }.toSet()
+        val overlap = core.count(textTokens::contains)
+        return core.size >= 3 && overlap >= 3 && overlap * 2 >= core.size
     }
 }
 
 sealed interface Anime2YouHttpResult {
     data class Success(val status: Int, val body: String, val url: String) : Anime2YouHttpResult
     data class Failure(val reason: String) : Anime2YouHttpResult
+}
+
+internal data class Anime2YouArticle(
+    val title: String,
+    val text: String,
+    val relevantSummary: String?,
+    val publishedAt: Instant?
+)
+
+internal object Anime2YouArticleParser {
+    fun parse(html: String, baseUrl: String): Anime2YouArticle {
+        val document = Jsoup.parse(html, baseUrl)
+        val title = document.selectFirst("h1.entry-title, h1.tdb-title-text")?.text()?.trim().orEmpty()
+        val body = document.selectFirst(".td-post-content, .tdb_single_content, article")
+        val text = body?.text()?.replace(Regex("\\s+"), " ")?.trim().orEmpty()
+        val published = document.selectFirst("time[datetime]")?.attr("datetime")
+            ?.let { runCatching { OffsetDateTime.parse(it).toInstant() }.getOrNull() }
+        val relevant = text.split(Regex("(?<=[.!?])\\s+"))
+            .filter { Anime2YouReleaseNewsClassifier.classify(title, it).isNotEmpty() }
+            .joinToString(" ").take(420).takeIf(String::isNotBlank)
+        return Anime2YouArticle(title, text, relevant, published)
+    }
+}
+
+object Anime2YouReleaseNewsClassifier {
+    private val postponement = Regex("verschob|verzöger|verspät|pause|unterbrech|neuer termin|wiederaufnahme", RegexOption.IGNORE_CASE)
+    private val releaseDate = Regex("start(?:et|termin|datum)?|erscheint|ausstrahlung|sendestart|ab dem|premiere|veröffentlich", RegexOption.IGNORE_CASE)
+    private val streaming = Regex("stream|simulcast|crunchyroll|netflix|disney\\+|adn|aniverse|amazon(?: prime)? video", RegexOption.IGNORE_CASE)
+    private val dach = Regex("deutschland|deutschsprach|dach|hierzulande|deutschen raum|deutsche lizenz|deutscher simulcast", RegexOption.IGNORE_CASE)
+    private val noDach = Regex("keine? (?:deutsche |dach[- ]?)?(?:streaming)?lizenz|kein simulcast (?:in|für) (?:deutschland|den deutschsprachigen raum)|nicht (?:in deutschland|im deutschsprachigen raum) verfügbar", RegexOption.IGNORE_CASE)
+    private val physical = Regex("dvd|blu[ -]?ray|disc|home video|heimvideo|komplettbox|steelbook|collector'?s edition|volume|releaseplan", RegexOption.IGNORE_CASE)
+    private val irrelevantOnly = Regex("merchandise|figur|\\bcd\\b|soundtrack|gewinnspiel|ranking|verkaufszahl|interview|sprecher|cast|manga|game|spiel", RegexOption.IGNORE_CASE)
+    private val editorialOnly = Regex("autor(?:in)?|schöpfer|verspricht|warten.+lohnt|soll.+maßstäbe setzen|statement|kommentar", RegexOption.IGNORE_CASE)
+    private val cooperationOnly = Regex("kooperation|kollaboration|collaboration|crossover|wirbt für|werbekampagne", RegexOption.IGNORE_CASE)
+    private val trailerTeaser = Regex("trailer|teaser", RegexOption.IGNORE_CASE)
+
+    fun classify(title: String, articleText: String): Set<ReleaseNewsCategory> {
+        val text = "$title $articleText"
+        val explicitlyNoDach = noDach.containsMatchIn(text)
+        val hasTrailerOrTeaser = trailerTeaser.containsMatchIn(title)
+        val hasPhysicalRelease = physical.containsMatchIn(title)
+        val hasProviderOrLicenseAnnouncement =
+            (streaming.containsMatchIn(title) && Regex("zeigt|streamt|simulcast|anbieter|lizenz|lizenziert|weltweit|auf abruf|programm|katalog|exklusiv|bei\\s+(?:crunchyroll|netflix|disney\\+|adn|aniverse|amazon)", RegexOption.IGNORE_CASE).containsMatchIn(title)) ||
+                (dach.containsMatchIn(title) && Regex("lizenz|lizenziert|simulcast|stream", RegexOption.IGNORE_CASE).containsMatchIn(title)) ||
+                explicitlyNoDach
+        val hasDatedRelease = releaseDate.containsMatchIn(text) && Regex("\\b(?:19|20)\\d{2}\\b|\\b\\d{1,2}\\.\\s*(?:januar|februar|märz|april|mai|juni|juli|august|september|oktober|november|dezember)|frühling|sommer|herbst|winter", RegexOption.IGNORE_CASE).containsMatchIn(text)
+        val hasConcreteReleaseSignal = postponement.containsMatchIn(text) ||
+            hasDatedRelease || hasTrailerOrTeaser || hasPhysicalRelease || hasProviderOrLicenseAnnouncement
+        // Provider names are commonly mentioned incidentally in merchandise, cast and trailer
+        // articles. Such a mention must not turn an otherwise irrelevant article into release news.
+        if (irrelevantOnly.containsMatchIn(title) || editorialOnly.containsMatchIn(title) || cooperationOnly.containsMatchIn(title)) return emptySet()
+        if (!hasConcreteReleaseSignal) return emptySet()
+        if (Regex("trailer|visual|poster|charakterbild", RegexOption.IGNORE_CASE).containsMatchIn(title) &&
+            !hasConcreteReleaseSignal) return emptySet()
+        val categories = buildSet {
+            if (postponement.containsMatchIn(text)) add(ReleaseNewsCategory.POSTPONEMENT)
+            if (releaseDate.containsMatchIn(text) && (Regex("\\b(?:19|20)\\d{2}\\b|\\b\\d{1,2}\\.\\s*(?:januar|februar|märz|april|mai|juni|juli|august|september|oktober|november|dezember)|frühling|sommer|herbst|winter", RegexOption.IGNORE_CASE).containsMatchIn(text))) add(ReleaseNewsCategory.RELEASE_DATE)
+            if (streaming.containsMatchIn(text)) add(ReleaseNewsCategory.STREAMING_PROVIDER)
+            if (!explicitlyNoDach && dach.containsMatchIn(text) && streaming.containsMatchIn(text)) add(ReleaseNewsCategory.DACH_LICENSE)
+            if (explicitlyNoDach) add(ReleaseNewsCategory.NO_DACH_STREAMING_LICENSE)
+            if (hasPhysicalRelease) add(ReleaseNewsCategory.PHYSICAL_RELEASE_ONLY)
+            if (hasTrailerOrTeaser) add(ReleaseNewsCategory.TRAILER_TEASER)
+        }
+        return categories
+    }
 }
 
 internal data class Anime2YouSearchPage(val rawCount: Int, val items: List<AnnouncementCandidate>)
@@ -348,6 +529,30 @@ class Anime2YouNewsTransport(
             Anime2YouHttpResult.Failure(error.message ?: "NETWORK_ERROR")
         }
     }
+
+    suspend fun article(url: String): Anime2YouHttpResult = withContext(Dispatchers.IO) {
+        val canonical = Anime2YouSearchParser.canonicalUrl(url)
+            ?: return@withContext Anime2YouHttpResult.Failure("INVALID_ARTICLE_URL")
+        requestHtml(canonical)
+    }
+
+    private fun requestHtml(target: String): Anime2YouHttpResult = runCatching {
+        val connection = URL(target).openConnection() as HttpURLConnection
+        connection.connectTimeout = 12_000
+        connection.readTimeout = 18_000
+        connection.instanceFollowRedirects = true
+        connection.setRequestProperty("User-Agent", "AniSentinel/0.25.16 (+https://github.com/schmitt627235-prog/AniSentinel)")
+        connection.setRequestProperty("Accept", "text/html")
+        connection.setRequestProperty("Accept-Language", "de-DE,de;q=0.9,en;q=0.7")
+        connection.useCaches = true
+        val code = connection.responseCode
+        val finalUrl = connection.url.toString()
+        val bytes = (if (code in 200..299) connection.inputStream else connection.errorStream)
+            ?.use { it.readBytes() } ?: ByteArray(0)
+        if (bytes.size > 3_000_000) error("RESPONSE_TOO_LARGE")
+        if (code !in 200..299) Anime2YouHttpResult.Failure("HTTP_$code")
+        else Anime2YouHttpResult.Success(code, bytes.toString(Charsets.UTF_8), finalUrl)
+    }.getOrElse { Anime2YouHttpResult.Failure(it.message ?: "NETWORK_ERROR") }
 
     suspend fun fetch(): String? = withContext(Dispatchers.IO) {
         repeat(3) { attempt ->
@@ -459,7 +664,7 @@ private fun AnnouncementCandidate.toEntity(fetchedAt: Instant): AnnouncementEnti
     // A weekly proximity bucket prevents unrelated later changes from collapsing while allowing
     // Anime2You and AniWorld reports of the same current event to become confirmations.
     val keyMaterial = listOf(
-        normalizedSubject(title), type.name, seasonNumber ?: "", publishedAt.epochSecond / 604_800
+        normalizedSubject(title), releaseCategories.sortedBy { it.name }.joinToString("+").ifBlank { type.name }, seasonNumber ?: "", publishedAt.epochSecond / 604_800
     ).joinToString("|")
     val dedupeKey = sha256(keyMaterial)
     return AnnouncementEntity(
@@ -468,7 +673,7 @@ private fun AnnouncementCandidate.toEntity(fetchedAt: Instant): AnnouncementEnti
         animeId = animeId,
         title = title,
         summary = summary,
-        type = type.name,
+        type = releaseCategories.sortedBy { it.name }.joinToString("+").ifBlank { type.name },
         seasonNumber = seasonNumber,
         oldDate = oldDate?.epochSecond,
         newDate = newDate?.epochSecond,

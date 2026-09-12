@@ -6,6 +6,35 @@ README.md, CHANGELOG.md und SOURCES.md bleiben als eigenständige Projektdokumen
 
 ---
 
+## AniSentinel v0.25.16 Build 19 – Future-News und staffelgenaue Anime2You-Zuordnung
+
+### Anlass
+
+- Auf Detailseiten erwarteter Titel erschienen teils thematisch verwandte, für die konkrete Veröffentlichung aber irrelevante Anime2You-Beiträge: Autoren-Aussagen, Kooperationen, redaktionelle Rückblicke oder Meldungen zur ersten Staffel einer angezeigten Fortsetzung.
+- Gleichzeitig sollten echte Anbieter-/Lizenzbestätigungen nicht verloren gehen und die Detailseite beim Öffnen ohne zusätzlichen manuellen Refresh aktuelle Meldungen laden.
+
+### Umsetzung und Begründung
+
+- Die Future-Detailseite stößt die titelbezogene Anime2You-Aktualisierung beim Öffnen automatisch an. Pull-to-Refresh bleibt als bewusster erneuter Abruf erhalten.
+- Für Future-Detailseiten gilt global eine positive Whitelist. Zugelassen sind nur Trailer/Teaser, konkrete Starttermine, Verschiebungen/Pausen/neue Termine, Disc-Releases sowie konkrete Anbieter- oder Lizenzmeldungen.
+- Anbieter-/Lizenzmeldungen erkennen unter anderem Providername zusammen mit `Simulcast`, `weltweit`, `auf Abruf`, `Lizenz`, `Programm`, `Katalog` oder `exklusiv`. Eine bloße Providernennung im Fließtext reicht nicht.
+- Disc-Signale umfassen DVD, Blu-ray, Disc, Steelbook, Volume, Komplettbox, Collector's Edition und Releaseplan.
+- Kooperationen, Kollaborationen, Interviews, Versprechen von Autoren, redaktionelle Wertungen, Merchandising, Figuren, CDs, Soundtracks, Rankings und ähnliche Inhalte werden nur auf Future-Detailseiten verworfen. Der allgemeine News-Bereich behält seine breitere Nachrichtenauswahl.
+- Nennt der AniList-Titel eine konkrete Staffel oder Fortsetzung, muss auch der Anime2You-Artikel genau diese Staffel bezeichnen. Eine unnummerierte Franchise-Meldung wird nicht vorschnell einer Fortsetzung zugewiesen. Titel ohne Staffel-/Fortsetzungsangabe benötigen dagegen weiterhin keine künstliche Staffelnummer.
+- Titelvarianten wurden generisch erweitert: englische, Romaji-, native und synonyme Namen, deutsche JustWatch-Namen, ausgeschriebene und numerische Staffelvarianten, `Dai San Maku`, kurze Franchise-Aliase sowie `Russiya-go`/`Russia-go` werden abgeglichen.
+- Alte AniSearch-DACH-Cachedaten werden nicht mehr in den Future-Titelstamm zurückgemischt. Dadurch kann ein früherer Fremdtreffer einen AniList-Titel nicht mehr umbenennen. JustWatch-Anreicherung akzeptiert ebenfalls nur konservativ passende Titel.
+
+### Validierung
+
+- Gezielter Testlauf `Anime2YouNewsParserTest`: bestanden.
+- Abgedeckte Regressionen: Witch Hat Atelier Staffel 2 gegen Beiträge zur ersten Staffel, Trailer/Teaser, Anbieter-/Lizenzmeldungen, Kooperationen, Autoren-Aussagen, Disc-Signale und exakter Staffelabgleich.
+- `assembleDebug`: erfolgreich.
+- ADB-Gerät `R3CX4056Q8L`: als `device` erkannt.
+- Der zuvor inhaltlich identische Stand wurde erfolgreich per `adb install -r` installiert und gestartet. Nach der Versionscode-Anhebung auf Build 19 lehnte Android die abschließende Updateinstallation wegen einer abweichenden lokalen Debug-Signatur mit `INSTALL_FAILED_UPDATE_INCOMPATIBLE` ab.
+- Es wurde bewusst weder deinstalliert noch wurden App-Daten gelöscht. Die Build-19-APK bleibt für eine Neuinstallation verwendbar; für ein datenerhaltendes Update ist derselbe Signaturschlüssel wie bei der installierten Debug-App erforderlich.
+
+---
+
 ## AniSentinel v0.25.16 Build 18 – aktueller Abschlussstand
 
 - **Season-Favoriten-Hotfix vom 11.09.2026:** Die Katalogtabelle erzwingt eine eindeutige Position je Katalog, beim Favorisieren eines erwarteten Titels wurde jedoch immer Position `0` verwendet. Deshalb war in „Favoriten → Season“ nur ein Eintrag sichtbar. AniSentinel baut die Zuordnung nun aus allen aktiven AniList-Favoriten mit ihren tatsächlichen Listenpositionen vollständig neu auf; das repariert auch vorhandene Bestände beim nächsten Laden. Ein Room-Regressionstest mit 120 Einträgen bestand. Debug-APK und gezielter Testlauf waren erfolgreich, das Update wurde per `adb install -r` installiert und ohne Datenlöschung gestartet.

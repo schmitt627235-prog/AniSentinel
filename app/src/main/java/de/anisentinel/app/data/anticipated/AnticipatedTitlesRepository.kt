@@ -65,7 +65,9 @@ data class AnticipatedTitle(
     val favourites: Int = 0,
     val episodes: Int? = null,
     val nextAiringEpisode: Int? = null,
-    val nextAiringAt: Long? = null
+    val nextAiringAt: Long? = null,
+    val justWatchProviders: Set<String> = emptySet(),
+    val justWatchUrl: String? = null
 )
 
 sealed interface AnticipatedLoadResult {
@@ -430,31 +432,9 @@ class AnticipatedTitlesRepository(
                     nextAiringEpisode = item.optJSONObject("nextAiringEpisode")?.optInt("episode")?.takeIf { it > 0 },
                     nextAiringAt = item.optJSONObject("nextAiringEpisode")?.optLong("airingAt")?.takeIf { it > 0 }
                 )
-                cache.getString("dach_$id", null)?.let { raw -> runCatching {
-                    val saved = JSONObject(raw)
-                    val cachedBase = anticipated.copy(
-                            identity = anticipated.identity.copy(aniSearchId = saved.optString("aniSearchId").takeIf(String::isNotBlank)),
-                            germanTitle = saved.optString("germanTitle").takeIf(String::isNotBlank),
-                            dachAvailablePeriod = saved.optString("period").takeIf(String::isNotBlank),
-                            dachSource = saved.optString("source").takeIf(String::isNotBlank)
-                        )
-                    anticipated = if (!saved.optBoolean("licensed", true)) {
-                        cachedBase.copy(
-                            dachLicenseStatus = DachLicenseStatus.NOT_LICENSED_YET,
-                            dachSourcePriority = 70,
-                            sourceObservedAt = saved.getLong("observedAt"),
-                            firstDetectedAt = saved.optLong("firstDetectedAt", saved.getLong("observedAt")),
-                            updatedAt = saved.getLong("observedAt")
-                        )
-                    } else AnticipatedDachResolver.apply(
-                        cachedBase,
-                        AnticipatedDachEvidence(
-                            saved.optString("provider").takeIf(String::isNotBlank),
-                            saved.optString("availableFrom").takeIf(String::isNotBlank)?.let(LocalDate::parse),
-                            saved.getString("source"), saved.getLong("observedAt"), 70
-                        )
-                    ).copy(firstDetectedAt = saved.optLong("firstDetectedAt", saved.getLong("observedAt")))
-                } }
+                // AniSearch is not part of the anticipated-title pipeline. In particular, do
+                // not rehydrate legacy dach_* aliases here: a stale match can otherwise replace
+                // an unrelated AniList title and poison the downstream news search.
                 add(anticipated)
             }
         }

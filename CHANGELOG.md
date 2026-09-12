@@ -2,6 +2,13 @@
 
 ## 0.25.16
 
+- **Build 19 / versionCode 65:** Die Future-Detailseite aktualisiert Anime2You-Meldungen beim Öffnen automatisch; ein manueller Pull-to-Refresh bleibt möglich.
+- Die Detailansicht verwendet eine globale positive News-Whitelist: Trailer/Teaser, Starttermine, Verschiebungen, Disc-Releases sowie konkrete Anbieter- und Lizenzmeldungen.
+- Kooperationen, Interviews, Autoren-Aussagen, redaktionelle Meinungen, Merchandising, Figuren, CDs, Soundtracks und Rankings bleiben aus Future-Detailseiten ausgeschlossen; der allgemeine News-Bereich bleibt davon unberührt.
+- Bei Fortsetzungen muss die im Artikel genannte Staffel mit der Staffel des AniList-Titels übereinstimmen. Unnummerierte Franchise-Meldungen und Meldungen zu älteren Staffeln werden nicht mehr einer Fortsetzung zugeordnet; eigenständige Titel ohne Staffelzusatz bleiben zulässig.
+- Englische, Romaji-, native und alternative Schreibweisen werden für Anime2You-Abfragen normalisiert. Dazu gehören Staffelvarianten, ausgeschriebene Ordinalzahlen, `Dai San Maku`, kurze Franchise-Aliase und die Schreibvariante `Russiya-go`/`Russia-go`.
+- Veraltete AniSearch-DACH-Cachedaten können Future-Titel nicht mehr umbenennen; konservatives JustWatch-Matching verhindert ebenfalls fremde Titelübernahmen.
+- Gezielte Anime2You-Parser-, Klassifizierungs-, Titel- und Staffeltests sowie die vollständige JVM-Testsuite bestanden; Debug-APK wurde gebaut. Die abschließende Build-19-Updateinstallation wurde wegen einer abweichenden lokalen Debug-Signatur von Android sicher abgelehnt; es wurden weder App noch App-Daten gelöscht.
 - **Build-18-Hotfix:** Saisonale Favoriten erhalten nun eindeutige Katalogpositionen. Zuvor wurde jeder vorgemerkte Zukunftstitel auf Position `0` geschrieben, wodurch in „Favoriten → Season“ nur ein Titel übrig blieb.
 - Die Season-Zuordnung wird bei jedem erfolgreichen Laden der erwarteten Titel aus allen aktiven AniList-Favoriten neu aufgebaut. Dadurch wird auch ein bereits fehlerhafter lokaler Bestand automatisch repariert.
 - Ein Regressionstest bestätigt Speicherung, Reihenfolge und Abruf von 120 saisonalen Favoriten.
