@@ -14,7 +14,7 @@ android {
         applicationId = "de.anisentinel.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 65
+        versionCode = 66
         versionName = "0.25.16"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

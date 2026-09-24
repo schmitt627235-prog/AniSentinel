@@ -6,6 +6,32 @@ README.md, CHANGELOG.md und SOURCES.md bleiben als eigenständige Projektdokumen
 
 ---
 
+## AniSentinel v0.25.16 Build 20 – Kalender-/AniWorld-Hotfix
+
+### Anlass
+
+- Der Kalender konnte beim AniWorld-Refresh abstürzen oder lange einen Ladezustand anzeigen. Historische Termine durften durch die begrenzte aktuelle AniWorld-Kalenderseite nicht verschwinden.
+- Nach dem GitHub-Zwischencommit verlangte der Nutzer ausdrücklich eine dazu passende herunterladbare APK und aktualisierte Release-Dokumentation.
+
+### Änderungen und Gründe
+
+- Der AniWorld-Kalenderparser überspringt einzelne ungültige Datums- oder Episodeneinträge mit Diagnose-Log, statt den ganzen Kalenderabruf scheitern zu lassen.
+- Der HTTP-Transport protokolliert Cache-/HTTP-Ergebnisse und erlaubt einen erzwungenen Refresh mit kürzerer Cache-Frist (fünf statt 30 Minuten). Leere oder unlesbare Cacheinhalte werden nicht als gültige Antwort übernommen.
+- Ein leerer oder nicht zum angefragten alten Monat passender öffentlicher Kalender löscht keine lokal erhaltene Historie. Ersetzungen sind auf den tatsächlich von AniWorld abgedeckten Zeitraum begrenzt.
+- Episoden werden beim Import direkt ihrem ermittelten Anime zugeordnet; eine mehrdeutige Titel-Rücksuche entfällt.
+- Der Kalender-ViewModel-Refresh begrenzt und beendet den Ladezustand auch bei Fehlern; Abbruchsignale werden korrekt weitergegeben. Diagnosen bleiben nachvollziehbar.
+- `versionCode` wurde für die neue Debug-APK von 65 auf 66 erhöht; `versionName` bleibt 0.25.16. README und Changelog nennen Build 20.
+
+### Validierung und Grenzen
+
+- Gezielter `AniWorldReleaseRepositoryTest`: 3 Tests, 0 Fehler. Der zuvor separat geprüfte Parser-Test umfasste 11 Tests, 0 Fehler.
+- `assembleDebug`: erfolgreich; APK-Metadaten zeigen `de.anisentinel.app`, `versionCode 66`, `versionName 0.25.16`.
+- Der erste Buildversuch traf auf einen lokalen Windows-Zugriffsfehler für das temporäre Kotlin-Compiler-Verzeichnis. Mit einem isolierten Temp-Verzeichnis innerhalb des Build-Checkouts liefen Tests und APK-Build erfolgreich; Projektlogik wurde dafür nicht geändert.
+- Kein Gerätetest für Build 20 erfolgt. Die Debug-Signatur kann von früher installierten APKs abweichen; ein datenerhaltendes Update ist nur bei identischem Signaturschlüssel möglich. Es wurden keine App-Daten gelöscht.
+- AKIBA PASS und Apple TV sind **nicht** Bestandteil von Build 20. Sie bleiben eine getrennte, noch zu implementierende und zu prüfende Provider-Erweiterung.
+
+---
+
 ## AniSentinel v0.25.16 Build 19 – Future-News und staffelgenaue Anime2You-Zuordnung
 
 ### Anlass

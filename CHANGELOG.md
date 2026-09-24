@@ -2,6 +2,7 @@
 
 ## 0.25.16
 
+- **Build 20 / versionCode 66:** Kalender-Aktualisierung und Ladezustand stabilisiert; ein Absturz beim AniWorld-Refresh wurde behoben. Gezielte Kalender-/AniWorld-Tests bestanden.
 - **Build 19 / versionCode 65:** Die Future-Detailseite aktualisiert Anime2You-Meldungen beim Öffnen automatisch; ein manueller Pull-to-Refresh bleibt möglich.
 - Die Detailansicht verwendet eine globale positive News-Whitelist: Trailer/Teaser, Starttermine, Verschiebungen, Disc-Releases sowie konkrete Anbieter- und Lizenzmeldungen.
 - Kooperationen, Interviews, Autoren-Aussagen, redaktionelle Meinungen, Merchandising, Figuren, CDs, Soundtracks und Rankings bleiben aus Future-Detailseiten ausgeschlossen; der allgemeine News-Bereich bleibt davon unberührt.

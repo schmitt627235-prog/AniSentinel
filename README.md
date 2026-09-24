@@ -1,6 +1,6 @@
 # AniSentinel
 
-Aktueller Diagnose-/Teststand: **v0.25.16 (Build 19, versionCode 65)**. „Heiß erwartete Titel“ zeigt reale, noch nicht gestartete Anime nach AniList-Popularity, bietet dynamische Saisonfilter und führt zu einer eigenen Future-Detailseite. Titelbezogene Anime2You-Meldungen werden automatisch aktualisiert und auf Trailer/Teaser, Starttermine, Verschiebungen, Disc-Releases sowie Anbieter-/Lizenzmeldungen derselben Staffel begrenzt. Die vier Einstellungsbereiche Kalender, Sync & Backup, Datenschutz und Anbieter bleiben funktionsfähig.
+Aktueller Diagnose-/Teststand: **v0.25.16 (Build 20, versionCode 66)**. „Heiß erwartete Titel“ zeigt reale, noch nicht gestartete Anime nach AniList-Popularity, bietet dynamische Saisonfilter und führt zu einer eigenen Future-Detailseite. Titelbezogene Anime2You-Meldungen werden automatisch aktualisiert und auf Trailer/Teaser, Starttermine, Verschiebungen, Disc-Releases sowie Anbieter-/Lizenzmeldungen derselben Staffel begrenzt. Die vier Einstellungsbereiche Kalender, Sync & Backup, Datenschutz und Anbieter bleiben funktionsfähig.
 
 Der Bereich **Entdecken** zeigt aus dem deutschen JustWatch-Datenbestand nur sicher als Anime erkannte Serien und Filme sowie ausdrücklich belegte Live-Action-Adaptionen. Der allgemeine JustWatch-Film- und Serienkatalog wird dort nicht angeboten.
 
