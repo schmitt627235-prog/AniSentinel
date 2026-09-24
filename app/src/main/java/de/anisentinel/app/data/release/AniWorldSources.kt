@@ -1,6 +1,7 @@
 package de.anisentinel.app.data.release
 
 import android.content.Context
+import android.util.Log
 import de.anisentinel.app.data.local.AnimeEntity
 import de.anisentinel.app.data.local.AniSentinelDao
 import de.anisentinel.app.data.local.EpisodeReleaseEntity
@@ -78,9 +79,14 @@ class AniWorldCalendarParser {
         val parsed = document.select("section.calendarList").flatMap { section ->
             val dateText = section.selectFirst("h3")?.text().orEmpty()
             val date = DATE.find(dateText)?.value?.let {
-                LocalDate.parse(it, DateTimeFormatter.ofPattern("dd.MM.uuuu"))
+                runCatching { LocalDate.parse(it, DateTimeFormatter.ofPattern("dd.MM.uuuu")) }
+                    .getOrElse { error ->
+                        Log.w("AniWorldCalendar", "Skipping invalid calendar date: $it", error)
+                        null
+                    }
             } ?: return@flatMap emptyList()
             section.select("div.seriesListContainer > div").mapNotNull { card ->
+                try {
                 val title = card.selectFirst("h3.seriesTitle")?.text()?.trim().orEmpty()
                 val href = card.selectFirst("h3.seriesTitle a[href*=/anime/stream/], a[href*=/anime/stream/]")
                     ?.attr("href")
@@ -119,6 +125,10 @@ class AniWorldCalendarParser {
                     sourceUrl = CALENDAR_URL,
                     fetchedAt = fetchedAt
                 )
+                } catch (error: RuntimeException) {
+                    Log.w("AniWorldCalendar", "Skipping malformed calendar entry", error)
+                    null
+                }
             }
         }
         return parsed.distinctBy {
@@ -229,16 +239,21 @@ class AniWorldHttpTransport(
     private val loader: (suspend (String) -> Pair<Int, String>)? = null
 ) {
     private val cache = File(context.cacheDir, "aniworld-html").apply { mkdirs() }
-    suspend fun fetch(url: String): AniWorldFetchResult {
+    suspend fun fetch(url: String, forceRefresh: Boolean = false): AniWorldFetchResult {
         if (url !in ALLOWED_URLS) return AniWorldFetchResult.Failure("ANIWORLD_URL_REJECTED")
         val file = File(cache, url.hash())
-        if (file.isFile && clock.millis() - file.lastModified() < 30 * 60 * 1000) {
-            return AniWorldFetchResult.Success(file.readText(), Instant.ofEpochMilli(file.lastModified()), true)
+        val cacheLifetimeMillis = if (forceRefresh) 5 * 60 * 1000L else 30 * 60 * 1000L
+        if (file.isFile && clock.millis() - file.lastModified() < cacheLifetimeMillis) {
+            runCatching { file.readText() }.getOrNull()?.takeIf(String::isNotBlank)?.let { cached ->
+                Log.i("AniWorldHttp", "CACHE url=$url bytes=${cached.length}")
+                return AniWorldFetchResult.Success(cached, Instant.ofEpochMilli(file.lastModified()), true)
+            }
         }
         return mutex.withLock {
             val response = runCatching { loader?.invoke(url) ?: load(url) }.getOrElse {
                 return@withLock AniWorldFetchResult.Failure("ANIWORLD_NETWORK:${it.javaClass.simpleName}")
             }
+            Log.i("AniWorldHttp", "HTTP ${response.first} url=$url bytes=${response.second.length}")
             if (response.first !in 200..299 || response.second.isBlank()) {
                 AniWorldFetchResult.Failure("ANIWORLD_HTTP_${response.first}")
             } else {
@@ -280,30 +295,36 @@ class AniWorldReleaseRepository(
     private val zoneId: ZoneId = ZoneId.systemDefault(),
     private val clock: Clock = Clock.systemUTC()
 ) {
-    suspend fun syncCalendar(start: LocalDate, endExclusive: LocalDate): AniWorldSyncResult {
+    suspend fun syncCalendar(
+        start: LocalDate, endExclusive: LocalDate, forceRefresh: Boolean = false
+    ): AniWorldSyncResult {
         // Repair identities produced by the former broad anchor selector even when
         // the network refresh itself is currently unavailable.
         dao.repairMalformedAniWorldEpisodeIdentities()
-        val response = transport.fetch(AniWorldCalendarParser.CALENDAR_URL)
+        val response = transport.fetch(AniWorldCalendarParser.CALENDAR_URL, forceRefresh)
         if (response !is AniWorldFetchResult.Success) return AniWorldSyncResult.Failure((response as AniWorldFetchResult.Failure).diagnostic)
         val all = runCatching { AniWorldCalendarParser().parse(response.html, response.fetchedAt, zoneId) }
             .getOrElse { return AniWorldSyncResult.Failure("ANIWORLD_CALENDAR_PARSE:${it.javaClass.simpleName}") }
+        if (all.isEmpty()) return AniWorldSyncResult.Failure("ANIWORLD_CALENDAR_EMPTY")
         val entries = all.filter { it.releaseAt.atZone(zoneId).toLocalDate() >= start && it.releaseAt.atZone(zoneId).toLocalDate() < endExclusive }
+        // The public page is a rolling window. A request for an older month must not erase
+        // locally preserved history merely because that month is no longer on the page.
+        if (entries.isEmpty()) return AniWorldSyncResult.Success(all.size, 0)
         val existing = dao.allAnime()
         val now = clock.instant().epochSecond
         val animeByKey = existing.groupBy { normalizeAnimeTitle(it.titleGerman.ifBlank { it.titleEnglish ?: it.titleRomaji.orEmpty() }) }
-        val anime = entries.map { entry ->
+        val matchedEntries = entries.map { entry ->
             val matches = animeByKey[entry.normalizedTitle].orEmpty()
             val id = matches.singleOrNull()?.id ?: "aniworld:${entry.externalId ?: entry.normalizedTitle}"
-            matches.singleOrNull()?.let { existingAnime ->
+            val row = matches.singleOrNull()?.let { existingAnime ->
                 existingAnime.copy(coverUrl = entry.coverUrl ?: existingAnime.coverUrl, updatedAt = now)
             } ?: AnimeEntity(id, null, null, entry.title, null, null, null, "", entry.coverUrl, null, null, null, null, now)
-        }.distinctBy { it.id }
-        val idByTitle = anime.groupBy { normalizeAnimeTitle(it.titleGerman) }
-        val releases = entries.map { entry ->
-            val animeId = idByTitle[entry.normalizedTitle]!!.single().id
+            entry to row
+        }
+        val anime = matchedEntries.map { it.second }.distinctBy { it.id }
+        val releases = matchedEntries.map { (entry, matchedAnime) ->
             val releaseId = "aniworld:${entry.externalId ?: entry.normalizedTitle}:s${entry.seasonNumber}:e${entry.episodeNumber}:${entry.releaseAt.epochSecond}"
-            EpisodeReleaseEntity("$releaseId:${entry.releaseLanguage.lowercase()}", animeId, entry.episodeNumber, null, entry.releaseAt.epochSecond,
+            EpisodeReleaseEntity("$releaseId:${entry.releaseLanguage.lowercase()}", matchedAnime.id, entry.episodeNumber, null, entry.releaseAt.epochSecond,
                 null, "ANIWORLD_CALENDAR", entry.sourceUrl, null, entry.fetchedAt.epochSecond,
                 entry.seasonNumber, entry.listedAt.epochSecond, entry.adjustmentMinutes,
                 entry.originalTimeWasEndOfDayMarker, "SCHEDULED", entry.releaseLanguage)
@@ -312,8 +333,10 @@ class AniWorldReleaseRepository(
             ReleaseSourceReferenceEntity("${release.sourceReleaseId}:aniworld", release.sourceReleaseId,
                 "ANIWORLD_CALENDAR", entry.externalId, entry.sourceUrl, entry.fetchedAt.epochSecond)
         }
-        val from = start.atStartOfDay(zoneId).toEpochSecond()
-        val until = endExclusive.atStartOfDay(zoneId).toEpochSecond()
+        val firstCovered = all.minOf { it.releaseAt.atZone(zoneId).toLocalDate() }
+        val lastCoveredExclusive = all.maxOf { it.releaseAt.atZone(zoneId).toLocalDate() }.plusDays(1)
+        val from = maxOf(start, firstCovered).atStartOfDay(zoneId).toEpochSecond()
+        val until = minOf(endExclusive, lastCoveredExclusive).atStartOfDay(zoneId).toEpochSecond()
         dao.replaceAniWorldReleaseRange(from, until, anime, releases, refs, now)
         dao.repairMalformedAniWorldEpisodeIdentities()
         return AniWorldSyncResult.Success(all.size, releases.size)

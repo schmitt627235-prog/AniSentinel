@@ -1,6 +1,7 @@
 package de.anisentinel.app.ui
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.Observer
 import androidx.lifecycle.viewModelScope
@@ -27,6 +28,8 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.stateIn
 import de.anisentinel.app.data.local.ReleasePostponementEntity
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 
 data class CalendarReleaseItem(
     val sourceReleaseId: String,
@@ -124,6 +127,7 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
     private val importState = MutableStateFlow(ImportUiState())
     private val syncState = MutableStateFlow(CalendarSyncUiState())
     private val historySyncState = MutableStateFlow(HistorySyncUiState())
+    private var postSyncProviderJob: Job? = null
 
     private data class HistorySyncUiState(val running: Boolean = false, val summary: String? = null)
 
@@ -136,7 +140,9 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
     init {
         val today = LocalDate.now()
         val weekStart = today.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
-        syncRange(weekStart, weekStart.plusWeeks(1))
+        // AniWorld's public calendar spans the upcoming season boundary. Import the
+        // visible rolling window on entry, not just the remaining days of this week.
+        syncRange(weekStart, weekStart.plusWeeks(3))
         viewModelScope.launch {
             dao.latestImportBatch()?.let { batch ->
                 val first = Instant.ofEpochSecond(batch.earliestReleaseAt).atZone(currentZone()).toLocalDate()
@@ -444,22 +450,33 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
         selectedDate.value = selected
         syncRange(value.atDay(1), value.plusMonths(1).atDay(1))
     }
-    private fun syncRange(start: LocalDate, endExclusive: LocalDate) {
+    private fun syncRange(start: LocalDate, endExclusive: LocalDate, forceRefresh: Boolean = false) {
         viewModelScope.launch {
             syncState.value = syncState.value.copy(loading = true, error = null)
+            try {
             if (getApplication<Application>().resources.getBoolean(de.anisentinel.app.R.bool.aniworld_enabled)) {
-                syncState.value = when (val result = container.aniWorldReleaseRepository.syncCalendar(start, endExclusive)) {
+                syncState.value = when (val result = container.aniWorldReleaseRepository.syncCalendar(start, endExclusive, forceRefresh)) {
                 is de.anisentinel.app.data.release.AniWorldSyncResult.Success -> {
                     container.aniWorldReleaseRepository.syncScheduleChanges()
                     container.favoriteReleaseScheduler.reconcileAll()
-                    container.providerPipelineRepository.syncTitleProviders()
-                    container.providerPipelineRepository.checkDueEpisodes()
                     container.backgroundSyncStatusStore.markSuccess(
                         Instant.now().epochSecond,
                         "ANIWORLD_CALENDAR",
                         result.received,
                         result.stored
                     )
+                    // Provider checks can take minutes. They must not keep the AniWorld
+                    // calendar refresh spinner active after its own data was saved.
+                    if (postSyncProviderJob?.isActive != true) postSyncProviderJob = viewModelScope.launch {
+                        try {
+                            container.providerPipelineRepository.syncTitleProviders()
+                            container.providerPipelineRepository.checkDueEpisodes()
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (error: Exception) {
+                            Log.e("AniWorldCalendar", "Post-refresh provider checks failed", error)
+                        }
+                    }
                     CalendarSyncUiState(
                         loading = false,
                         lastSuccess = Instant.now()
@@ -471,12 +488,18 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
             } else {
                 syncState.value = CalendarSyncUiState(false, "ANIWORLD_DISABLED")
             }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Log.e("AniWorldCalendar", "Calendar refresh failed", error)
+                syncState.value = CalendarSyncUiState(false, "ANIWORLD_SYNC:${error.javaClass.simpleName}")
+            }
         }
     }
 
     fun retryCalendarSync() {
         val value = month.value
-        syncRange(value.atDay(1), value.plusMonths(1).atDay(1))
+        syncRange(value.atDay(1), value.plusMonths(1).atDay(1), forceRefresh = true)
     }
 
     /** Imports only already resolved DE provider identities; it performs no title guessing. */
@@ -546,7 +569,7 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
 
     fun refreshDisplayedMonth() {
         val value = month.value
-        syncRange(value.atDay(1), value.plusMonths(1).atDay(1))
+        syncRange(value.atDay(1), value.plusMonths(1).atDay(1), forceRefresh = true)
     }
     fun runDiagnosticRetryProof() {
         val debuggable = getApplication<Application>().applicationInfo.flags and
