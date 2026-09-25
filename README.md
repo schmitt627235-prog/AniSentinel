@@ -147,13 +147,21 @@ AniSearch- und ältere AnimeRadar-Komponenten sind als gekapselte Entwicklungs- 
 
 ## Screenshots
 
-| Startseite | Detailansicht |
+| Startseite | Kalender |
 |---|---|
-| ![Startseite](docs/screenshots/startseite.png) | ![Detailansicht](docs/screenshots/detailansicht.png) |
+| ![Startseite](docs/screenshots/01_startseite.png) | ![Kalender](docs/screenshots/02_kalender.png) |
 
-| Kalender August 2026 | Historischer Crunchyroll-Kalender |
+| Favoriten – Aktuell | Favoriten – Demnächst |
 |---|---|
-| ![Kalender](docs/screenshots/kalender-august-2026.png) | ![Historischer Kalender](docs/screenshots/historischer-kalender-crunchyroll.png) |
+| ![Favoriten – Aktuell](docs/screenshots/03_favoriten_aktuell.png) | ![Favoriten – Demnächst](docs/screenshots/04_favoriten_demnaechst.png) |
+
+| Favoriten – Season | Heiß erwartet |
+|---|---|
+| ![Favoriten – Season](docs/screenshots/05_favoriten_season.png) | ![Heiß erwartete Titel](docs/screenshots/06_heiss_erwartet.png) |
+
+| Benachrichtigungen | Seitenmenü |
+|---|---|
+| ![Benachrichtigungen](docs/screenshots/07_benachrichtigungen.png) | ![Seitenmenü](docs/screenshots/08_sidemenue.png) |
 
 ## Installation und Build
 
@@ -209,3 +217,10 @@ AniSentinel ist ein unabhängiges Entwicklungsprojekt und kein offizieller Clien
 - [Provider-Checker](docs/06_PROVIDER_CHECKERS.md)
 - [Release-Wächter](docs/05_RELEASE_WATCHER.md)
 - [Validierung v0.24.7](docs/VALIDATION_V24_7_PROVIDER_FALLBACK.md)
+
+## 🤖 Hinweis zur KI-Nutzung – Transparenz ist mir wichtig
+
+Die Ideen, das Konzept und die Funktionen von AniSentinel stammen von mir.
+ChatGPT nutze ich, um zu prüfen, ob und wie meine Ideen technisch umsetzbar sind, Lösungswege zu besprechen und Probleme zu analysieren.
+Die Umsetzung im Code erfolgt anschließend mit Unterstützung von GPT Codex.
+Welche Funktionen entwickelt werden und wie sich AniSentinel weiterentwickelt, entscheide ich selbst und prüfe die umgesetzten Änderungen anschließend.
