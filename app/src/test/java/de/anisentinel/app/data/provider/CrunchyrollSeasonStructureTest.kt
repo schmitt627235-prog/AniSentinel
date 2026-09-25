@@ -1,9 +1,28 @@
 package de.anisentinel.app.data.provider
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CrunchyrollSeasonStructureTest {
+    @Test fun confirmedAzurAssignmentRejectsMainSeriesCatalog() {
+        assertEquals(
+            listOf("GQWH0MXPQ"),
+            ConfirmedCrunchyrollCatalogPolicy.forAnime(
+                "aniworld:azur-lane-slow-ahead", listOf("G9VHN9P49")
+            )
+        )
+    }
+
+    @Test fun confirmedConanAssignmentAlwaysKeepsBothCatalogs() {
+        assertEquals(
+            listOf("GW4HM7NV3", "G6JQVM3ER"),
+            ConfirmedCrunchyrollCatalogPolicy.forAnime(
+                "aniworld:detektiv-conan", listOf("GW4HM7NV3")
+            )
+        )
+    }
     private fun episode(number: Int, title: String) = CrunchyrollCatalogEpisode(
         seriesId = "series",
         seasonId = "season",
@@ -75,6 +94,60 @@ class CrunchyrollSeasonStructureTest {
         assertEquals(
             true,
             CrunchyrollSeasonStructure.containsDeclaredEpisode(episode(1156, "Elbaph (1156-current)"))
+        )
+    }
+
+    @Test
+    fun exactPrimarySeriesWinsOverDifferentJustWatchAliasSeries() {
+        assertEquals(
+            "slow-ahead-series",
+            CrunchyrollSeriesIdentityPolicy.select(
+                primaryMatch = "slow-ahead-series",
+                aliasMatches = listOf("azur-lane-main-series")
+            )
+        )
+    }
+
+    @Test
+    fun oneUnambiguousAliasRemainsAValidFallback() {
+        assertEquals(
+            "translated-title-series",
+            CrunchyrollSeriesIdentityPolicy.select(
+                primaryMatch = null,
+                aliasMatches = listOf("translated-title-series", "translated-title-series")
+            )
+        )
+        assertEquals(
+            null,
+            CrunchyrollSeriesIdentityPolicy.select(
+                primaryMatch = null,
+                aliasMatches = listOf("series-a", "series-b")
+            )
+        )
+    }
+
+    @Test
+    fun shortenedParentTitleIsNotAcceptedAsSpinOffAlias() {
+        assertTrue(
+            CrunchyrollSeriesIdentityPolicy.isBroaderAlias(
+                "Azur Lane - Slow Ahead!", "Azur Lane"
+            )
+        )
+        assertFalse(
+            CrunchyrollSeriesIdentityPolicy.isBroaderAlias(
+                "Das Band der Unterwelt", "Daemons of the Shadow Realm"
+            )
+        )
+    }
+
+    @Test
+    fun multipleExactCrunchyrollCatalogsAreKeptForOneAnime() {
+        assertEquals(
+            listOf("GW4HM7NV3", "G6JQVM3ER"),
+            CrunchyrollSeriesIdentityPolicy.selectAll(
+                primaryMatch = "GW4HM7NV3",
+                aliasMatches = listOf("G6JQVM3ER", "GW4HM7NV3")
+            )
         )
     }
 }

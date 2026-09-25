@@ -1,8 +1,15 @@
 # Changelog
 
+## 0.25.16 Build 21 (versionCode 67)
+
+- AKIBA-PASS-Katalog über öffentliche Produkt- und Staffelseiten integriert: exakter Titel-/Staffelabgleich, Sprachfassung, Folge, Beschreibung, Laufzeit und direkter Anbieterlink. Bloß gelistete, noch nicht buchbare Produkte gelten nicht als verfügbar.
+- Verifizierte AKIBA-PASS-Folgen werden als anbieterspezifische historische Einträge gespeichert und auf Detailseiten angezeigt. Room-Migration 28→29 ergänzt optionale Beschreibungs- und Laufzeitfelder.
+- Anbieteranfragen verwenden einen transparenten AniSentinel-User-Agent sowie einen begrenzten Cache; Konto-, Checkout- und Player-Endpunkte bleiben unberührt.
+- Apple TV bleibt ein dokumentierter offener Punkt: Die öffentliche Conan-Seite zeigt Staffeln, aber nur einen Teil der Episoden; deshalb kein irreführender vollständiger Apple-TV-Katalog und noch keine Conan-Zusammenführung mit Apple TV.
+- Debug-Signatur ist lokal wiederverwendbar konfiguriert; Schlüssel und Zugangsdaten werden nicht veröffentlicht. Gezielte AKIBA-PASS-Tests (8), Room-Migrationstest und Debug-Build bestanden; Updateinstallation und Start auf dem angeschlossenen Android-Gerät erfolgreich.
+
 ## 0.25.16
 
-- **Build 20 / versionCode 66:** Kalender-Aktualisierung und Ladezustand stabilisiert; ein Absturz beim AniWorld-Refresh wurde behoben. Gezielte Kalender-/AniWorld-Tests bestanden.
 - **Build 19 / versionCode 65:** Die Future-Detailseite aktualisiert Anime2You-Meldungen beim Öffnen automatisch; ein manueller Pull-to-Refresh bleibt möglich.
 - Die Detailansicht verwendet eine globale positive News-Whitelist: Trailer/Teaser, Starttermine, Verschiebungen, Disc-Releases sowie konkrete Anbieter- und Lizenzmeldungen.
 - Kooperationen, Interviews, Autoren-Aussagen, redaktionelle Meinungen, Merchandising, Figuren, CDs, Soundtracks und Rankings bleiben aus Future-Detailseiten ausgeschlossen; der allgemeine News-Bereich bleibt davon unberührt.

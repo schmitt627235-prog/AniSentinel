@@ -185,6 +185,9 @@ interface AniSentinelDao {
     @Query("SELECT DISTINCT providerSeriesId FROM provider_season_mappings WHERE animeId = :animeId AND lower(provider) = lower(:provider) AND providerSeriesId IS NOT NULL")
     suspend fun providerCatalogSeriesIds(animeId: String, provider: String): List<String>
 
+    @Query("SELECT * FROM provider_season_mappings WHERE animeId = :animeId AND lower(provider) = lower(:provider)")
+    suspend fun providerMappingsForAnimeProvider(animeId: String, provider: String): List<ProviderSeasonMappingEntity>
+
     @Query("DELETE FROM provider_season_mappings WHERE animeId = :animeId AND lower(provider) = lower(:provider)")
     suspend fun deleteProviderSeasonMappings(animeId: String, provider: String)
 
@@ -579,6 +582,27 @@ interface AniSentinelDao {
         deleteProviderSeasonMappings(animeId, provider)
         importHistoricalProviderCatalog(releases, references, seasons, mappings)
     }
+
+    /** Replaces all catalogues of one provider as one transaction after every source parsed. */
+    @Transaction
+    suspend fun replaceHistoricalProviderCatalogs(
+        animeId: String,
+        provider: String,
+        releases: List<EpisodeReleaseEntity>,
+        references: List<ReleaseSourceReferenceEntity>,
+        seasons: List<AnimeSeasonEntity>,
+        mappings: List<ProviderSeasonMappingEntity>,
+        identities: List<ProviderMetadataIdentityEntity>
+    ) {
+        deleteHistoricalProviderReleases(animeId, provider)
+        deleteProviderSeasonMappings(animeId, provider)
+        deleteProviderMetadataIdentities(animeId, "CRUNCHYROLL_STRUCTURED_METADATA_PROBE", "DE")
+        importHistoricalProviderCatalog(releases, references, seasons, mappings)
+        identities.forEach { upsertProviderMetadataIdentity(it) }
+    }
+
+    @Query("DELETE FROM provider_metadata_identities WHERE animeId = :animeId AND provider = :provider AND providerMarket = :market")
+    suspend fun deleteProviderMetadataIdentities(animeId: String, provider: String, market: String)
 
     @Upsert
     suspend fun upsertReleaseSourceReferences(references: List<ReleaseSourceReferenceEntity>)

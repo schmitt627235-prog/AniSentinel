@@ -47,9 +47,9 @@ class JustWatchCatalogRepository(
                 contentType = contentType, seasonNumber = seasonNumber, candidates = result.titles
             ) ?: continue
             persistSearchResults(listOf(selected), forcedAnimeId = animeId)
-            dao.anime(animeId)?.let { existing ->
-                dao.upsertAnime(listOf(existing.copy(titleGerman = selected.title, updatedAt = Instant.now().epochSecond)))
-            }
+            // JustWatch establishes provider availability and contributes aliases. It
+            // must not replace the canonical work title (a shorter parent-series match
+            // would otherwise turn a spin-off into a different anime).
             return UpcomingJustWatchEnrichment(selected.justWatchId, selected.title, selected.providers, selected.justWatchUrl)
         }
         return cached

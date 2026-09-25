@@ -1,6 +1,8 @@
 # AniSentinel
 
-Aktueller Diagnose-/Teststand: **v0.25.16 (Build 20, versionCode 66)**. „Heiß erwartete Titel“ zeigt reale, noch nicht gestartete Anime nach AniList-Popularity, bietet dynamische Saisonfilter und führt zu einer eigenen Future-Detailseite. Titelbezogene Anime2You-Meldungen werden automatisch aktualisiert und auf Trailer/Teaser, Starttermine, Verschiebungen, Disc-Releases sowie Anbieter-/Lizenzmeldungen derselben Staffel begrenzt. Die vier Einstellungsbereiche Kalender, Sync & Backup, Datenschutz und Anbieter bleiben funktionsfähig.
+Aktueller Diagnose-/Teststand: **v0.25.16 (Build 21, versionCode 67)**. „Heiß erwartete Titel“ zeigt reale, noch nicht gestartete Anime nach AniList-Popularity, bietet dynamische Saisonfilter und führt zu einer eigenen Future-Detailseite. Titelbezogene Anime2You-Meldungen werden automatisch aktualisiert und auf Trailer/Teaser, Starttermine, Verschiebungen, Disc-Releases sowie Anbieter-/Lizenzmeldungen derselben Staffel begrenzt. Die vier Einstellungsbereiche Kalender, Sync & Backup, Datenschutz und Anbieter bleiben funktionsfähig.
+
+AKIBA PASS wird für von JustWatch zugeordnete Titel über öffentliche Produktseiten geprüft; bestätigte kaufbare Staffeln und Episoden erhalten Anbieterlinks. Apple TV ist noch **kein vollständiger Episodenkatalog**: Die öffentlich sichtbare Conan-Seite liefert zwar Staffeln, aber nicht zuverlässig alle Episoden. Es werden deshalb keine Apple-TV-Folgen erfunden oder als bestätigt ausgegeben. Der Debug-Signaturschlüssel bleibt ausschließlich lokal außerhalb des Repositories.
 
 Der Bereich **Entdecken** zeigt aus dem deutschen JustWatch-Datenbestand nur sicher als Anime erkannte Serien und Filme sowie ausdrücklich belegte Live-Action-Adaptionen. Der allgemeine JustWatch-Film- und Serienkatalog wird dort nicht angeboten.
 

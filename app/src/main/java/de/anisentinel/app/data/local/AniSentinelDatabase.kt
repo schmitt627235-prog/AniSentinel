@@ -36,7 +36,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ,ProviderPreferenceEntity::class
         ,ProviderFailureStateEntity::class
     ],
-    version = 27,
+    version = 29,
     exportSchema = true
 )
 abstract class AniSentinelDatabase : RoomDatabase() {
@@ -426,6 +426,45 @@ abstract class AniSentinelDatabase : RoomDatabase() {
         val MIGRATION_26_27 = object : Migration(26, 27) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE provider_season_mappings ADD COLUMN providerSeasonLabel TEXT")
+            }
+        }
+        val MIGRATION_27_28 = object : Migration(27, 28) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE provider_season_mappings_new (
+                        animeId TEXT NOT NULL, canonicalSeasonNumber INTEGER NOT NULL,
+                        provider TEXT NOT NULL, providerSeasonNumber INTEGER,
+                        providerSeriesId TEXT, providerSeasonId TEXT, providerSeriesUrl TEXT,
+                        region TEXT NOT NULL, available INTEGER NOT NULL,
+                        lastConfirmedAt INTEGER NOT NULL, providerSeasonLabel TEXT,
+                        providerCatalogId TEXT NOT NULL,
+                        PRIMARY KEY(animeId, canonicalSeasonNumber, provider, providerCatalogId),
+                        FOREIGN KEY(animeId) REFERENCES anime(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                """.trimIndent())
+                db.execSQL("""
+                    INSERT INTO provider_season_mappings_new (
+                        animeId, canonicalSeasonNumber, provider, providerSeasonNumber,
+                        providerSeriesId, providerSeasonId, providerSeriesUrl, region,
+                        available, lastConfirmedAt, providerSeasonLabel, providerCatalogId
+                    ) SELECT animeId, canonicalSeasonNumber, provider, providerSeasonNumber,
+                        providerSeriesId, providerSeasonId, providerSeriesUrl, region,
+                        available, lastConfirmedAt, providerSeasonLabel,
+                        COALESCE(providerSeriesId, provider)
+                    FROM provider_season_mappings
+                """.trimIndent())
+                db.execSQL("DROP TABLE provider_season_mappings")
+                db.execSQL("ALTER TABLE provider_season_mappings_new RENAME TO provider_season_mappings")
+                db.execSQL("CREATE INDEX index_provider_season_mappings_animeId ON provider_season_mappings(animeId)")
+                db.execSQL("CREATE INDEX index_provider_season_mappings_animeId_canonicalSeasonNumber ON provider_season_mappings(animeId, canonicalSeasonNumber)")
+                db.execSQL("DROP INDEX IF EXISTS index_provider_metadata_identities_animeId_provider_providerMarket")
+                db.execSQL("CREATE UNIQUE INDEX index_provider_metadata_identities_animeId_provider_providerMarket_seriesId ON provider_metadata_identities(animeId, provider, providerMarket, seriesId)")
+            }
+        }
+        val MIGRATION_28_29 = object : Migration(28, 29) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE episode_releases ADD COLUMN providerEpisodeDescription TEXT")
+                db.execSQL("ALTER TABLE episode_releases ADD COLUMN providerEpisodeDuration TEXT")
             }
         }
     }

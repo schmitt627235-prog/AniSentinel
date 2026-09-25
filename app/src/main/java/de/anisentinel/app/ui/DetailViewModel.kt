@@ -59,7 +59,9 @@ class DetailViewModel(
     private val animeId: String = savedStateHandle["animeId"] ?: "skyward"
     private val container = (application as AniSentinelApplication).container
     private var anime: Anime? = null
+    private var animeEntity: AnimeEntity? = null
     private var automaticCrunchyrollHistoryAttempted = false
+    private var automaticAkibaPassImportAttempted = false
     private var historicalSeasonMappingsReconciled = false
     private val _state = MutableStateFlow(
         DetailUiState(anime = anime, loading = anime == null)
@@ -70,9 +72,11 @@ class DetailViewModel(
         viewModelScope.launch {
             val cached = container.database.aniSentinelDao().anime(animeId)
             if (cached != null) {
+                animeEntity = cached
                 anime = cached.toDomain()
                 _state.value = _state.value.copy(anime = anime, loading = false)
                 refreshJustWatchMetadata()
+                maybeImportAkibaPass()
             } else {
                 _state.value = _state.value.copy(loading = false, notFound = true)
                 return@launch
@@ -145,6 +149,7 @@ class DetailViewModel(
                     providerReference = it.firstOrNull(),
                     providerReferences = it
                 )
+                maybeImportAkibaPass()
             }
         }
         viewModelScope.launch {
@@ -177,6 +182,7 @@ class DetailViewModel(
         viewModelScope.launch {
             container.database.aniSentinelDao().observeJustWatchOffersForAnime(animeId).collect { rows ->
                 _state.value = _state.value.copy(justWatchOffers = rows)
+                maybeImportAkibaPass()
                 val offer = rows.firstOrNull {
                     it.providerName.equals("Crunchyroll", true) && !it.offerUrl.isNullOrBlank()
                 }
@@ -220,6 +226,7 @@ class DetailViewModel(
     ) {
         val confirmed = releases.filter {
             it.isHistoricalImport && !it.provider.isNullOrBlank() &&
+                !it.provider.equals("AKIBA PASS", true) && !it.provider.equals("Apple TV", true) &&
                 it.metadataSource != "ANIWORLD_CALENDAR" &&
                 (!it.providerUrl.isNullOrBlank() || !it.sourceUrl.isNullOrBlank())
         }.groupBy { release ->
@@ -313,6 +320,10 @@ class DetailViewModel(
                 _state.value = _state.value.copy(
                     metadataRefreshError = (metadata as? de.anisentinel.app.domain.provider.JustWatchCatalogResult.Failed)?.code
                 )
+                // A user refresh may retry the confirmed AKIBA PASS catalogue; the client
+                // still serves fresh index/product pages from its bounded cache.
+                automaticAkibaPassImportAttempted = false
+                maybeImportAkibaPass()
             } finally {
                 _state.value = _state.value.copy(providerChecking = false, metadataRefreshing = false)
             }
@@ -342,12 +353,9 @@ class DetailViewModel(
             _state.value = _state.value.copy(historyImportRunning = true, historyImportResult = null)
             val currentAnime = anime
             val aliases = verifiedCatalogAliases()
-            // Stored provider URLs can originate from stale JustWatch redirects. They
-            // establish the provider only; Crunchyroll identity is resolved from the
-            // verified AniWorld/JustWatch title aliases.
             val result = if (currentAnime != null) {
-                container.crunchyrollHistoricalReleaseImporter.importByTitle(
-                    animeId, currentAnime.title, titleAliases = aliases
+                container.crunchyrollHistoricalReleaseImporter.importFromProviderUrl(
+                    animeId, currentAnime.title, seriesUrl, titleAliases = aliases
                 )
             } else de.anisentinel.app.data.provider.HistoricalImportResult.Failed("ANIME_NOT_LOADED")
             _state.value = _state.value.copy(
@@ -443,7 +451,50 @@ class DetailViewModel(
     private suspend fun verifiedCatalogAliases(): Set<String> {
         val dao = container.database.aniSentinelDao()
         return (dao.justWatchMatches(animeId).filter { it.status == "MATCHED" }.map { it.title } +
-            listOfNotNull(dao.justWatchCatalogTitleForAnime(animeId)?.title)).filter(String::isNotBlank).toSet()
+            listOfNotNull(
+                dao.justWatchCatalogTitleForAnime(animeId)?.title,
+                animeEntity?.titleGerman,
+                animeEntity?.titleEnglish,
+                animeEntity?.titleRomaji,
+                animeEntity?.titleNative
+            )).filter(String::isNotBlank).toSet()
+    }
+
+    private fun maybeImportAkibaPass() {
+        if (automaticAkibaPassImportAttempted || anime == null) return
+        val confirmedReference = _state.value.providerReferences.any {
+            it.provider.contains("akiba", true) && it.source.contains("JUSTWATCH", true)
+        }
+        val confirmedOffer = _state.value.justWatchOffers.any {
+            it.providerName.contains("akiba", true) && it.source.contains("JUSTWATCH", true)
+        }
+        if (!confirmedReference && !confirmedOffer) return
+        automaticAkibaPassImportAttempted = true
+        viewModelScope.launch {
+            val dao = container.database.aniSentinelDao()
+            val existing = dao.providerMappingsForAnimeProvider(animeId, "AKIBA PASS")
+            val now = java.time.Instant.now().epochSecond
+            if (existing.isNotEmpty() && existing.all { now - it.lastConfirmedAt < 6 * 60 * 60 }) {
+                return@launch
+            }
+            val row = dao.anime(animeId) ?: return@launch
+            val aliases = buildSet {
+                add(row.titleGerman)
+                listOfNotNull(row.titleEnglish, row.titleRomaji, row.titleNative).forEach(::add)
+                addAll(verifiedCatalogAliases())
+            }.filter(String::isNotBlank).toSet()
+            _state.value = _state.value.copy(historyImportRunning = true)
+            val result = container.akibaPassCatalogImporter.importByTitle(animeId, aliases)
+            _state.value = _state.value.copy(
+                historyImportRunning = false,
+                historyImportResult = when (result) {
+                    is de.anisentinel.app.data.provider.HistoricalImportResult.Success ->
+                        "AKIBA_OK:${result.parsed}:${result.inserted}"
+                    is de.anisentinel.app.data.provider.HistoricalImportResult.Failed ->
+                        "AKIBA_ERROR:${result.code}"
+                }
+            )
+        }
     }
 
     fun clearProviderPreference(seasonNumber: Int) {

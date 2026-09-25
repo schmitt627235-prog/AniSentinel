@@ -212,6 +212,8 @@ object StreamingProviderPolicy {
 
     fun displayName(provider: String): String = when {
         provider.contains("crunchyroll", true) -> "Crunchyroll"
+        provider.contains("akiba", true) -> "AKIBA PASS"
+        provider.contains("apple tv", true) && !provider.contains("apple tv+", true) -> "Apple TV"
         else -> provider.trim()
     }
 }

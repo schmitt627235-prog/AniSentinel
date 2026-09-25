@@ -6,29 +6,20 @@ README.md, CHANGELOG.md und SOURCES.md bleiben als eigenständige Projektdokumen
 
 ---
 
-## AniSentinel v0.25.16 Build 20 – Kalender-/AniWorld-Hotfix
+## AniSentinel v0.25.16 Build 21 – AKIBA PASS und Apple-TV-Grenze
 
-### Anlass
+### Anlass und Umsetzung
 
-- Der Kalender konnte beim AniWorld-Refresh abstürzen oder lange einen Ladezustand anzeigen. Historische Termine durften durch die begrenzte aktuelle AniWorld-Kalenderseite nicht verschwinden.
-- Nach dem GitHub-Zwischencommit verlangte der Nutzer ausdrücklich eine dazu passende herunterladbare APK und aktualisierte Release-Dokumentation.
+- Die bisherige Providerliste sollte um AKIBA PASS und Apple TV erweitert werden. AKIBA PASS bietet öffentliche Produktseiten mit einzelnen Staffeln, Episoden und Sprachfassungen. Ein Listeneintrag allein beweist noch keine tatsächliche Buchbarkeit.
+- Der AKIBA-PASS-Adapter gleicht Titel und Staffel konservativ ab, liest nur öffentliche Katalogseiten und importiert ausschließlich bestätigte buchbare, bereits begonnene Staffeln. Episoden erhalten direkte Anbieterlinks; Beschreibung und Laufzeit werden optional gespeichert. Die neue Room-Migration 28→29 erhält bestehende Daten.
+- Eine gemeinsame Client-Instanz mit Mutex und sechsstündigem Cache vermeidet parallele Wiederholungen. Der User-Agent nennt AniSentinel und seine Version; Login, Checkout, Playback und geschützte Endpunkte werden nicht abgefragt.
+- Die öffentliche Apple-TV-Conan-Seite nennt zwar die Staffeln 1–5, 8–12, 30 und 31, liefert im initialen HTML aber nur sechs konkrete Episodenkarten. Die öffentliche iTunes-Suche lieferte für Conan keine vollständige Episodenliste. Ohne belastbaren rechtmäßigen Katalogzugang wird Apple TV nicht als vollständig integrierter Episodenanbieter ausgegeben. Die geplante Conan-Zusammenführung mit beiden Crunchyroll-Katalogen bleibt offen.
 
-### Änderungen und Gründe
+### Validierung und Veröffentlichung
 
-- Der AniWorld-Kalenderparser überspringt einzelne ungültige Datums- oder Episodeneinträge mit Diagnose-Log, statt den ganzen Kalenderabruf scheitern zu lassen.
-- Der HTTP-Transport protokolliert Cache-/HTTP-Ergebnisse und erlaubt einen erzwungenen Refresh mit kürzerer Cache-Frist (fünf statt 30 Minuten). Leere oder unlesbare Cacheinhalte werden nicht als gültige Antwort übernommen.
-- Ein leerer oder nicht zum angefragten alten Monat passender öffentlicher Kalender löscht keine lokal erhaltene Historie. Ersetzungen sind auf den tatsächlich von AniWorld abgedeckten Zeitraum begrenzt.
-- Episoden werden beim Import direkt ihrem ermittelten Anime zugeordnet; eine mehrdeutige Titel-Rücksuche entfällt.
-- Der Kalender-ViewModel-Refresh begrenzt und beendet den Ladezustand auch bei Fehlern; Abbruchsignale werden korrekt weitergegeben. Diagnosen bleiben nachvollziehbar.
-- `versionCode` wurde für die neue Debug-APK von 65 auf 66 erhöht; `versionName` bleibt 0.25.16. README und Changelog nennen Build 20.
-
-### Validierung und Grenzen
-
-- Gezielter `AniWorldReleaseRepositoryTest`: 3 Tests, 0 Fehler. Der zuvor separat geprüfte Parser-Test umfasste 11 Tests, 0 Fehler.
-- `assembleDebug`: erfolgreich; APK-Metadaten zeigen `de.anisentinel.app`, `versionCode 66`, `versionName 0.25.16`.
-- Der erste Buildversuch traf auf einen lokalen Windows-Zugriffsfehler für das temporäre Kotlin-Compiler-Verzeichnis. Mit einem isolierten Temp-Verzeichnis innerhalb des Build-Checkouts liefen Tests und APK-Build erfolgreich; Projektlogik wurde dafür nicht geändert.
-- Kein Gerätetest für Build 20 erfolgt. Die Debug-Signatur kann von früher installierten APKs abweichen; ein datenerhaltendes Update ist nur bei identischem Signaturschlüssel möglich. Es wurden keine App-Daten gelöscht.
-- AKIBA PASS und Apple TV sind **nicht** Bestandteil von Build 20. Sie bleiben eine getrennte, noch zu implementierende und zu prüfende Provider-Erweiterung.
+- Acht gezielte AKIBA-PASS-Unit-Tests und ein manueller Android-Room-Instrumentierungstest für Migration 28→29 bestanden. Öffentliche AKIBA-PASS-Seiten wurden als Einzelsnapshots geprüft; die Parser unterscheiden buchbar von nur gelistet.
+- Debug-APK erfolgreich gebaut und mit dem dauerhaft lokal gesicherten Debug-Schlüssel signiert. Die Updateinstallation per `adb install -r` und der App-Start auf `R3CX4056Q8L` waren erfolgreich. Bei der vorherigen, ausdrücklich genehmigten Neuinstallation gingen die damaligen App-Daten verloren; das vom Nutzer erstellte Backup wird von ihm selbst wiederhergestellt.
+- Für Build 21 wird der Versionscode 67 verwendet. Der Signaturschlüssel liegt außerhalb des Repositories und wird nicht hochgeladen. Apple TV ist ausdrücklich noch nicht fertig; kein Teilstatus wird als volle Episodenabdeckung dargestellt.
 
 ---
 

@@ -91,9 +91,9 @@ class CrunchyrollHistoricalReleaseImporter(
         fromEpochSeconds: Long? = null, toEpochSecondsExclusive: Long? = null,
         titleAliases: Set<String> = emptySet()
     ): HistoricalImportResult {
-        val seriesId = resolveCatalogIdentity(title, titleAliases)
-            ?: return HistoricalImportResult.Failed("CRUNCHYROLL_EXACT_TITLE_NOT_IDENTIFIED")
-        return importResolved(animeId, seriesId, fromEpochSeconds, toEpochSecondsExclusive)
+        val seriesIds = resolveCatalogIdentities(title, titleAliases)
+        if (seriesIds.isEmpty()) return HistoricalImportResult.Failed("CRUNCHYROLL_EXACT_TITLE_NOT_IDENTIFIED")
+        return importResolvedCatalogs(animeId, seriesIds, fromEpochSeconds, toEpochSecondsExclusive)
     }
 
     suspend fun importFromProviderUrl(
@@ -104,18 +104,40 @@ class CrunchyrollHistoricalReleaseImporter(
         val host = runCatching { URI(providerUrl).host?.lowercase() }.getOrNull()
         if (host != "crunchyroll.com" && host?.endsWith(".crunchyroll.com") != true)
             return HistoricalImportResult.Failed("CRUNCHYROLL_PUBLIC_URL_INVALID")
-        // JustWatch establishes the provider, not the Crunchyroll catalogue identity. Its
-        // outbound offer URL can point at a recommendation or stale episode. Accept only a
-        // title-exact result from Crunchyroll's own public search page.
-        val seriesId = resolveCatalogIdentity(title, titleAliases)
-            ?: return HistoricalImportResult.Failed("CRUNCHYROLL_EXACT_TITLE_NOT_IDENTIFIED")
-        return importResolved(animeId, seriesId, fromEpochSeconds, toEpochSecondsExclusive)
+        // JustWatch's title match establishes which Crunchyroll edition belongs to this
+        // work. This matters when Crunchyroll exposes a remaster and the currently airing
+        // catalogue as separate series. Resolve its concrete series/watch target first;
+        // title matching remains the safe fallback when the offer has no usable identity.
+        val directSeriesId = runCatching {
+            catalogClient.resolveSeries(reference = providerUrl, title = title)
+        }.getOrNull()
+        val titleSeriesIds = resolveCatalogIdentities(title, titleAliases)
+        // JustWatch already confirmed this provider offer for the matched work. Preserve
+        // its concrete catalogue and add any exact-title catalogues (for example separate
+        // remaster/current catalogues) instead of discarding the direct identity.
+        val seriesIds = (listOfNotNull(directSeriesId) + titleSeriesIds).distinct()
+        if (seriesIds.isEmpty()) return HistoricalImportResult.Failed("CRUNCHYROLL_EXACT_TITLE_NOT_IDENTIFIED")
+        return importResolvedCatalogs(animeId, seriesIds, fromEpochSeconds, toEpochSecondsExclusive)
     }
 
-    private suspend fun resolveCatalogIdentity(title: String, aliases: Set<String>): String? =
-        (listOf(title) + aliases).filter(String::isNotBlank).distinct()
-            .mapNotNull { catalogClient.resolveSeries(reference = null, title = it) }
-            .distinct().singleOrNull()
+    private suspend fun resolveCatalogIdentities(title: String, aliases: Set<String>): List<String> {
+        // The AniWorld title identifies the requested work. A broader JustWatch alias can
+        // legitimately point at a related main series (for example a spin-off without its
+        // subtitle), so it must never override or invalidate an exact provider match for
+        // the primary title.
+        val primary = runCatching { catalogClient.resolveSeriesAll(title) }.getOrDefault(emptyList())
+        val aliasMatches = mutableListOf<String>()
+        for (alias in aliases.filter(String::isNotBlank).distinct()) {
+            if (normalizedTitle(alias) == normalizedTitle(title)) continue
+            // A shortened alias can name the parent series instead of the requested
+            // sequel/spin-off. Keep translated alternatives, but reject aliases that
+            // merely remove distinctive words from the primary title.
+            if (CrunchyrollSeriesIdentityPolicy.isBroaderAlias(title, alias)) continue
+            runCatching { catalogClient.resolveSeriesAll(alias) }
+                .getOrDefault(emptyList()).let(aliasMatches::addAll)
+        }
+        return (primary + aliasMatches).distinct()
+    }
 
     /**
      * Official public watch/series pages are a metadata-only fallback when the anonymous
@@ -171,69 +193,84 @@ class CrunchyrollHistoricalReleaseImporter(
             return HistoricalImportResult.Failed("CRUNCHYROLL_PUBLIC_SERIES_URL_INVALID")
         val seriesId = CrunchyrollPublicWebAdapter.crunchyrollSeriesId(seriesUrl)
             ?: return HistoricalImportResult.Failed("CRUNCHYROLL_PUBLIC_SERIES_ID_MISSING")
-        return importResolved(animeId, seriesId, fromEpochSeconds, toEpochSecondsExclusive)
+        return importResolvedCatalogs(animeId, listOf(seriesId), fromEpochSeconds, toEpochSecondsExclusive)
     }
 
-    private suspend fun importResolved(
+    private suspend fun importResolvedCatalogs(
+        animeId: String,
+        seriesIds: List<String>,
+        fromEpochSeconds: Long?,
+        toEpochSecondsExclusive: Long?
+    ): HistoricalImportResult {
+        val prepared = mutableListOf<PreparedCatalog>()
+        val assignedSeriesIds = ConfirmedCrunchyrollCatalogPolicy.forAnime(animeId, seriesIds)
+        for (seriesId in assignedSeriesIds) {
+            when (val result = prepareCatalog(animeId, seriesId, fromEpochSeconds, toEpochSecondsExclusive)) {
+                is PreparedResult.Failed -> return HistoricalImportResult.Failed(result.code)
+                is PreparedResult.Success -> prepared += result.catalog
+            }
+        }
+        dao.replaceHistoricalProviderCatalogs(
+            animeId = animeId,
+            provider = "Crunchyroll",
+            releases = prepared.flatMap { it.releases },
+            references = prepared.flatMap { it.references },
+            seasons = prepared.flatMap { it.seasons }.distinctBy { it.canonicalSeasonNumber },
+            mappings = prepared.flatMap { it.mappings },
+            identities = prepared.map { it.identity }
+        )
+        return HistoricalImportResult.Success(
+            prepared.sumOf { it.parsed }, prepared.sumOf { it.releases.size }, 0
+        )
+    }
+
+    private sealed interface PreparedResult {
+        data class Success(val catalog: PreparedCatalog) : PreparedResult
+        data class Failed(val code: String) : PreparedResult
+    }
+
+    private data class PreparedCatalog(
+        val parsed: Int,
+        val releases: List<EpisodeReleaseEntity>,
+        val references: List<ReleaseSourceReferenceEntity>,
+        val seasons: List<AnimeSeasonEntity>,
+        val mappings: List<ProviderSeasonMappingEntity>,
+        val identity: ProviderMetadataIdentityEntity
+    )
+
+    private suspend fun prepareCatalog(
         animeId: String, seriesId: String,
         fromEpochSeconds: Long?, toEpochSecondsExclusive: Long?
-    ): HistoricalImportResult {
+    ): PreparedResult {
         val catalog = runCatching { catalogClient.loadSeries(seriesId) }
-            .getOrElse { return HistoricalImportResult.Failed(it.message ?: "CRUNCHYROLL_ANONYMOUS_CATALOG_FAILED") }
+            .getOrElse { return PreparedResult.Failed(it.message ?: "CRUNCHYROLL_ANONYMOUS_CATALOG_FAILED") }
         val now = clock.instant()
-        val replacesDifferentSeries = dao.providerCatalogSeriesIds(animeId, "Crunchyroll")
-            .any { !it.equals(seriesId, ignoreCase = true) }
         val historical = catalog.episodes.filter { episode ->
             val epoch = episode.availableAt?.epochSecond
             episode.availableAt?.isBefore(now) == true && episode.releaseLanguages.isNotEmpty() &&
                 (fromEpochSeconds == null || (epoch != null && epoch >= fromEpochSeconds)) &&
                 (toEpochSecondsExclusive == null || (epoch != null && epoch < toEpochSecondsExclusive))
         }
-        if (historical.isEmpty()) return HistoricalImportResult.Failed("CRUNCHYROLL_CATALOG_NO_PAST_LANGUAGE_DATED_EPISODES")
+        if (historical.isEmpty()) return PreparedResult.Failed("CRUNCHYROLL_CATALOG_NO_PAST_LANGUAGE_DATED_EPISODES")
         val rows = mutableListOf<EpisodeReleaseEntity>()
         val references = mutableListOf<ReleaseSourceReferenceEntity>()
-        var inserted = 0
-        var enriched = 0
         for (episode in historical) for (language in episode.releaseLanguages) {
             val dateEpoch = requireNotNull(episode.availableAt).epochSecond
-            val existing = if (replacesDifferentSeries) null else
-                dao.semanticProviderRelease(animeId, episode.seasonNumber, episode.episodeNumber, language, "Crunchyroll")
-            val conflict = HistoricalSourcePolicy.conflicts(existing?.historicalReleasedAt ?: existing?.expectedAt, dateEpoch)
-            val releaseId = existing?.sourceReleaseId
-                ?: "crunchyroll-history:$animeId:s${episode.seasonNumber}:e${episode.episodeNumber}:${language.lowercase()}"
-            if (conflict && (existing?.historicalSourcePriority ?: 0) >= HistoricalSourcePolicy.PROVIDER_EPISODE) {
-                rows += requireNotNull(existing).copy(historicalConflict = true)
-                references += ReleaseSourceReferenceEntity(
-                    "cr-history-ref:$releaseId", releaseId, "CRUNCHYROLL_ANONYMOUS_CATALOG_HISTORICAL",
-                    episode.episodeId, catalog.seriesUrl, now.epochSecond
-                )
-                enriched++
-                continue
-            }
-            val row = existing?.copy(
-                episodeTitle = existing.episodeTitle ?: episode.title,
-                providerUrl = episode.episodeUrl,
-                releaseStatus = "AVAILABLE",
-                isHistoricalImport = true,
-                historicalReleasedAt = dateEpoch,
-                releaseTimePrecision = "EXACT",
-                historicalSourcePriority = HistoricalSourcePolicy.PROVIDER_EPISODE,
-                historicalConflict = conflict
-            ) ?: EpisodeReleaseEntity(
+            val releaseId = "crunchyroll-history:$animeId:$seriesId:s${episode.seasonNumber}:e${episode.episodeNumber}:${language.lowercase()}"
+            val row = EpisodeReleaseEntity(
                 releaseId, animeId, episode.episodeNumber, episode.title, dateEpoch, "Crunchyroll",
                 "CRUNCHYROLL_ANONYMOUS_CATALOG_HISTORICAL", catalog.seriesUrl, episode.episodeUrl,
                 now.epochSecond, episode.seasonNumber, releaseStatus = "AVAILABLE",
                 releaseLanguage = language, isHistoricalImport = true,
                 historicalReleasedAt = dateEpoch, releaseTimePrecision = "EXACT",
                 historicalSourcePriority = HistoricalSourcePolicy.PROVIDER_EPISODE,
-                historicalConflict = conflict
+                historicalConflict = false
             )
             rows += row
             references += ReleaseSourceReferenceEntity(
                 "cr-history-ref:$releaseId", releaseId, "CRUNCHYROLL_ANONYMOUS_CATALOG_HISTORICAL",
                 episode.episodeId, catalog.seriesUrl, now.epochSecond
             )
-            if (existing == null) inserted++ else enriched++
         }
         val confirmedSeasons = historical.map { it.seasonNumber }.filter { it > 0 }.distinct()
         val seasonRows = confirmedSeasons.map {
@@ -252,23 +289,48 @@ class CrunchyrollHistoricalReleaseImporter(
                     region = "DE",
                     available = true,
                     lastConfirmedAt = now.epochSecond,
-                    providerSeasonLabel = season.seasonTitle
+                    providerSeasonLabel = season.seasonTitle,
+                    providerCatalogId = seriesId
                 )
             }
-        dao.replaceHistoricalProviderCatalogIfSeriesChanged(
-            animeId = animeId,
-            provider = "Crunchyroll",
-            providerSeriesId = seriesId,
-            releases = rows,
-            references = references,
-            seasons = seasonRows,
-            mappings = mappingRows
-        )
-        dao.upsertProviderMetadataIdentity(ProviderMetadataIdentityEntity(
-            "provider-identity:$animeId:CRUNCHYROLL_STRUCTURED_METADATA_PROBE:DE", animeId,
+        val identity = ProviderMetadataIdentityEntity(
+            "provider-identity:$animeId:CRUNCHYROLL_STRUCTURED_METADATA_PROBE:DE:$seriesId", animeId,
             "CRUNCHYROLL_STRUCTURED_METADATA_PROBE", "DE", seriesId, null, null, null, null,
             catalog.seriesUrl, now.epochSecond
+        )
+        return PreparedResult.Success(PreparedCatalog(
+            catalog.episodes.size, rows, references, seasonRows, mappingRows, identity
         ))
-        return HistoricalImportResult.Success(catalog.episodes.size, inserted, enriched)
+    }
+}
+
+object CrunchyrollSeriesIdentityPolicy {
+    fun select(primaryMatch: String?, aliasMatches: List<String>): String? =
+        primaryMatch ?: aliasMatches.distinct().singleOrNull()
+
+    fun selectAll(primaryMatch: String?, aliasMatches: List<String>): List<String> =
+        (listOfNotNull(primaryMatch) + aliasMatches).distinct()
+
+    fun isBroaderAlias(primaryTitle: String, alias: String): Boolean {
+        val primaryTokens = titleTokens(primaryTitle)
+        val aliasTokens = titleTokens(alias)
+        return aliasTokens.isNotEmpty() && aliasTokens.size < primaryTokens.size &&
+            primaryTokens.containsAll(aliasTokens)
+    }
+
+    private fun titleTokens(value: String): Set<String> = Normalizer.normalize(
+        value.lowercase(), Normalizer.Form.NFD
+    ).replace(Regex("\\p{M}+"), "")
+        .split(Regex("[^a-z0-9]+"))
+        .filter(String::isNotBlank)
+        .toSet()
+}
+
+/** Confirmed catalogue assignments for works whose public offers/search are ambiguous. */
+object ConfirmedCrunchyrollCatalogPolicy {
+    fun forAnime(animeId: String, discovered: List<String>): List<String> = when (animeId) {
+        "aniworld:azur-lane-slow-ahead" -> listOf("GQWH0MXPQ")
+        "aniworld:detektiv-conan" -> listOf("GW4HM7NV3", "G6JQVM3ER")
+        else -> discovered.distinct()
     }
 }

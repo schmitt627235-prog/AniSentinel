@@ -2,6 +2,7 @@ package de.anisentinel.app.ui
 
 import de.anisentinel.app.data.local.ProviderSeasonMappingEntity
 import de.anisentinel.app.data.local.ProviderReferenceEntity
+import de.anisentinel.app.data.local.EpisodeReleaseEntity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -59,9 +60,181 @@ class ProviderPreferenceUiPolicyTest {
         assertFalse(ProviderPreferenceUiPolicy.isInvalidAnimePreference("Crunchyroll", mappings))
     }
 
-    private fun mapping(season: Int, provider: String, available: Boolean, region: String = "DE") =
-        ProviderSeasonMappingEntity("anime", season, provider, season, null, null, null, region, available, 1)
+    @Test fun selectedCrunchyrollDoesNotUseCalendarNavigationUntilCatalogIsLoaded() {
+        assertEquals(
+            emptyList<Int>(),
+            ProviderPreferenceUiPolicy.seasonsForProvider(
+                "Crunchyroll", listOf(1, 2), emptyList(), emptyList()
+            )
+        )
+    }
+
+    @Test fun selectedCrunchyrollUsesMappingsAndHistoricalRowsWithoutLosingASeason() {
+        val releases = listOf(
+            release(2, 1, "Crunchyroll"),
+            release(3, 1, "ADN")
+        )
+        assertEquals(
+            listOf(1, 2),
+            ProviderPreferenceUiPolicy.seasonsForProvider(
+                "Crunchyroll", listOf(1, 2, 3),
+                listOf(mapping(1, "Crunchyroll", true)), releases
+            )
+        )
+    }
+
+    @Test fun automaticCrunchyrollAndExplicitCrunchyrollSeeTheSameCatalogEpisodes() {
+        val releases = listOf(
+            release(2, 1, "Crunchyroll"),
+            release(2, 2, "Crunchyroll"),
+            release(2, 1, "ADN")
+        )
+        val automatic = ProviderPreferenceUiPolicy.releasesForProviderSeason(releases, 2, "Crunchyroll")
+        val explicit = ProviderPreferenceUiPolicy.releasesForProviderSeason(releases, 2, "Crunchyroll")
+
+        assertEquals(listOf(1, 2), ProviderPreferenceUiPolicy.episodeCatalogRows(automatic, false).mapNotNull { it.episodeNumber })
+        assertEquals(automatic, explicit)
+    }
+
+    @Test fun automaticCrunchyrollAndExplicitCrunchyrollUseTheSameSeasonStructure() {
+        val mappings = listOf(mapping(1, "Crunchyroll", true), mapping(2, "Crunchyroll", true))
+        val releases = listOf(release(1, 1, "Crunchyroll"), release(2, 1, "Crunchyroll"))
+
+        val automatic = ProviderPreferenceUiPolicy.seasonsForProvider(
+            "Crunchyroll", listOf(1, 2, 3), mappings, releases
+        )
+        val explicit = ProviderPreferenceUiPolicy.seasonsForProvider(
+            "Crunchyroll", listOf(1, 2, 3), mappings, releases
+        )
+
+        assertEquals(listOf(1, 2), automatic)
+        assertEquals(automatic, explicit)
+    }
+
+    @Test fun airingAdjacentAniWorldSeasonDoesNotBecomeProviderCatalogSeason() {
+        val mappings = listOf(mapping(1, "Crunchyroll", true))
+        val releases = listOf(
+            release(1, 12, "Crunchyroll"),
+            scheduledRelease(2, 11)
+        )
+
+        assertEquals(
+            listOf(1),
+            ProviderPreferenceUiPolicy.seasonsForProvider(
+                "Crunchyroll", listOf(1, 2), mappings, releases
+            )
+        )
+    }
+
+    @Test fun automaticModeMergesOnlyConfirmedProviderCatalogs() {
+        val mappings = listOf(mapping(1, "Crunchyroll", true), mapping(2, "ADN", true))
+        val releases = listOf(release(3, 1, "Crunchyroll"), scheduledRelease(32, 1))
+
+        assertEquals(
+            listOf(1, 2, 3),
+            ProviderPreferenceUiPolicy.seasonsForProvider(null, (1..32).toList(), mappings, releases)
+        )
+        assertEquals(
+            listOf(1),
+            ProviderPreferenceUiPolicy.releasesForProviderSeason(releases, 3, null)
+                .mapNotNull { it.episodeNumber }
+        )
+    }
+
+    @Test fun distantCalendarSeasonIsNotAppendedToCrunchyrollCatalog() {
+        val mappings = (1..6).map { mapping(it, "Crunchyroll", true) }
+        val releases = (1..6).map { release(it, 1, "Crunchyroll") } + scheduledRelease(32, 47)
+
+        assertEquals(
+            (1..6).toList(),
+            ProviderPreferenceUiPolicy.seasonsForProvider(
+                "Crunchyroll", (1..6).toList() + 32, mappings, releases
+            )
+        )
+    }
+
+    @Test fun adnScopingRemainsUnchanged() {
+        val releases = listOf(release(1, 1, "ADN"), release(1, 1, "Crunchyroll"))
+
+        assertEquals(
+            listOf("ADN"),
+            ProviderPreferenceUiPolicy.releasesForProviderSeason(releases, 1, "ADN")
+                .mapNotNull { it.provider }
+        )
+    }
+
+    @Test fun conanCatalogSeasonsKeepEqualSeasonNumbersSeparate() {
+        val mappings = listOf(
+            mapping(1, "Crunchyroll", true, catalogId = "GW4HM7NV3", label = "HD Remaster"),
+            mapping(1, "Crunchyroll", true, catalogId = "G6JQVM3ER", label = "Detective Conan")
+        )
+
+        val options = ProviderPreferenceUiPolicy.catalogSeasonsForProvider("Crunchyroll", mappings)
+
+        assertEquals(2, options.size)
+        assertEquals(setOf("GW4HM7NV3", "G6JQVM3ER"), options.map { it.catalogId }.toSet())
+        assertEquals(2, options.map { it.key }.distinct().size)
+    }
+
+    @Test fun conanEpisodeCollisionIsScopedByCatalogIdentity() {
+        val oldCatalog = release(1, 1, "Crunchyroll", "GW4HM7NV3")
+        val currentCatalog = release(1, 1, "Crunchyroll", "G6JQVM3ER")
+
+        assertEquals(
+            listOf(oldCatalog),
+            ProviderPreferenceUiPolicy.releasesForProviderSeason(
+                listOf(oldCatalog, currentCatalog), 1, "Crunchyroll", "GW4HM7NV3"
+            )
+        )
+        assertEquals(
+            listOf(currentCatalog),
+            ProviderPreferenceUiPolicy.releasesForProviderSeason(
+                listOf(oldCatalog, currentCatalog), 1, "Crunchyroll", "G6JQVM3ER"
+            )
+        )
+    }
+
+    private fun mapping(
+        season: Int, provider: String, available: Boolean, region: String = "DE",
+        catalogId: String = provider, label: String? = null
+    ) = ProviderSeasonMappingEntity(
+        "anime", season, provider, season, catalogId, null, null, region, available, 1,
+        providerSeasonLabel = label, providerCatalogId = catalogId
+    )
 
     private fun reference(provider: String, url: String) =
         ProviderReferenceEntity("anime", provider, url, "JUSTWATCH", null, 1)
+
+    private fun release(
+        season: Int, episode: Int, provider: String, catalogId: String? = null
+    ) = EpisodeReleaseEntity(
+        sourceReleaseId = if (catalogId == null) "${provider.lowercase()}:s$season:e$episode"
+            else "crunchyroll-history:anime:$catalogId:s$season:e$episode:ger_sub",
+        animeId = "anime",
+        episodeNumber = episode,
+        episodeTitle = null,
+        expectedAt = 1,
+        provider = provider,
+        metadataSource = "TEST",
+        sourceUrl = "https://example.test/${catalogId ?: provider}",
+        providerUrl = "https://example.test/$provider/$episode",
+        fetchedAt = 1,
+        seasonNumber = season,
+        isHistoricalImport = true
+    )
+
+    private fun scheduledRelease(season: Int, episode: Int) = EpisodeReleaseEntity(
+        sourceReleaseId = "aniworld:s$season:e$episode",
+        animeId = "anime",
+        episodeNumber = episode,
+        episodeTitle = null,
+        expectedAt = 1,
+        provider = null,
+        metadataSource = "ANIWORLD_CALENDAR",
+        sourceUrl = "https://example.test/calendar",
+        providerUrl = null,
+        fetchedAt = 1,
+        seasonNumber = season,
+        isHistoricalImport = false
+    )
 }

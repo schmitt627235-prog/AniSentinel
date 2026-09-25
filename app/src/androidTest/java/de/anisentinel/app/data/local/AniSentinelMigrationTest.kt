@@ -273,6 +273,44 @@ class AniSentinelMigrationTest {
         }
     }
 
+    @Test
+    fun migration27To28KeepsMappingAndAllowsTwoCatalogsForOneProviderSeason() {
+        val databaseName = "migration-27-28"
+        helper.createDatabase(databaseName, 27).apply {
+            execSQL("INSERT INTO anime (id,anilistId,anisearchId,titleGerman,titleEnglish,titleRomaji,titleNative,description,coverUrl,bannerUrl,season,seasonYear,totalEpisodes,updatedAt,nextAiringAt,nextEpisode,sourceUpdatedAt,cachedAt) VALUES ('anime',NULL,NULL,'Titel',NULL,NULL,NULL,'',NULL,NULL,NULL,2026,12,1,NULL,NULL,NULL,NULL)")
+            execSQL("INSERT INTO provider_season_mappings (animeId,canonicalSeasonNumber,provider,providerSeasonNumber,providerSeriesId,providerSeasonId,providerSeriesUrl,region,available,lastConfirmedAt,providerSeasonLabel) VALUES ('anime',1,'Crunchyroll',1,'CATALOG_A','S1','https://example/a','DE',1,1,'Staffel A')")
+            close()
+        }
+        helper.runMigrationsAndValidate(databaseName, 28, true, AniSentinelDatabase.MIGRATION_27_28).use { database ->
+            database.execSQL("INSERT INTO provider_season_mappings (animeId,canonicalSeasonNumber,provider,providerSeasonNumber,providerSeriesId,providerSeasonId,providerSeriesUrl,region,available,lastConfirmedAt,providerSeasonLabel,providerCatalogId) VALUES ('anime',1,'Crunchyroll',1,'CATALOG_B','S2','https://example/b','DE',1,2,'Staffel B','CATALOG_B')")
+            database.query("SELECT providerCatalogId FROM provider_season_mappings WHERE animeId='anime' ORDER BY providerCatalogId").use {
+                assertEquals(2, it.count)
+                assertEquals(true, it.moveToFirst())
+                assertEquals("CATALOG_A", it.getString(0))
+                assertEquals(true, it.moveToNext())
+                assertEquals("CATALOG_B", it.getString(0))
+            }
+        }
+    }
+
+    @Test
+    fun migration28To29KeepsReleaseAndAddsOptionalProviderEpisodeMetadata() {
+        val databaseName = "migration-28-29"
+        helper.createDatabase(databaseName, 28).apply {
+            execSQL("INSERT INTO anime (id,anilistId,anisearchId,titleGerman,titleEnglish,titleRomaji,titleNative,description,coverUrl,bannerUrl,season,seasonYear,totalEpisodes,updatedAt,nextAiringAt,nextEpisode,sourceUpdatedAt,cachedAt) VALUES ('anime',NULL,NULL,'Titel',NULL,NULL,NULL,'',NULL,NULL,NULL,2026,12,1,NULL,NULL,NULL,NULL)")
+            execSQL("INSERT INTO episode_releases (sourceReleaseId,animeId,episodeNumber,episodeTitle,expectedAt,provider,metadataSource,sourceUrl,providerUrl,fetchedAt,seasonNumber,listedAt,adjustmentMinutes,originalTimeWasEndOfDayMarker,releaseStatus,releaseLanguage,isHistoricalImport,historicalReleasedAt,releaseTimePrecision,historicalSourcePriority,historicalConflict) VALUES ('release','anime',1,'Folge',NULL,'AKIBA PASS','TEST',NULL,NULL,1,1,NULL,NULL,0,'AVAILABLE','GER_SUB',1,NULL,'UNKNOWN',0,0)")
+            close()
+        }
+        helper.runMigrationsAndValidate(databaseName, 29, true, AniSentinelDatabase.MIGRATION_28_29).use { database ->
+            database.query("SELECT episodeTitle, providerEpisodeDescription, providerEpisodeDuration FROM episode_releases WHERE sourceReleaseId='release'").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals("Folge", it.getString(0))
+                assertEquals(true, it.isNull(1))
+                assertEquals(true, it.isNull(2))
+            }
+        }
+    }
+
     private fun assertMigration7To8(batchCount: Int) {
         val databaseName = "migration-7-8-$batchCount"
         helper.createDatabase(databaseName, 7).apply {

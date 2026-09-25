@@ -16,6 +16,8 @@ class CrunchyrollAnonymousCatalogClientTest {
             "/discover/search" in url -> response(url, """{"data":[
                 {"type":"series","items":[
                     {"id":"GDAEMONS","type":"series","title":"Daemons of the Shadow Realm"},
+                    {"id":"GDAEMONS2","type":"series","title":"Daemons of the Shadow Realm"},
+                    {"id":"GSLOW","type":"series","title":"Anime: AzurLane Slow Ahead!"},
                     {"id":"GOTHER","type":"series","title":"Another title",
                      "recommendations":[{"id":"GATTACK","type":"series","title":"Daemons of the Shadow Realm"}]}
                 ]},
@@ -65,9 +67,18 @@ class CrunchyrollAnonymousCatalogClientTest {
     }
 
     @Test fun resolvesOnlyDirectExactSeriesHitAndIgnoresNestedUnrelatedIds() = runBlocking {
+        val client = CrunchyrollAnonymousCatalogClient(transport)
+        assertNull(client.resolveSeries(null, "Daemons of the Shadow Realm"))
+        assertEquals(
+            listOf("GDAEMONS", "GDAEMONS2"),
+            client.resolveSeriesAll("Daemons of the Shadow Realm")
+        )
+    }
+
+    @Test fun resolvesProviderStylingWithoutConfusingParentSeries() = runBlocking {
         val resolved = CrunchyrollAnonymousCatalogClient(transport)
-            .resolveSeries(null, "Daemons of the Shadow Realm")
-        assertEquals("GDAEMONS", resolved)
+            .resolveSeries(null, "Azur Lane - Slow Ahead!")
+        assertEquals("GSLOW", resolved)
     }
 
     private fun response(url: String, body: String) = MetadataHttpResponse(200, body, url, "application/json")

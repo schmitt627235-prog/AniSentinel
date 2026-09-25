@@ -125,7 +125,12 @@ class CrunchyrollAnonymousCatalogClient(
             val response = transport.get("https://www.crunchyroll.com/content/v2/cms/objects/$episodeId?locale=de-DE")
             if (response.status in 200..299) firstDataObject(response.body)?.optString("series_id")?.takeIf(String::isNotBlank)?.let { return it }
         }
-        val query = title?.takeIf(String::isNotBlank) ?: return null
+        return resolveSeriesAll(title).singleOrNull()
+    }
+
+    /** Returns every exact-title catalogue; Crunchyroll can split one work across IDs. */
+    suspend fun resolveSeriesAll(title: String?): List<String> {
+        val query = title?.takeIf(String::isNotBlank) ?: return emptyList()
         val encoded = URLEncoder.encode(query, Charsets.UTF_8.name())
         val response = transport.get("https://www.crunchyroll.com/content/v2/discover/search?q=$encoded&n=20&type=series&locale=de-DE")
         check(response.status in 200..299) { "CRUNCHYROLL_CATALOG_HTTP_${response.status}" }
@@ -142,7 +147,7 @@ class CrunchyrollAnonymousCatalogClient(
             }
             .filter { it.third == wanted }
             .distinctBy { it.first }
-            .singleOrNull()?.first
+            .map { it.first }
     }
 
     suspend fun loadSeries(seriesId: String): CrunchyrollCatalogSeries {
@@ -323,4 +328,6 @@ private fun directSearchResults(body: String): List<JSONObject> {
 
 private fun normalizedCatalogTitle(value: String): String = java.text.Normalizer.normalize(
     value.lowercase(), java.text.Normalizer.Form.NFD
-).replace(Regex("\\p{M}+"), "").replace(Regex("[^a-z0-9]+"), " ").trim()
+).replace(Regex("\\p{M}+"), "")
+    .replace(Regex("^\\s*anime\\s*[:-]\\s*", RegexOption.IGNORE_CASE), "")
+    .replace(Regex("[^a-z0-9]+"), "")

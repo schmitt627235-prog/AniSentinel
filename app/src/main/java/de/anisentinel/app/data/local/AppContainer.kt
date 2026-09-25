@@ -38,6 +38,7 @@ import de.anisentinel.app.data.news.Anime2YouNewsRepository
 import de.anisentinel.app.data.provider.CrunchyrollHistoricalReleaseImporter
 import de.anisentinel.app.data.provider.AdnHistoricalReleaseImporter
 import de.anisentinel.app.data.provider.CrunchyrollAnonymousCatalogClient
+import de.anisentinel.app.data.provider.AkibaPassCatalogImporter
 
 class AppContainer(context: Context) {
     val database: AniSentinelDatabase = Room.databaseBuilder(
@@ -70,7 +71,9 @@ class AppContainer(context: Context) {
         ,AniSentinelDatabase.MIGRATION_23_24
         ,AniSentinelDatabase.MIGRATION_24_25
         ,AniSentinelDatabase.MIGRATION_25_26
-        ,AniSentinelDatabase.MIGRATION_26_27
+        ,AniSentinelDatabase.MIGRATION_26_27,
+        AniSentinelDatabase.MIGRATION_27_28,
+        AniSentinelDatabase.MIGRATION_28_29
     ).build()
 
     val newsRepository = Anime2YouNewsRepository(database.aniSentinelDao())
@@ -132,6 +135,7 @@ class AppContainer(context: Context) {
         database.aniSentinelDao(), justWatchCatalogSource
     )
     private val crunchyrollCatalogClient = CrunchyrollAnonymousCatalogClient()
+    private val akibaPassCatalogClient = de.anisentinel.app.data.provider.AkibaPassCatalogClient()
     val providerPipelineRepository = ProviderPipelineRepository(
         database.aniSentinelDao(),
         justWatchSource,
@@ -143,6 +147,7 @@ class AppContainer(context: Context) {
             de.anisentinel.app.data.provider.NetflixPublicEpisodeAdapter(),
             de.anisentinel.app.data.provider.DisneyPlusPublicEpisodeAdapter(),
             de.anisentinel.app.data.provider.AdnMetadataAdapter(),
+            de.anisentinel.app.data.provider.AkibaPassMetadataAdapter(akibaPassCatalogClient),
             de.anisentinel.app.data.provider.AniversePublicEpisodeAdapter()
         )
     )
@@ -150,6 +155,7 @@ class AppContainer(context: Context) {
         database.aniSentinelDao(), catalogClient = crunchyrollCatalogClient
     )
     val adnHistoricalReleaseImporter = AdnHistoricalReleaseImporter(database.aniSentinelDao())
+    val akibaPassCatalogImporter = AkibaPassCatalogImporter(database.aniSentinelDao(), akibaPassCatalogClient)
     val watcherEngine = WatcherEngine(providerRepository, ProfileWatchScheduler())
     val androidNotificationDispatcher =
         AndroidNotificationDispatcher(context.applicationContext)

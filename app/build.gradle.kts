@@ -1,9 +1,19 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp")
 }
+
+// Optional machine-local debug signing. Credentials and keystore stay in ignored
+// local.properties, so a change of Codex/Android user profile cannot rotate the key.
+val localDebugSigning = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.isFile }?.inputStream()?.use(::load)
+}
+val preservedDebugKeystore = localDebugSigning.getProperty("anisentinel.debug.keystore")
+    ?.let(::file)?.takeIf { it.isFile }
 
 android {
     namespace = "de.anisentinel.app"
@@ -14,15 +24,27 @@ android {
         applicationId = "de.anisentinel.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 66
+        versionCode = 67
         versionName = "0.25.16"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
     }
 
+    if (preservedDebugKeystore != null) {
+        signingConfigs.create("preservedDebug") {
+            storeFile = preservedDebugKeystore
+            storePassword = localDebugSigning.getProperty("anisentinel.debug.storePassword")
+            keyAlias = localDebugSigning.getProperty("anisentinel.debug.keyAlias")
+            keyPassword = localDebugSigning.getProperty("anisentinel.debug.keyPassword")
+        }
+    }
+
     buildTypes {
         debug {
+            if (preservedDebugKeystore != null) {
+                signingConfig = signingConfigs.getByName("preservedDebug")
+            }
             resValue("bool", "anime_radar_enabled", "false")
             resValue("bool", "aniworld_enabled", "true")
             resValue("bool", "local_provider_diagnostic_enabled", "false")

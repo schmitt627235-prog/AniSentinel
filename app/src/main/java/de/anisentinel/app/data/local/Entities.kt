@@ -242,7 +242,7 @@ data class EpisodeProviderAvailabilityEntity(
 @Entity(
     tableName = "provider_metadata_identities",
     foreignKeys = [ForeignKey(entity = AnimeEntity::class, parentColumns = ["id"], childColumns = ["animeId"], onDelete = ForeignKey.CASCADE)],
-    indices = [Index("animeId"), Index(value = ["animeId", "provider", "providerMarket"], unique = true)]
+    indices = [Index("animeId"), Index(value = ["animeId", "provider", "providerMarket", "seriesId"], unique = true)]
 )
 data class ProviderMetadataIdentityEntity(
     @PrimaryKey val identityId: String,
@@ -275,7 +275,7 @@ data class AnimeSeasonEntity(
 /** Provider catalogue season mapped to a canonical anime season for the German market. */
 @Entity(
     tableName = "provider_season_mappings",
-    primaryKeys = ["animeId", "canonicalSeasonNumber", "provider"],
+    primaryKeys = ["animeId", "canonicalSeasonNumber", "provider", "providerCatalogId"],
     foreignKeys = [ForeignKey(entity = AnimeEntity::class, parentColumns = ["id"], childColumns = ["animeId"], onDelete = ForeignKey.CASCADE)],
     indices = [Index("animeId"), Index(value = ["animeId", "canonicalSeasonNumber"])]
 )
@@ -290,7 +290,8 @@ data class ProviderSeasonMappingEntity(
     val region: String,
     val available: Boolean,
     val lastConfirmedAt: Long,
-    val providerSeasonLabel: String? = null
+    val providerSeasonLabel: String? = null,
+    val providerCatalogId: String = providerSeriesId ?: provider
 )
 
 /** seasonNumber 0 is the anime-wide default; positive values are explicit season overrides. */
@@ -349,7 +350,9 @@ data class EpisodeReleaseEntity(
     val historicalReleasedAt: Long? = null,
     val releaseTimePrecision: String = "EXACT",
     val historicalSourcePriority: Int = 0,
-    val historicalConflict: Boolean = false
+    val historicalConflict: Boolean = false,
+    val providerEpisodeDescription: String? = null,
+    val providerEpisodeDuration: String? = null
 )
 
 @Entity(
