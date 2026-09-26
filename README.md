@@ -110,12 +110,13 @@ GER SUB und GER DUB werden getrennt behandelt. Gründe und Ersatztermine erschei
 
 ## Release- und Verfügbarkeitsüberwachung
 
-JustWatch ordnet einen Titel dem deutschen Anbieterkatalog zu, bestätigt aber keine einzelne Episode. Danach prüft AniSentinel beim konkreten Anbieter Serie, Staffel, Episode und erwartete Sprache.
+JustWatch ordnet einen Titel dem deutschen Anbieterkatalog zu, bestätigt aber keine einzelne Episode. Für konkrete Releaseprüfungen nutzt AniSentinel, soweit vorhanden, öffentliche Metadaten des jeweiligen Anbieters und gleicht Titel, Staffel, Episode und Sprachfassung ab. Ein Katalogeintrag allein bestätigt noch keine Abspiel- oder Abo-Verfügbarkeit.
 
 ```text
-JustWatch → Anbieterzuordnung
-Crunchyroll/Netflix/Disney+/ADN/ANIVERSE → konkrete Episode und Sprache
-technischer CHECK_FAILED oder UNSUPPORTED → kontrollierter AniWorld-Fallback
+JustWatch → Anbieterzuordnung in Deutschland
+Crunchyroll/Netflix/Disney+/ADN/ANIVERSE/AKIBA PASS → anbieterspezifische Episodenprüfung
+Apple TV → separater öffentlicher Staffel-/Episodenkatalog, keine Abo-Bestätigung
+ab T+10 beim Releasecheck → kontrollierter AniWorld-Sicherheitsfallback
 ```
 
 Ein direkt bestätigtes `AVAILABLE` wird sofort gespeichert und kann genau eine Benachrichtigung auslösen. `NOT_AVAILABLE_YET` bedeutet eine technisch erfolgreich ausgewertete Providerantwort ohne Zielrelease; `CHECK_FAILED` bezeichnet ausschließlich technische oder parserseitige Fehler. Ab T+10 läuft AniWorld als unabhängiger Sicherheitsfallback, unabhängig davon, ob der direkte Weg negativ oder technisch fehlgeschlagen ist. Nach einer AniWorld-Bestätigung werden direkte Providerprüfungen weitergeführt, damit der stärkere Direktbeleg später samt Episodenlink gespeichert werden kann.
@@ -154,7 +155,9 @@ Fehlende Termine oder Sprachfassungen werden nicht geraten. Ein japanischer Auss
 | [Disney+ Deutschland](https://www.disneyplus.com/de-de) | öffentliche Entity-, Staffel- und Episodenmetadaten nach JustWatch-Auflösung |
 | [ADN Deutschland](https://animationdigitalnetwork.com/de/) | anonyme DE-Katalog-/Episodenmetadaten einschließlich Platzhalterprüfung |
 | [ANIVERSE bei Prime Video](https://www.primevideo.com/-/de_DE/channel/0bc7238a-ac57-4e04-a3f3-1be6f9aefa32) | öffentliche Prime-Titelseite; Bestätigung nur mit konkreter Episode und ANIVERSE-Channelnachweis |
-| [Anime2You](https://www.anime2you.de/feed/) | öffentlicher RSS-Feed für News und Releasesignale |
+| [AKIBA PASS](https://www.akibapass.tv/products) | öffentliche Produkt- und Staffelseiten; bestätigte kaufbare Episoden mit Sprachfassung und Anbieterlink |
+| [Apple TV Deutschland](https://tv.apple.com/de) | öffentlicher Staffel-/Episodenkatalog einschließlich nachgeladener Metadaten; keine automatische Apple-TV+-Abo- oder Abspielbestätigung |
+| [Anime2You](https://www.anime2you.de/feed/) | öffentlicher RSS-Feed und titelbezogene Suche für News und Releasesignale |
 | [JustWatch Deutschland](https://www.justwatch.com/de) | Katalog- und Providerzuordnung, nicht Episodenbestätigung |
 | [AniList](https://anilist.co) | zukünftige Anime und Popularitätsreihenfolge über GraphQL; geprüfter APK-/Backup-Bestand als Ausfallsicherung |
 | [AniSearch](https://www.anisearch.de) | automatische DACH-Anreicherung derzeit pausiert; Wiederaufnahme bei freigegebenem API-Zugang |
