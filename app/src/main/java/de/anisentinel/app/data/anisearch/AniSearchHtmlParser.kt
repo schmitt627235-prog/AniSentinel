@@ -93,7 +93,7 @@ object AniSearchHtmlParser {
         val dachPublisher = germanRelease?.selectFirst(".company a, [class*=publisher] a")
             ?.text()?.trim()?.takeIf(String::isNotBlank)
         val dachReleaseText = germanRelease?.selectFirst(".released")?.text()
-            ?.substringAfter(":", "")?.substringBefore("?")?.substringBefore("-")?.trim()
+            ?.substringAfter(":", "")?.substringBefore("‑")?.substringBefore("-")?.trim()
         val dachDate = dachReleaseText?.let(::parseGermanReleaseDate)
         return AniSearchParseResult.Success(AniSearchImport(
             anisearchId = id,

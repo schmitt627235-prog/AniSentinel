@@ -680,7 +680,7 @@ fun CalendarScreen(
                         release.lastCheckedAt?.let {
                             if (isNotEmpty()) append("\n")
                             append(stringResource(R.string.calendar_last_provider_check,
-                                it.atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy ? HH:mm 'Uhr'"))))
+                                it.atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy · HH:mm 'Uhr'"))))
                         }
                         release.providerName?.takeIf(String::isNotBlank)?.let {
                             append("\n").append(stringResource(
@@ -690,11 +690,11 @@ fun CalendarScreen(
                         }
                         release.firstAvailableAt?.let {
                             append("\n").append(stringResource(R.string.first_detected_at,
-                                it.atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy ? HH:mm 'Uhr'"))))
+                                it.atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy · HH:mm 'Uhr'"))))
                         }
                         release.sourceAvailableAt?.let {
                             append("\n").append(stringResource(R.string.source_available_at,
-                                it.atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy ? HH:mm 'Uhr'"))))
+                                it.atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy · HH:mm 'Uhr'"))))
                         }
                         if (!release.availabilityConfirmed && release.providerErrorCode != null) {
                             append("\n").append(stringResource(R.string.calendar_provider_check_failed))
@@ -702,7 +702,7 @@ fun CalendarScreen(
                                 append("\n").append(
                                     stringResource(
                                         R.string.calendar_fallback_status,
-                                        localizedReleaseStatus(it.substringBefore(" ?"))
+                                        localizedReleaseStatus(it.substringBefore(" ·"))
                                     )
                                 )
                             }
@@ -764,7 +764,7 @@ private fun MonthGrid(
                             ) {
                                 Text(day.dayOfMonth.toString(), fontWeight = if (selected) FontWeight.Bold else null)
                                 if (day in releaseDates) {
-                                    Text("?", color = MaterialTheme.colorScheme.secondary)
+                                    Text("•", color = MaterialTheme.colorScheme.secondary)
                                 }
                             }
                         }
@@ -788,7 +788,7 @@ fun FavoritesScreen(
     val favoritesState by favoritesViewModel.state.collectAsState()
     ScreenContainer(scaffoldPadding, onMenu) { contentPadding ->
         AniSentinelPullToRefresh(favoritesState.refreshing, favoritesViewModel::refresh) {
-        val tabs = listOf("Alle", "Aktuell", "Demn?chst", "Abgeschlossen", "Season")
+        val tabs = listOf("Alle", "Aktuell", "Demnächst", "Abgeschlossen", "Season")
         val filters = FavoritesFilter.entries
         var selectedCycle by remember { mutableStateOf<Int?>(null) }
         var selectedSeason by remember { mutableStateOf<String?>(null) }
@@ -1232,7 +1232,7 @@ fun SettingsScreen(
                         }
                         monitoringDiagnostics.latestDeliveries.forEach { delivery ->
                             Text(
-                                "${delivery.eventType}: ${delivery.deliveredAt.diagnosticTime()} ? ${delivery.deliveryId}",
+                                "${delivery.eventType}: ${delivery.deliveredAt.diagnosticTime()} · ${delivery.deliveryId}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.tertiary
                             )
@@ -1240,10 +1240,10 @@ fun SettingsScreen(
                         monitoringDiagnostics.latestChecks.forEach { check ->
                             Text(
                                 buildString {
-                                    append("${localizedReleaseStatus(check.status)} ? ${check.lastCheckedAt.diagnosticTime()}")
-                                    if (check.errorCode != null) append(" ? Pr?fung derzeit nicht m?glich")
-                                    check.nextCheckAt?.let { append(" ? N?chste Pr?fung ${it.diagnosticTime()}") }
-                                    check.firstAvailableAt?.let { append(" ? erkannt ${it.diagnosticTime()}") }
+                                    append("${localizedReleaseStatus(check.status)} · ${check.lastCheckedAt.diagnosticTime()}")
+                                    if (check.errorCode != null) append(" · Prüfung derzeit nicht möglich")
+                                    check.nextCheckAt?.let { append(" · Nächste Prüfung ${it.diagnosticTime()}") }
+                                    check.firstAvailableAt?.let { append(" · erkannt ${it.diagnosticTime()}") }
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant

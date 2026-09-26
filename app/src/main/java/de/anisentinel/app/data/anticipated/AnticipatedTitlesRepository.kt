@@ -84,7 +84,7 @@ object AnticipatedRanking {
 
 object UpcomingIdentityResolver {
     fun canonicalTitle(value: String): String = value.lowercase()
-        .replace(Regex("?\\s*(\\d+)\\s*?"), " season $1 ")
+        .replace(Regex("第\\s*(\\d+)\\s*期"), " season $1 ")
         .replace(Regex("dai\\s*(\\d+)\\s*ki"), " season $1 ")
         .replace(Regex("(\\d+)(st|nd|rd|th)\\s+season"), " season $1 ")
         .replace(Regex("season\\s*(\\d+)"), " season $1 ")
@@ -162,7 +162,7 @@ object AniSearchFutureMatcher {
         listOf(
             Regex("(?i)(?:season|staffel|dai)\\s*(\\d+)"),
             Regex("(?i)(\\d+)(?:st|nd|rd|th)\\s+season"),
-            Regex("?\\s*(\\d+)\\s*?")
+            Regex("第\\s*(\\d+)\\s*期")
         ).firstNotNullOfOrNull { it.find(value)?.groupValues?.get(1)?.toIntOrNull() }
     }
 
@@ -180,15 +180,15 @@ object AnticipatedDachFormatter {
         DachLicenseStatus.UNKNOWN -> buildString {
             append("DACH-Status derzeit nicht ermittelbar")
             title.dachCheckMessage?.takeUnless { it.startsWith("DACH-Status derzeit nicht ermittelbar") }
-                ?.let { append(" ? $it") }
+                ?.let { append(" · $it") }
         }
         DachLicenseStatus.NOT_LICENSED_YET -> "Noch nicht in der DACH-Region lizenziert"
         DachLicenseStatus.CONFIRMED -> buildString {
         append("DACH")
-        title.dachAvailableFrom?.let { append(" ? ab ${it.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"))}") }
-            ?: title.dachAvailablePeriod?.let { append(" ? ab $it") }
-        title.dachProvider?.let { append(" ? Anbieter: $it") }
-        append(" ? Best?tigt")
+        title.dachAvailableFrom?.let { append(" · ab ${it.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"))}") }
+            ?: title.dachAvailablePeriod?.let { append(" · ab $it") }
+        title.dachProvider?.let { append(" · Anbieter: $it") }
+        append(" · Bestätigt")
         }
     }
 }
@@ -455,13 +455,13 @@ class AnticipatedTitlesRepository(
     private fun Boolean?.orFalse() = this ?: false
 
     private fun AniSearchFetchResult.toDachMessage(): String = when (this) {
-        is AniSearchFetchResult.RateLimited -> "AniSearch-Anfragelimit erreicht ? sp?ter erneut ziehen"
+        is AniSearchFetchResult.RateLimited -> "AniSearch-Anfragelimit erreicht – später erneut ziehen"
         is AniSearchFetchResult.AccessBlocked -> "AniSearch blockiert den automatischen Abruf"
         is AniSearchFetchResult.TemporarilyUnavailable -> "AniSearch momentan nicht erreichbar"
         is AniSearchFetchResult.Disabled -> "AniSearch-Abgleich deaktiviert"
         is AniSearchFetchResult.NotFound -> "AniSearch-Seite nicht gefunden"
-        is AniSearchFetchResult.InvalidUrl -> "Ung?ltige AniSearch-Quelle"
-        is AniSearchFetchResult.Success -> "DACH-Status noch nicht best?tigt"
+        is AniSearchFetchResult.InvalidUrl -> "Ungültige AniSearch-Quelle"
+        is AniSearchFetchResult.Success -> "DACH-Status noch nicht bestätigt"
     }
 
     companion object {

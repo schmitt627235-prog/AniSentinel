@@ -146,7 +146,7 @@ private fun DrawerNavigationItem(
                 if (enabled) {
                     stringResource(item.label)
                 } else {
-                    "${stringResource(item.label)} ? ${stringResource(R.string.coming_soon)}"
+                    "${stringResource(item.label)} · ${stringResource(R.string.coming_soon)}"
                 }
             )
         },

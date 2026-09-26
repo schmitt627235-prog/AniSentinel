@@ -188,7 +188,7 @@ object UnconfiguredProviderEpisodeChecker : ProviderEpisodeChecker {
 
 object StreamingProviderPolicy {
     private val physicalMarkers = listOf(
-        "dvd", "blu-ray", "blu ray", "b?cher", "buecher", "book",
+        "dvd", "blu-ray", "blu ray", "bücher", "buecher", "book",
         "medimops", "thalia", "hugendubel", "jpc", "zavvi", "zoxs"
     )
     private val preferred = listOf("crunchyroll", "netflix", "prime video", "disney+", "adn")

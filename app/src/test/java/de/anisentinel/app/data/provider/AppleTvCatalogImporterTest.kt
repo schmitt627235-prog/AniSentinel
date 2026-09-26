@@ -57,8 +57,8 @@ class AppleTvCatalogImporterTest {
             <h1>Detektiv Conan</h1>
             <select data-testid="accessory-button-select"><option>Staffel 1</option><option>Staffel 2</option></select>
             <a href="https://tv.apple.com/de/episode/kleiner-mann/umc.cmc.ep2?showId=$showId">
-              <div class="tag">FOLGE 2</div><div class="title">Kleiner Mann ganz gro?</div>
-              <div class="description">?ffentlich best?tigte Folge.</div><div class="metadata">24 Min.</div>
+              <div class="tag">FOLGE 2</div><div class="title">Kleiner Mann ganz groß</div>
+              <div class="description">Öffentlich bestätigte Folge.</div><div class="metadata">24 Min.</div>
             </a>
         """.trimIndent()
         val client = AppleTvCatalogClient(ProviderMetadataTransport { requested, _ ->
@@ -73,7 +73,7 @@ class AppleTvCatalogImporterTest {
         assertEquals("APPLE_TV_PUBLIC_PAGE_PARTIAL", release.metadataSource)
         assertEquals(null, release.releaseLanguage)
         assertEquals(2, release.episodeNumber)
-        assertEquals("?ffentlich best?tigte Folge.", release.providerEpisodeDescription)
+        assertEquals("Öffentlich bestätigte Folge.", release.providerEpisodeDescription)
         assertTrue(release.providerUrl!!.contains("/de/episode/"))
         assertEquals(listOf(1), dao.providerMappingsForAnimeProvider("conan", "Apple TV").map { it.canonicalSeasonNumber })
     }
@@ -103,7 +103,7 @@ class AppleTvCatalogImporterTest {
             <h1>Detektiv Conan</h1>
             <select data-testid="accessory-button-select"><option>Staffel 1</option></select>
             <a href="https://tv.apple.com/de/episode/kleiner-mann/umc.cmc.ep2?showId=$showId">
-              <div class="tag">FOLGE 2</div><div class="title">Kleiner Mann ganz gro?</div>
+              <div class="tag">FOLGE 2</div><div class="title">Kleiner Mann ganz groß</div>
             </a>
             <script type="application/json">{"seasons":[{"episodeCount":41,"id":"umc.cmc.seasonone","seasonNumber":1,"title":"Staffel 1"},{"episodeCount":27,"id":"umc.cmc.seasonthirtyone","seasonNumber":31,"title":"Staffel 31"}]}</script>
         """.trimIndent()
@@ -139,7 +139,7 @@ class AppleTvCatalogImporterTest {
             <script type="application/json">{"seasons":[{"episodeCount":2,"id":"$seasonOne","seasonNumber":1,"title":"Staffel 1"},{"episodeCount":1,"id":"$seasonTwo","seasonNumber":2,"title":"Staffel 2"}],"requiredParamsMap":{"Default":{"utscf":"public-config","utsk":"ephemeral","caller":"web","sf":"143443","v":"100","pfm":"web","locale":"de-DE"}}}</script>
         """.trimIndent()
         fun episode(id: String, season: Int, seasonId: String, number: Int) = """
-            {"id":"$id","showId":"$showId","seasonId":"$seasonId","seasonNumber":$season,"episodeNumber":$number,"title":"Folge $number","description":"Best?tigt","duration":1440,"url":"https://tv.apple.com/de/episode/confirmed/$id?showId=$showId"}
+            {"id":"$id","showId":"$showId","seasonId":"$seasonId","seasonNumber":$season,"episodeNumber":$number,"title":"Folge $number","description":"Bestätigt","duration":1440,"url":"https://tv.apple.com/de/episode/confirmed/$id?showId=$showId"}
         """.trimIndent()
         val firstPage = """{"data":{"totalEpisodeCount":3,"episodes":[
             ${episode("umc.cmc.ep1", 1, seasonOne, 1)},

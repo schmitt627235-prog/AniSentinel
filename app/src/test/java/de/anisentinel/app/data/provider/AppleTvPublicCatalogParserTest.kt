@@ -16,7 +16,7 @@ class AppleTvPublicCatalogParserTest {
         assertEquals(AppleTvCatalogCompleteness.PARTIAL, catalog.completeness)
         assertEquals(listOf(2, 3), catalog.episodes.map { it.number })
         assertEquals(listOf(1, 1), catalog.episodes.map { it.seasonNumber })
-        assertEquals("Kleiner Mann ganz gro?", catalog.episodes.first().title)
+        assertEquals("Kleiner Mann ganz groß", catalog.episodes.first().title)
         assertEquals("24 Min.", catalog.episodes.first().duration)
         assertEquals("Anfang der Geschichte.", catalog.episodes.first().description)
         assertTrue(catalog.episodes.first().url.contains("/de/episode/"))
@@ -62,11 +62,11 @@ class AppleTvPublicCatalogParserTest {
           <option>Staffel 1</option><option>Staffel 2</option>
         </select>
         <a href="https://tv.apple.com/de/episode/kleiner-mann/umc.cmc.ep2?showId=$showId">
-          <div class="tag">FOLGE 2</div><div class="title">Kleiner Mann ganz gro?</div>
+          <div class="tag">FOLGE 2</div><div class="title">Kleiner Mann ganz groß</div>
           <div class="description">Anfang der Geschichte.</div><div class="metadata">24 Min.</div>
         </a>
         <a href="https://tv.apple.com/de/episode/doppelgaengerin/umc.cmc.ep3?showId=$showId">
-          <div class="tag">FOLGE 3</div><div class="title">Die Doppelg?ngerin</div>
+          <div class="tag">FOLGE 3</div><div class="title">Die Doppelgängerin</div>
         </a>
     """.trimIndent()
 }

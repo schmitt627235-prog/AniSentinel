@@ -166,9 +166,9 @@ private fun backupSectionLabel(section: BackupSection) = stringResource(when (se
 private fun backupMessage(code: String): String = when {
     code.startsWith("BACKUP_CREATED:") -> "Backup erfolgreich erstellt (${code.substringAfter(':')} Favoriten)."
     code.startsWith("BACKUP_RESTORED:") -> "Backup erfolgreich wiederhergestellt (${code.substringAfter(':')} Favoriten)."
-    code == "LOCAL_DATA_DELETED" -> "Lokale Nutzerdaten wurden gel?scht."
-    code == "UNSUPPORTED_SCHEMA" -> "Dieses Backupformat wird nicht unterst?tzt. Bestehende Daten blieben unver?ndert."
-    else -> "Backup konnte nicht verarbeitet werden ($code). Bestehende Daten blieben unver?ndert."
+    code == "LOCAL_DATA_DELETED" -> "Lokale Nutzerdaten wurden gelöscht."
+    code == "UNSUPPORTED_SCHEMA" -> "Dieses Backupformat wird nicht unterstützt. Bestehende Daten blieben unverändert."
+    else -> "Backup konnte nicht verarbeitet werden ($code). Bestehende Daten blieben unverändert."
 }
 
 @Composable

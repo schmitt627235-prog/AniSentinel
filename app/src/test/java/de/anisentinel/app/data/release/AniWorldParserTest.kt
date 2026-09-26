@@ -75,9 +75,9 @@ class AniWorldParserTest {
     fun scheduleChangeWithoutDubMarkerDefaultsToSub() {
         val html = """
             <article class='supportFAQArticle'><p>
-              ?? Example Anime<br>
-              ? S01 E09<br>
-              ?? 27.08. ? 03.09.<br>
+              ⚠️ Example Anime<br>
+              • S01 E09<br>
+              📅 27.08. ▼ 03.09.<br>
               Special programming<br>
               ----------------------------------------------------------------------
             </p></article>
@@ -94,9 +94,9 @@ class AniWorldParserTest {
     fun delayedChangeWithMistypedEarlierMonthAdvancesToPlausibleMonth() {
         val html = """
             <article class='supportFAQArticle'><p>
-              ?? Chainsmoker Cat<br>
-              ? S01 E09<br>
-              ?? 27.08. ? 03.08.<br>
+              ⚠️ Chainsmoker Cat<br>
+              • S01 E09<br>
+              📅 27.08. ▼ 03.08.<br>
               Special programming<br>
               ----------------------------------------------------------------------
             </p></article>

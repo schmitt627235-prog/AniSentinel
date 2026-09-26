@@ -224,11 +224,11 @@ class ProviderPreferenceUiPolicyTest {
 
     @Test fun conanThreeCatalogsKeepEpisodeIdentitySeparateUntilCanonicalMatchIsProven() {
         val first = release(1, 2, "Crunchyroll", "GW4HM7NV3")
-            .copy(episodeTitle = "Kleiner Mann ganz gro?")
+            .copy(episodeTitle = "Kleiner Mann ganz groß")
         val second = release(1, 2, "Crunchyroll", "G6JQVM3ER")
-            .copy(episodeTitle = "Kleiner Mann ganz gro?", providerUrl = "https://crunchyroll.example/other")
+            .copy(episodeTitle = "Kleiner Mann ganz groß", providerUrl = "https://crunchyroll.example/other")
         val apple = release(1, 2, "Apple TV", "umc.cmc.o4e5fbtkmgjivlpghedf8a6x")
-            .copy(episodeTitle = "Kleiner Mann ganz gro?", providerUrl = "https://tv.apple.com/de/episode/confirmed")
+            .copy(episodeTitle = "Kleiner Mann ganz groß", providerUrl = "https://tv.apple.com/de/episode/confirmed")
         val different = release(1, 2, "Apple TV", "other")
             .copy(episodeTitle = "Anderer Episodentitel")
         val merged = ProviderPreferenceUiPolicy.confirmedEpisodeCards(listOf(first, second, apple))

@@ -238,7 +238,7 @@ private fun JustWatchCatalogTitleEntity.toCatalogItem(id: String, disabledProvid
     stableKey = justWatchId,
     id = id,
     title = title,
-    subtitle = listOfNotNull(if (contentType == "MOVIE") "Film" else "Serie", releaseYear?.toString()).joinToString(" ? "),
+    subtitle = listOfNotNull(if (contentType == "MOVIE") "Film" else "Serie", releaseYear?.toString()).joinToString(" · "),
     providers = de.anisentinel.app.domain.provider.ProviderVisibilityPolicy.visibleProviders(csvProviders(), disabledProviderIds),
     coverUrl = coverUrl
 )

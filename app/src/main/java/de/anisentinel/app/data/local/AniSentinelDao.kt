@@ -310,7 +310,7 @@ interface AniSentinelDao {
         WHERE instr(lower(provider), 'dvd') > 0
            OR instr(lower(provider), 'blu-ray') > 0
            OR instr(lower(provider), 'blu ray') > 0
-           OR instr(lower(provider), 'b?cher') > 0
+           OR instr(lower(provider), 'bücher') > 0
            OR instr(lower(provider), 'buecher') > 0
            OR instr(lower(provider), 'medimops') > 0
            OR instr(lower(provider), 'thalia') > 0

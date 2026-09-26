@@ -52,12 +52,12 @@ class AniSearchHtmlParserTest {
     @Test
     fun parsesConfirmedGermanFuturePublisherAndAvailabilityMonth() {
         val html = """
-            <html><body><h1>Die Tageb?cher der Apothekerin: Staffel 3 - Cour 1</h1>
-            <div itemprop="description">K?nftige Staffel.</div><ul class="xlist row simple infoblock">
+            <html><body><h1>Die Tagebücher der Apothekerin: Staffel 3 - Cour 1</h1>
+            <div itemprop="description">Künftige Staffel.</div><ul class="xlist row simple infoblock">
               <li><img src="https://cdn.anisearch.de/media/country/de.webp" class="flag" alt="Deutsch" title="Deutsch">
-              <div class="title" lang="de"><strong>Die Tageb?cher der Apothekerin: Staffel 3 - Cour 1</strong></div>
-              <div class="status"><span class="header">Status:</span> Zuk?nftig</div>
-              <div class="released"><span class="header">Ver?ffentlicht:</span> 10.2026 ? ?</div>
+              <div class="title" lang="de"><strong>Die Tagebücher der Apothekerin: Staffel 3 - Cour 1</strong></div>
+              <div class="status"><span class="header">Status:</span> Zukünftig</div>
+              <div class="released"><span class="header">Veröffentlicht:</span> 10.2026 ‑ ?</div>
               <div class="company"><span class="header">Publisher:</span> <a href="company/1258,crunchyroll">Crunchyroll</a></div></li>
             </ul></body></html>
         """.trimIndent()
@@ -77,8 +77,8 @@ class AniSearchHtmlParserTest {
             <div itemprop="description">Beschreibung.</div><ul class="xlist row simple infoblock">
               <li><img src="https://cdn.anisearch.de/media/country/de.webp" class="flag" alt="Deutsch" title="Deutsch">
               <div class="title" lang="de"><strong>Lizenzierter Titel</strong></div>
-              <div class="status">Status: Zuk?nftig</div>
-              <div class="released">Ver?ffentlicht: Herbst 2026 - ?</div></li>
+              <div class="status">Status: Zukünftig</div>
+              <div class="released">Veröffentlicht: Herbst 2026 - ?</div></li>
             </ul></body></html>
         """.trimIndent()
         val value = (AniSearchHtmlParser.parse(html, "https://www.anisearch.de/anime/99999,test") as AniSearchParseResult.Success).value

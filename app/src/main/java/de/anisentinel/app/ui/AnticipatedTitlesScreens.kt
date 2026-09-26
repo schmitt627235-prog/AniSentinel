@@ -217,7 +217,7 @@ fun AnticipatedTitlesScreen(padding: PaddingValues, onMenu: () -> Unit, onOpen: 
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text("#$rank", color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Bold)
                             Text(title.germanTitle ?: title.englishTitle ?: title.title, style = MaterialTheme.typography.titleMedium)
-                            Text("?? ${formatPopularity(title.popularity)} ${stringResource(R.string.anticipated_users)}")
+                            Text("🔥 ${formatPopularity(title.popularity)} ${stringResource(R.string.anticipated_users)}")
                             Text("${stringResource(R.string.anticipated_start)}: ${futureStart(title)}")
                             IconButton(onClick = { vm.toggleFavorite(title) }) {
                                 Icon(
@@ -251,7 +251,7 @@ fun AnticipatedTitleDetailScreen(padding: PaddingValues, aniListId: Int, onBack:
         AnticipatedCover(title.coverUrl, title.title, Modifier.fillMaxWidth().height(360.dp))
         Text(title.germanTitle ?: title.englishTitle ?: title.title, style = MaterialTheme.typography.headlineSmall)
         title.nativeTitle?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        Text("?? ${formatPopularity(title.popularity)} ${stringResource(R.string.anticipated_users)}")
+        Text("🔥 ${formatPopularity(title.popularity)} ${stringResource(R.string.anticipated_users)}")
         InfoCard(stringResource(R.string.anticipated_start), futureStart(title))
         InfoCard(stringResource(R.string.anticipated_format), title.format ?: stringResource(R.string.anticipated_unknown))
         InfoCard(stringResource(R.string.anticipated_studio), title.studio ?: stringResource(R.string.anticipated_unknown))
@@ -259,9 +259,9 @@ fun AnticipatedTitleDetailScreen(padding: PaddingValues, aniListId: Int, onBack:
         Button(onClick = { vm.toggleFavorite(title) }, modifier = Modifier.fillMaxWidth()) {
             Text(if (aniListId in state.favoriteAniListIds) "Favorisiert" else "Favorisieren")
         }
-        InfoCard("Verf?gbarkeit", buildString {
-            if (title.justWatchProviders.isEmpty()) append("Streaminganbieter derzeit noch nicht best?tigt")
-            else append("Streaming DACH: ${title.justWatchProviders.sorted().joinToString(" ? ")}")
+        InfoCard("Verfügbarkeit", buildString {
+            if (title.justWatchProviders.isEmpty()) append("Streaminganbieter derzeit noch nicht bestätigt")
+            else append("Streaming DACH: ${title.justWatchProviders.sorted().joinToString(" · ")}")
             append("\nMonitoring: ${if (aniListId in state.favoriteAniListIds) "Aktiv" else "Inaktiv"}")
         })
         title.description?.let { InfoCard(stringResource(R.string.synopsis), it.replace(Regex("<[^>]+>"), "")) }
@@ -279,12 +279,12 @@ fun AnticipatedTitleDetailScreen(padding: PaddingValues, aniListId: Int, onBack:
         } else news.forEach { item ->
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(releaseNewsLabels(item.type).joinToString(" ? "), color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Bold)
-                    Text("Anime2You ? ${java.time.Instant.ofEpochSecond(item.publishedAt).atZone(ZoneId.systemDefault()).toLocalDate().format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))}")
+                    Text(releaseNewsLabels(item.type).joinToString(" · "), color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Bold)
+                    Text("Anime2You · ${java.time.Instant.ofEpochSecond(item.publishedAt).atZone(ZoneId.systemDefault()).toLocalDate().format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))}")
                     Text(item.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     item.summary?.take(240)?.let { Text(it) }
                     val url = item.sourceUrls.lines().firstOrNull { it.startsWith("https://www.anime2you.de/") }
-                    if (url != null) TextButton(onClick = { uriHandler.openUri(url) }) { Text("Artikel ?ffnen") }
+                    if (url != null) TextButton(onClick = { uriHandler.openUri(url) }) { Text("Artikel öffnen") }
                 }
             }
         }
@@ -325,4 +325,4 @@ private fun AnticipatedCover(url: String?, title: String, modifier: Modifier) {
 }
 private fun formatPopularity(value: Int) = NumberFormat.getIntegerInstance(java.util.Locale.GERMANY).format(value)
 private fun futureStart(title: AnticipatedTitle) = title.startDate?.format(DateTimeFormatter.ofPattern("dd.MM.yyyy")) ?: futurePeriod(title)
-private fun futurePeriod(title: AnticipatedTitle): String = when (title.season) { "FALL" -> "Herbst ${title.seasonYear ?: ""}"; "WINTER" -> "Winter ${title.seasonYear ?: ""}"; "SPRING" -> "Fr?hling ${title.seasonYear ?: ""}"; "SUMMER" -> "Sommer ${title.seasonYear ?: ""}"; else -> "Sp?ter / TBA" }
+private fun futurePeriod(title: AnticipatedTitle): String = when (title.season) { "FALL" -> "Herbst ${title.seasonYear ?: ""}"; "WINTER" -> "Winter ${title.seasonYear ?: ""}"; "SPRING" -> "Frühling ${title.seasonYear ?: ""}"; "SUMMER" -> "Sommer ${title.seasonYear ?: ""}"; else -> "Später / TBA" }

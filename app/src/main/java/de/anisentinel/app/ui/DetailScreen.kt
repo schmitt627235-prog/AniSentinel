@@ -61,11 +61,11 @@ private fun ReleaseHistoryCard(
     inferred: Boolean = false
 ) {
     val check = semanticAvailabilityCheck(release, releases, checks)
-    val formatter = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy ? HH:mm")
+    val formatter = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy · HH:mm")
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Text(heading, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-            Text("S${release.seasonNumber ?: 1} ? Folge ${release.episodeNumber ?: 0} ? ${localizedReleaseLanguage(release.releaseLanguage)}")
+            Text("S${release.seasonNumber ?: 1} · Folge ${release.episodeNumber ?: 0} · ${localizedReleaseLanguage(release.releaseLanguage)}")
             release.expectedAt?.let {
                 val value = java.time.Instant.ofEpochSecond(it).atZone(java.time.ZoneId.systemDefault())
                 Text(if (release.releaseTimePrecision == "DATE" ||
@@ -205,7 +205,7 @@ fun AnimeDetailScreen(
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(stringResource(R.string.notification_release_target), style = MaterialTheme.typography.titleMedium)
-                            Text("S${focusedSeason ?: 1} ? Folge $focusedEpisode ? ${focusedLanguage ?: "?"}")
+                            Text("S${focusedSeason ?: 1} · Folge $focusedEpisode · ${focusedLanguage ?: "–"}")
                         }
                     }
                 }
@@ -354,7 +354,7 @@ fun AnimeDetailScreen(
                             R.string.release_job_scheduled,
                             java.time.Instant.ofEpochSecond(scheduled.eventAt)
                                 .atZone(java.time.ZoneId.systemDefault())
-                                .format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy ? HH:mm"))
+                                .format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy · HH:mm"))
                         ),
                         color = if (scheduled != null) MaterialTheme.colorScheme.tertiary
                             else MaterialTheme.colorScheme.onSurfaceVariant
@@ -474,7 +474,7 @@ fun AnimeDetailScreen(
                     val genres = de.anisentinel.app.data.provider.MetadataTextNormalizer.normalizeGenres(
                         state.justWatchMetadata?.genres.orEmpty().split(','), state.justWatchGenreLabels
                     )
-                    Text(genres.takeIf(List<String>::isNotEmpty)?.joinToString(" ? ")
+                    Text(genres.takeIf(List<String>::isNotEmpty)?.joinToString(" · ")
                         ?: stringResource(R.string.metadata_unavailable))
                 }
             }
@@ -482,7 +482,7 @@ fun AnimeDetailScreen(
                 DetailSection(stringResource(R.string.studios)) {
                     val studios = state.justWatchMetadata?.studios.orEmpty().lines()
                         .mapNotNull(de.anisentinel.app.data.provider.MetadataTextNormalizer::decode).distinct()
-                    Text(studios.joinToString(" ? "))
+                    Text(studios.joinToString(" · "))
                 }
             }
             item { SectionHeader(stringResource(R.string.episodes)) }
@@ -756,7 +756,7 @@ fun AnimeDetailScreen(
                                         modifier = Modifier.fillMaxWidth(),
                                         onClick = { context.openProviderUrlSafely(url) }
                                     ) {
-                                        Text("${release?.provider ?: "Provider"} ? ${stringResource(R.string.open_at_provider)}")
+                                        Text("${release?.provider ?: "Provider"} · ${stringResource(R.string.open_at_provider)}")
                                     }
                                 }
                             }
@@ -801,7 +801,7 @@ fun AnimeDetailScreen(
 
 internal fun Long.localDateTimeText(): String = java.time.Instant.ofEpochSecond(this)
     .atZone(java.time.ZoneId.systemDefault())
-    .format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy ? HH:mm 'Uhr'"))
+    .format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy · HH:mm 'Uhr'"))
 
 internal fun semanticAvailabilityCheck(
     release: de.anisentinel.app.data.local.EpisodeReleaseEntity,

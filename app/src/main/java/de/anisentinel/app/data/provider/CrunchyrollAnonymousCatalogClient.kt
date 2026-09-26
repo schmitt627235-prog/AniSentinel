@@ -244,7 +244,7 @@ class CrunchyrollAnonymousCatalogClient(
 /** Collapses Crunchyroll audio/dub season variants into content seasons. */
 object CrunchyrollSeasonStructure {
     private val declaredEpisodeRange = Regex(
-        "\\((\\d+)\\s*[-??]\\s*(\\d+|current)\\)",
+        "\\((\\d+)\\s*[-–—]\\s*(\\d+|current)\\)",
         RegexOption.IGNORE_CASE
     )
     private val variantSuffix = Regex(
@@ -252,7 +252,7 @@ object CrunchyrollSeasonStructure {
         RegexOption.IGNORE_CASE
     )
     private val trailingVariant = Regex(
-        "\\s*[-??????]\\s*(?:german|deutsch|english|french|spanish|italian|portuguese|hindi|arabic)(?:\\s+(?:dub|audio|synchro|sub))?\\s*$",
+        "\\s*[-â€“â€”]\\s*(?:german|deutsch|english|french|spanish|italian|portuguese|hindi|arabic)(?:\\s+(?:dub|audio|synchro|sub))?\\s*$",
         RegexOption.IGNORE_CASE
     )
 

@@ -209,7 +209,7 @@ object JustWatchUpcomingMatchPolicy {
 
     private fun installmentNumber(candidate: String): Int? = listOf(
             Regex("(?i)(?:season|staffel)\\s*(\\d+)"),
-            Regex("(?i)(\\d+)(?:st|nd|rd|th)\\s+season"), Regex("?\\s*(\\d+)\\s*?")
+            Regex("(?i)(\\d+)(?:st|nd|rd|th)\\s+season"), Regex("第\\s*(\\d+)\\s*期")
         ).firstNotNullOfOrNull { it.find(candidate)?.groupValues?.getOrNull(1)?.toIntOrNull() }
 }
 
