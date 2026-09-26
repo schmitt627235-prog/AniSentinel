@@ -39,6 +39,7 @@ import de.anisentinel.app.data.provider.CrunchyrollHistoricalReleaseImporter
 import de.anisentinel.app.data.provider.AdnHistoricalReleaseImporter
 import de.anisentinel.app.data.provider.CrunchyrollAnonymousCatalogClient
 import de.anisentinel.app.data.provider.AkibaPassCatalogImporter
+import de.anisentinel.app.data.provider.AppleTvCatalogImporter
 
 class AppContainer(context: Context) {
     val database: AniSentinelDatabase = Room.databaseBuilder(
@@ -156,6 +157,7 @@ class AppContainer(context: Context) {
     )
     val adnHistoricalReleaseImporter = AdnHistoricalReleaseImporter(database.aniSentinelDao())
     val akibaPassCatalogImporter = AkibaPassCatalogImporter(database.aniSentinelDao(), akibaPassCatalogClient)
+    val appleTvCatalogImporter = AppleTvCatalogImporter(database.aniSentinelDao())
     val watcherEngine = WatcherEngine(providerRepository, ProfileWatchScheduler())
     val androidNotificationDispatcher =
         AndroidNotificationDispatcher(context.applicationContext)

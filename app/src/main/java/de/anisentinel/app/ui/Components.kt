@@ -300,7 +300,7 @@ fun CatalogAnimeCard(
                 Text(item.subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(
                     if (item.providers.isEmpty()) stringResource(R.string.catalog_no_streaming_provider)
-                    else stringResource(R.string.catalog_providers, item.providers.joinToString(" · ")),
+                    else stringResource(R.string.catalog_providers, item.providers.joinToString(" ? ")),
                     color = MaterialTheme.colorScheme.secondary,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis
@@ -371,7 +371,7 @@ internal fun CompactPostponementNotice(
 
 private fun formatCompactPostponementTime(epoch: Long): String = Instant.ofEpochSecond(epoch)
     .atZone(ZoneId.systemDefault())
-    .format(DateTimeFormatter.ofPattern("dd.MM.yyyy · HH:mm"))
+    .format(DateTimeFormatter.ofPattern("dd.MM.yyyy ? HH:mm"))
 
 @Composable
 private fun CatalogCover(item: CatalogAnimeItem, modifier: Modifier) {

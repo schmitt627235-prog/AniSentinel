@@ -6,6 +6,36 @@ import de.anisentinel.app.data.local.EpisodeReleaseEntity
 
 /** Keeps preference controls limited to providers verified for German availability. */
 object ProviderPreferenceUiPolicy {
+    data class EpisodeCard(
+        val seasonNumber: Int,
+        val number: Int,
+        val identityKey: String,
+        val releases: List<EpisodeReleaseEntity>
+    )
+
+    /** Catalog identity stays separate until a provider-independent episode match is proven. */
+    fun confirmedEpisodeCards(releases: List<EpisodeReleaseEntity>): List<EpisodeCard> =
+        releases.asSequence()
+            .filter { it.isHistoricalImport && it.episodeNumber != null && !it.provider.isNullOrBlank() }
+            .groupBy { release ->
+                val title = java.text.Normalizer.normalize(
+                    release.episodeTitle.orEmpty().lowercase(), java.text.Normalizer.Form.NFKD
+                ).replace(Regex("\\p{M}+"), "")
+                    .replace(Regex("[^a-z0-9]+"), " ").trim()
+                val identity = title.takeIf { it.length >= 4 } ?: release.sourceReleaseId
+                // Source IDs retain the provider's raw season (e.g. s1) even when
+                // a confirmed canonical mapping displays this content as S32.
+                val seasonMarker = Regex(":s\\d+:e\\d+:").find(release.sourceReleaseId)
+                val catalogPrefix = seasonMarker?.let { release.sourceReleaseId.substring(0, it.range.first) }
+                    ?: release.sourceReleaseId
+                val episodeDestination = release.providerUrl?.takeIf { it.startsWith("https://") }
+                    ?: release.sourceReleaseId
+                "${release.animeId}|${release.provider}|$catalogPrefix|${release.seasonNumber}|${release.episodeNumber}|$identity|$episodeDestination"
+            }
+            .map { (key, rows) -> EpisodeCard(
+                rows.first().seasonNumber ?: 1, requireNotNull(rows.first().episodeNumber), key, rows
+            ) }
+            .sortedWith(compareBy<EpisodeCard> { it.seasonNumber }.thenBy { it.number }.thenBy { it.identityKey })
     data class CatalogSeason(
         val provider: String,
         val catalogId: String,
@@ -36,6 +66,10 @@ object ProviderPreferenceUiPolicy {
         .sortedWith(compareBy<CatalogSeason> { it.provider.lowercase() }
             .thenBy { it.catalogId.lowercase() }.thenBy { it.seasonNumber })
         .toList()
+
+    /** Automatic mode keeps every provider catalogue and its own season key. */
+    fun automaticUnionSeasons(mappings: List<ProviderSeasonMappingEntity>): List<CatalogSeason> =
+        catalogSeasonsForProvider(null, mappings)
 
     fun seasonsForProvider(
         provider: String?,
@@ -91,7 +125,8 @@ object ProviderPreferenceUiPolicy {
     fun isVisibleCatalogEpisode(release: EpisodeReleaseEntity, now: Long): Boolean =
         (release.expectedAt != null && release.expectedAt <= now) ||
             (release.isHistoricalImport && release.expectedAt == null &&
-                release.releaseStatus.startsWith("AVAILABLE"))
+                (release.releaseStatus.startsWith("AVAILABLE") ||
+                    (release.provider.equals("Apple TV", true) && release.releaseStatus == "CATALOGUED")))
 
     fun providersForSeason(
         seasonNumber: Int,
@@ -139,6 +174,7 @@ object ProviderPreferenceUiPolicy {
         provider.contains("Aniverse", true) -> if (provider.contains("Amazon", true))
             "ANIVERSE Amazon Channel" else "ANIVERSE"
         provider.contains("Akiba", true) -> "AKIBA PASS"
+        provider.equals("Apple TV", true) || provider.equals("Apple TV Store", true) -> "Apple TV"
         else -> null
     }
 

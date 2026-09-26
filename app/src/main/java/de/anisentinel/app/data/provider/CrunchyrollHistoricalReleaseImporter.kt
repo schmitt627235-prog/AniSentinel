@@ -256,11 +256,14 @@ class CrunchyrollHistoricalReleaseImporter(
         val references = mutableListOf<ReleaseSourceReferenceEntity>()
         for (episode in historical) for (language in episode.releaseLanguages) {
             val dateEpoch = requireNotNull(episode.availableAt).epochSecond
+            val canonicalSeason = ConfirmedCrunchyrollCatalogPolicy.canonicalSeasonNumber(
+                animeId, seriesId, episode.seasonNumber
+            )
             val releaseId = "crunchyroll-history:$animeId:$seriesId:s${episode.seasonNumber}:e${episode.episodeNumber}:${language.lowercase()}"
             val row = EpisodeReleaseEntity(
                 releaseId, animeId, episode.episodeNumber, episode.title, dateEpoch, "Crunchyroll",
                 "CRUNCHYROLL_ANONYMOUS_CATALOG_HISTORICAL", catalog.seriesUrl, episode.episodeUrl,
-                now.epochSecond, episode.seasonNumber, releaseStatus = "AVAILABLE",
+                now.epochSecond, canonicalSeason, releaseStatus = "AVAILABLE",
                 releaseLanguage = language, isHistoricalImport = true,
                 historicalReleasedAt = dateEpoch, releaseTimePrecision = "EXACT",
                 historicalSourcePriority = HistoricalSourcePolicy.PROVIDER_EPISODE,
@@ -273,14 +276,18 @@ class CrunchyrollHistoricalReleaseImporter(
             )
         }
         val confirmedSeasons = historical.map { it.seasonNumber }.filter { it > 0 }.distinct()
-        val seasonRows = confirmedSeasons.map {
-                AnimeSeasonEntity(animeId, it, "CRUNCHYROLL_ANONYMOUS_CATALOG", now.epochSecond)
+        val seasonRows = confirmedSeasons.map { providerSeason ->
+                AnimeSeasonEntity(animeId, ConfirmedCrunchyrollCatalogPolicy.canonicalSeasonNumber(
+                    animeId, seriesId, providerSeason
+                ), "CRUNCHYROLL_ANONYMOUS_CATALOG", now.epochSecond)
             }
         val mappingRows = confirmedSeasons.map { seasonNumber ->
                 val season = historical.first { it.seasonNumber == seasonNumber }
                 ProviderSeasonMappingEntity(
                     animeId = animeId,
-                    canonicalSeasonNumber = seasonNumber,
+                    canonicalSeasonNumber = ConfirmedCrunchyrollCatalogPolicy.canonicalSeasonNumber(
+                        animeId, seriesId, seasonNumber
+                    ),
                     provider = "Crunchyroll",
                     providerSeasonNumber = seasonNumber,
                     providerSeriesId = seriesId,
@@ -289,7 +296,9 @@ class CrunchyrollHistoricalReleaseImporter(
                     region = "DE",
                     available = true,
                     lastConfirmedAt = now.epochSecond,
-                    providerSeasonLabel = season.seasonTitle,
+                    providerSeasonLabel = ConfirmedCrunchyrollCatalogPolicy.seasonLabel(
+                        animeId, seriesId, seasonNumber, season.seasonTitle
+                    ),
                     providerCatalogId = seriesId
                 )
             }
@@ -333,4 +342,15 @@ object ConfirmedCrunchyrollCatalogPolicy {
         "aniworld:detektiv-conan" -> listOf("GW4HM7NV3", "G6JQVM3ER")
         else -> discovered.distinct()
     }
+
+    // Explicitly confirmed by the user for the current Conan catalogue. Keep the
+    // provider's season number and ID unchanged in ProviderSeasonMappingEntity.
+    fun canonicalSeasonNumber(animeId: String, seriesId: String, providerSeasonNumber: Int): Int =
+        if (animeId == "aniworld:detektiv-conan" && seriesId == "G6JQVM3ER" && providerSeasonNumber == 1) 32
+        else providerSeasonNumber
+
+    fun seasonLabel(animeId: String, seriesId: String, providerSeasonNumber: Int, original: String?): String? =
+        if (canonicalSeasonNumber(animeId, seriesId, providerSeasonNumber) == 32 &&
+            animeId == "aniworld:detektiv-conan" && seriesId == "G6JQVM3ER") "Staffel 32 (Aktuell)"
+        else original
 }

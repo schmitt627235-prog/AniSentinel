@@ -63,7 +63,7 @@ fun normalizeAnimeTitle(value: String): String = value.lowercase(Locale.GERMAN)
     .replace(Regex("\\b(2nd|second)\\s+season\\b"), "staffel2")
     .replace(Regex("\\bseason\\s*(\\d+)\\b"), "staffel$1")
     .replace(Regex("\\bstaffel\\s*(\\d+)\\b"), "staffel$1")
-    .replace(Regex("[^a-z0-9äöüß]+"), "")
+    .replace(Regex("[^a-z0-9????]+"), "")
 
 internal fun aniWorldLanguageMatches(changeType: String?, releaseLanguage: String?): Boolean =
     when (changeType?.uppercase()) {
@@ -158,10 +158,10 @@ class AniWorldScheduleChangeParser {
         val result = mutableListOf<AniWorldScheduleChange>()
         lines.forEachIndexed { index, line ->
             when {
-                line.startsWith("⚠") || line.startsWith("🚨") -> {
+                line.startsWith("?") || line.startsWith("??") -> {
                     titleReleaseType = Regex("\\[(Sub\\+Dub|Dub\\+Sub|Sub|Dub)]\\s*$", RegexOption.IGNORE_CASE)
                         .find(line)?.groupValues?.get(1)?.replaceFirstChar(Char::uppercase)
-                    title = line.replace(Regex("^[⚠️🚨ℹ\\s]+"), "")
+                    title = line.replace(Regex("^[?????\\s]+"), "")
                         .replace(Regex("\\s*\\[(Sub\\+Dub|Dub\\+Sub|Sub|Dub)]\\s*$", RegexOption.IGNORE_CASE), "").trim()
                     season = null; episode = null
                 }
@@ -188,18 +188,18 @@ class AniWorldScheduleChangeParser {
                         // the linked evidence says 03.09). Preserve the day and advance the month
                         // until the direction is chronologically plausible.
                         val revised = if (
-                            directionToken != "â–²" && previous != null && parsedRevised != null && parsedRevised < previous
+                            directionToken != "???" && previous != null && parsedRevised != null && parsedRevised < previous
                         ) generateSequence(parsedRevised) { it.plusMonths(1) }
                             .first { !it.isBefore(previous) }
                         else parsedRevised
                         val type = Regex("\\((Sub\\+Dub|Dub\\+Sub|Sub|Dub)\\)", RegexOption.IGNORE_CASE).find(line)
                             ?.groupValues?.get(1)?.replaceFirstChar(Char::uppercase) ?: titleReleaseType ?: "Sub"
-                        val following = lines.drop(index + 1).takeWhile { it.isNotBlank() && !it.startsWith("-") && !it.startsWith("⚠") && !it.startsWith("🚨") && !it.startsWith("📅") }
+                        val following = lines.drop(index + 1).takeWhile { it.isNotBlank() && !it.startsWith("-") && !it.startsWith("?") && !it.startsWith("??") && !it.startsWith("??") }
                         val reason = following.firstOrNull { !it.startsWith("http") }
                         val evidence = following.firstNotNullOfOrNull { evidenceLinks[it] ?: it.takeIf { v -> v.startsWith("https://") } }
                         result += AniWorldScheduleChange(
                             title!!, normalizeAnimeTitle(title!!), season, episode, previous, revised,
-                            type, reason, if (directionToken == "▲") "EARLIER" else "DELAYED",
+                            type, reason, if (directionToken == "?") "EARLIER" else "DELAYED",
                             CHANGES_URL, evidence, now, relativeDelayMinutes
                         )
                     }
@@ -222,7 +222,7 @@ class AniWorldScheduleChangeParser {
         const val CHANGES_URL = "https://aniworld.to/support/frage/anime-verschiebungen"
         private val SEASON = Regex("S(\\d{1,3})(?:\\s*E(\\d{1,4}))?", RegexOption.IGNORE_CASE)
         private val CHANGE = Regex(
-            "(\\d{2}\\.\\d{2}\\.?)\\s*([▼▲►])\\s*(\\d{2}\\.\\d{2}\\.?|\\?|vsl\\s+ca\\.?\\s+\\d+\\s*min(?:uten)?\\s+später)",
+            "(\\d{2}\\.\\d{2}\\.?)\\s*([???])\\s*(\\d{2}\\.\\d{2}\\.?|\\?|vsl\\s+ca\\.?\\s+\\d+\\s*min(?:uten)?\\s+sp?ter)",
             RegexOption.IGNORE_CASE
         )
     }

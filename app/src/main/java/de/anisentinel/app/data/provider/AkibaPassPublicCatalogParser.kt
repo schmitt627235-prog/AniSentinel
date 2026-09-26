@@ -107,7 +107,7 @@ object AkibaPassPublicCatalogParser {
         if (episodes.isEmpty()) return null
         val checkout = document.select("a[href*='/checkout/$id?']")
             .any { it.absUrl("href").startsWith("https://www.akibapass.tv/checkout/$id?") }
-        val availableFrom = Regex("Ab\\s+(\\d{2}\\.\\d{2}\\.\\d{4})\\s+verfügbar", RegexOption.IGNORE_CASE)
+        val availableFrom = Regex("Ab\\s+(\\d{2}\\.\\d{2}\\.\\d{4})\\s+verf?gbar", RegexOption.IGNORE_CASE)
             .find(document.selectFirst(".collection-description")?.text().orEmpty())
             ?.groupValues?.getOrNull(1)
             ?.let { runCatching { LocalDate.parse(it, DateTimeFormatter.ofPattern("dd.MM.uuuu")) }.getOrNull() }

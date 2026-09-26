@@ -28,7 +28,7 @@ class Anime2YouNewsParserTest {
 
     @Test fun announcementWithoutDateIsNotARelease() {
         val item = Anime2YouRssParser.parse("""
-            <rss><channel><item><title>Serie erhält zweite Staffel</title>
+            <rss><channel><item><title>Serie erh?lt zweite Staffel</title>
             <link>https://www.anime2you.de/news/example/</link><guid>x</guid>
             <pubDate>Sun, 09 Aug 2026 12:00:00 +0200</pubDate></item></channel></rss>
         """.trimIndent()).single()
@@ -41,7 +41,7 @@ class Anime2YouNewsParserTest {
             announcementId = "old", title = "Neues zu Kusuriya no Hitorigoto", publishedAt = 10
         )
         val current = row("Anime2You", "https://www.anime2you.de/news/new").copy(
-            announcementId = "new", title = "Die Tagebücher der Apothekerin: Staffel 3 bestätigt", publishedAt = 20
+            announcementId = "new", title = "Die Tageb?cher der Apothekerin: Staffel 3 best?tigt", publishedAt = 20
         )
         val unrelated = row("Anime2You", "https://www.anime2you.de/news/other").copy(
             announcementId = "other", title = "Ein anderer Anime", publishedAt = 30
@@ -50,7 +50,7 @@ class Anime2YouNewsParserTest {
             listOf("new", "old"),
             Anime2YouTitleNewsMatcher.matching(
                 listOf(old, unrelated, current),
-                listOf("Die Tagebücher der Apothekerin", "Kusuriya no Hitorigoto")
+                listOf("Die Tageb?cher der Apothekerin", "Kusuriya no Hitorigoto")
             ).map { it.announcementId }
         )
     }
@@ -63,16 +63,16 @@ class Anime2YouNewsParserTest {
 
     @Test fun titleVariantsIncludeOriginalAndArticleFreeFormWithoutDuplicates() {
         assertEquals(
-            listOf("The Ancient Magus' Bride", "Ancient Magus' Bride", "魔法使いの嫁"),
-            Anime2YouTitleVariants.build(listOf(" The Ancient Magus' Bride ", "the ancient magus' bride", "魔法使いの嫁", "null", ""))
+            listOf("The Ancient Magus' Bride", "Ancient Magus' Bride", "??????"),
+            Anime2YouTitleVariants.build(listOf(" The Ancient Magus' Bride ", "the ancient magus' bride", "??????", "null", ""))
         )
     }
 
     @Test fun normalizationHandlesUnicodeCaseAndPunctuationGenerically() {
-        assertEquals("café au lait season 2", Anime2YouTitleNormalizer.normalize("  CAFÉ—au: Lait! Season-2  "))
+        assertEquals("caf? au lait season 2", Anime2YouTitleNormalizer.normalize("  CAF??au: Lait! Season-2  "))
         assertEquals(
             null,
-            Anime2YouTitleNewsMatcher.rejectionReason("Neuigkeiten zu »SPY × FAMILY«", null, listOf("Spy x Family"))
+            Anime2YouTitleNewsMatcher.rejectionReason("Neuigkeiten zu ?SPY ? FAMILY?", null, listOf("Spy x Family"))
         )
         assertEquals("TITLE_MISMATCH", Anime2YouTitleNewsMatcher.rejectionReason("Neuigkeiten zu One Piece", null, listOf("Frieren")))
     }
@@ -80,9 +80,9 @@ class Anime2YouNewsParserTest {
     @Test fun searchHtmlParsesAndCanonicalizesUniqueArticles() {
         val html = """
             <html><body>
-              <div class="tdb_module_loop"><h3 class="entry-title"><a href="https://www.anime2you.de/news/123/example/?tracking=x">Anime: Titel – neue Staffel</a></h3>
+              <div class="tdb_module_loop"><h3 class="entry-title"><a href="https://www.anime2you.de/news/123/example/?tracking=x">Anime: Titel ? neue Staffel</a></h3>
                 <time datetime="2026-09-10T12:30:00+02:00"></time><div class="td-excerpt">Kurze Vorschau.</div></div>
-              <div class="tdb_module_loop"><h3 class="entry-title"><a href="https://www.anime2you.de/news/123/example/">Anime: Titel – neue Staffel</a></h3></div>
+              <div class="tdb_module_loop"><h3 class="entry-title"><a href="https://www.anime2you.de/news/123/example/">Anime: Titel ? neue Staffel</a></h3></div>
             </body></html>
         """.trimIndent()
         val page = Anime2YouSearchParser.parse(html)
@@ -93,7 +93,7 @@ class Anime2YouNewsParserTest {
     }
 
     @Test fun nativeSynonymAlternativeAndPunctuationVariantsCanMatch() {
-        val variants = listOf("Bocchi the Rock!", "ぼっち・ざ・ろっく！", "Bocchi, the Rock", "Alternative Name")
+        val variants = listOf("Bocchi the Rock!", "??????????", "Bocchi, the Rock", "Alternative Name")
         variants.forEach { variant ->
             assertEquals(null, Anime2YouTitleNewsMatcher.rejectionReason("Artikel zu $variant: Trailer", null, variants))
         }
@@ -101,11 +101,11 @@ class Anime2YouNewsParserTest {
 
     @Test fun equivalentSeasonWordingMatchesReleaseArticles() {
         assertEquals(null, Anime2YouTitleNewsMatcher.rejectionReason(
-            "Konkreter Termin von »Black Clover Second Season« + Visual", null,
+            "Konkreter Termin von ?Black Clover Second Season? + Visual", null,
             listOf("Black Clover Season 2")
         ))
         assertEquals(null, Anime2YouTitleNewsMatcher.rejectionReason(
-            "Starttermin der dritten Staffel von »The Apothecary Diaries« + Trailer", null,
+            "Starttermin der dritten Staffel von ?The Apothecary Diaries? + Trailer", null,
             listOf("The Apothecary Diaries Season 3")
         ))
         val searchVariants = Anime2YouTitleVariants.build(listOf("Black Clover 2nd Season", "Black Clover Season 2"))
@@ -118,17 +118,17 @@ class Anime2YouNewsParserTest {
 
     @Test fun commonRomajiTranscriptionVariantMatches() {
         assertEquals(null, Anime2YouTitleNewsMatcher.rejectionReason(
-            "Termin von »Tokidoki Bosotto Russia-go de Dereru Tonari no Alya-san Season 2«",
+            "Termin von ?Tokidoki Bosotto Russia-go de Dereru Tonari no Alya-san Season 2?",
             null,
             listOf("Tokidoki Bosotto Russiya-go de Dereru Tonari no Alya-san Season 2")
         ))
         assertEquals(null, Anime2YouTitleNewsMatcher.rejectionReason(
-            "Start der zweiten »Alya Hides Her Feelings«-Staffel verschoben",
+            "Start der zweiten ?Alya Hides Her Feelings?-Staffel verschoben",
             null,
             listOf("Alya Sometimes Hides Her Feelings in Russian Season 2")
         ))
         assertTrue(Anime2YouReleaseNewsClassifier.classify(
-            "Neue Alya-Figur angekündigt", "Release im Januar 2027 bei einem Figurenhändler."
+            "Neue Alya-Figur angek?ndigt", "Release im Januar 2027 bei einem Figurenh?ndler."
         ).isEmpty())
         assertTrue(Anime2YouReleaseNewsClassifier.classify(
             "Neue Character-Song-CD zu Alya", "Die CD erscheint im Februar 2027."
@@ -146,30 +146,30 @@ class Anime2YouNewsParserTest {
             Anime2YouTitleNormalizer.normalize("Tsukimichi Dai San Maku")
         )
         assertEquals("TITLE_MISMATCH", Anime2YouTitleNewsMatcher.rejectionReason(
-            "Termin des zweiten Volumes der zweiten »TSUKIMICHI«-Staffel", null, variants
+            "Termin des zweiten Volumes der zweiten ?TSUKIMICHI?-Staffel", null, variants
         ))
         assertEquals(null, Anime2YouTitleNewsMatcher.rejectionReason(
-            "Start der dritten »TSUKIMICHI«-Staffel steht fest", null, variants
+            "Start der dritten ?TSUKIMICHI?-Staffel steht fest", null, variants
         ))
     }
 
     @Test fun sequelRejectsUnnumberedFirstSeasonAndEditorialArticles() {
         val sequel = listOf("Witch Hat Atelier Season 2", "Tongari Boushi no Atelier 2nd Season")
         assertEquals("TITLE_MISMATCH", Anime2YouTitleNewsMatcher.rejectionReason(
-            "Start der Fantasy-Serie »Witch Hat Atelier« verschoben", null, sequel
+            "Start der Fantasy-Serie ?Witch Hat Atelier? verschoben", null, sequel
         ))
         assertEquals(null, Anime2YouTitleNewsMatcher.rejectionReason(
-            "Erster Teaser zur zweiten Staffel von »Witch Hat Atelier«", null, sequel
+            "Erster Teaser zur zweiten Staffel von ?Witch Hat Atelier?", null, sequel
         ))
         assertTrue(Anime2YouReleaseNewsClassifier.classify(
-            "»Witch Hat Atelier«-Autorin verspricht: Das Warten auf Staffel 2 lohnt sich",
-            "Die erste Staffel ist bei Crunchyroll verfügbar."
+            "?Witch Hat Atelier?-Autorin verspricht: Das Warten auf Staffel 2 lohnt sich",
+            "Die erste Staffel ist bei Crunchyroll verf?gbar."
         ).isEmpty())
         assertTrue(Anime2YouReleaseNewsClassifier.classify(
             "Neue Kooperation zu Witch Hat Atelier", "Die Serie startet 2026 bei Crunchyroll."
         ).isEmpty())
         assertTrue(ReleaseNewsCategory.TRAILER_TEASER in Anime2YouReleaseNewsClassifier.classify(
-            "Erster Teaser zur zweiten Staffel von Witch Hat Atelier", "Das Video wurde veröffentlicht."
+            "Erster Teaser zur zweiten Staffel von Witch Hat Atelier", "Das Video wurde ver?ffentlicht."
         ))
     }
 
@@ -194,13 +194,13 @@ class Anime2YouNewsParserTest {
             "Anime verschoben", "Der neue Termin ist der 5. Januar 2027."
         ))
         assertTrue(ReleaseNewsCategory.STREAMING_PROVIDER in Anime2YouReleaseNewsClassifier.classify(
-            "Crunchyroll zeigt die Serie", "Der Simulcast ist für Deutschland bestätigt."
+            "Crunchyroll zeigt die Serie", "Der Simulcast ist f?r Deutschland best?tigt."
         ))
         assertTrue(ReleaseNewsCategory.NO_DACH_STREAMING_LICENSE in Anime2YouReleaseNewsClassifier.classify(
-            "Keine Streaminglizenz", "Kein Simulcast für Deutschland ist geplant."
+            "Keine Streaminglizenz", "Kein Simulcast f?r Deutschland ist geplant."
         ))
         assertTrue(ReleaseNewsCategory.STREAMING_PROVIDER in Anime2YouReleaseNewsClassifier.classify(
-            "Netflix zeigt Fool Night weltweit exklusiv", "Der Anime wurde für das Netflix-Programm angekündigt."
+            "Netflix zeigt Fool Night weltweit exklusiv", "Der Anime wurde f?r das Netflix-Programm angek?ndigt."
         ))
         assertEquals("TITLE_MISMATCH", Anime2YouTitleNewsMatcher.rejectionReason(
             "Netflix zeigt Witch Hat Atelier weltweit exklusiv", null, listOf("Witch Hat Atelier Season 2")
@@ -212,26 +212,26 @@ class Anime2YouNewsParserTest {
             "Deutscher Disc-Release", "Die Komplettbox erscheint auf DVD und Blu-ray."
         ))
         assertTrue(ReleaseNewsCategory.PHYSICAL_RELEASE_ONLY in Anime2YouReleaseNewsClassifier.classify(
-            "Releaseplan und Steelbook vorgestellt", "Die Collector's Edition erscheint später."
+            "Releaseplan und Steelbook vorgestellt", "Die Collector's Edition erscheint sp?ter."
         ))
         assertTrue(ReleaseNewsCategory.TRAILER_TEASER in Anime2YouReleaseNewsClassifier.classify(
             "Neuer Trailer und Visual", "Das Video zeigt neue Charaktere."
         ))
         assertTrue(Anime2YouReleaseNewsClassifier.classify(
-            "Neue Figuren vorgestellt", "Merchandise zur Serie wurde präsentiert."
+            "Neue Figuren vorgestellt", "Merchandise zur Serie wurde pr?sentiert."
         ).isEmpty())
         assertTrue(Anime2YouReleaseNewsClassifier.classify(
-            "Neues Merchandise zu Clevatess", "Die Serie läuft bei Crunchyroll. Neue Figuren und CDs wurden vorgestellt."
+            "Neues Merchandise zu Clevatess", "Die Serie l?uft bei Crunchyroll. Neue Figuren und CDs wurden vorgestellt."
         ).isEmpty())
     }
 
     @Test fun articleParserUsesBodyInAdditionToHeadline() {
         val article = Anime2YouArticleParser.parse("""
-            <article><h1 class="entry-title">Neuer Trailer veröffentlicht</h1>
+            <article><h1 class="entry-title">Neuer Trailer ver?ffentlicht</h1>
             <time datetime="2026-09-12T10:00:00+02:00"></time>
             <div class="td-post-content"><p>Der Simulcast startet im Oktober 2026 bei Netflix in Deutschland.</p></div></article>
         """.trimIndent(), "https://www.anime2you.de/news/123/test/")
-        assertEquals("Neuer Trailer veröffentlicht", article.title)
+        assertEquals("Neuer Trailer ver?ffentlicht", article.title)
         assertTrue(article.text.contains("Netflix"))
         assertTrue(ReleaseNewsCategory.DACH_LICENSE in Anime2YouReleaseNewsClassifier.classify(article.title, article.text))
     }

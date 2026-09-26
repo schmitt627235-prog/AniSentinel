@@ -73,7 +73,7 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
             base.copy(
                 provider = de.anisentinel.app.domain.provider.ProviderVisibilityPolicy.visibleProviders(
                     providers[entity.id].orEmpty().map { it.provider }, appSettings.disabledProviderIds
-                ).joinToString(" · "),
+                ).joinToString(" ? "),
                 expectedReleaseAt = display?.countdownTarget?.let(Instant::ofEpochSecond) ?: base.expectedReleaseAt,
                 episode = display?.identity?.episode ?: base.episode,
                 status = when {
@@ -162,7 +162,7 @@ private fun String.toFavoritesSort(): FavoritesSort = when (this) {
         else -> runCatching { FavoritesSort.valueOf(this) }.getOrDefault(FavoritesSort.NEXT_RELEASE)
 }
 
-internal fun Anime.primaryStreamingProvider(): String = provider.split('·')
+internal fun Anime.primaryStreamingProvider(): String = provider.split('?')
     .map(String::trim)
     .filter(String::isNotBlank)
     .let(StreamingProviderPolicy::visible)
@@ -206,7 +206,7 @@ object UpcomingSeasonPolicy {
     fun cycleLabel(start: Int): String = "Season $start/${(start + 1).toString().takeLast(2)}"
 
     fun seasonLabel(season: String?, year: Int?): String = when (season) {
-        "SPRING" -> "Frühling ${year ?: ""}".trim()
+        "SPRING" -> "Fr?hling ${year ?: ""}".trim()
         "SUMMER" -> "Sommer ${year ?: ""}".trim()
         "FALL" -> "Herbst ${year ?: ""}".trim()
         "WINTER" -> "Winter ${year ?: ""}".trim()

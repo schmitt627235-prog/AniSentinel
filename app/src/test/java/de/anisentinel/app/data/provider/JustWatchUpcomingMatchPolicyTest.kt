@@ -11,16 +11,16 @@ class JustWatchUpcomingMatchPolicyTest {
         val result = JustWatchUpcomingMatchPolicy.uniqueCandidate(
             listOf("Kusuriya no Hitorigoto 3rd Season", "The Apothecary Diaries Season 3"),
             "The Apothecary Diaries Season 3", 2026, "SHOW", 3,
-            listOf(candidate("Die Tagebücher der Apothekerin: Staffel 3", 2026, "SHOW"))
+            listOf(candidate("Die Tageb?cher der Apothekerin: Staffel 3", 2026, "SHOW"))
         )
-        assertEquals("Die Tagebücher der Apothekerin: Staffel 3", result?.title)
+        assertEquals("Die Tageb?cher der Apothekerin: Staffel 3", result?.title)
     }
 
     @Test fun ambiguityWrongSeasonAndWrongFormatAreRejected() {
         val aliases = listOf("Example Season 3")
         assertNull(JustWatchUpcomingMatchPolicy.uniqueCandidate(
             aliases, aliases.single(), 2027, "SHOW", 3,
-            listOf(candidate("Beispiel Staffel 3", 2027, "SHOW", "a"), candidate("Beispiel – Dritte Staffel", 2027, "SHOW", "b"))
+            listOf(candidate("Beispiel Staffel 3", 2027, "SHOW", "a"), candidate("Beispiel ? Dritte Staffel", 2027, "SHOW", "b"))
         ))
         assertNull(JustWatchUpcomingMatchPolicy.uniqueCandidate(
             aliases, aliases.single(), 2027, "SHOW", 3,

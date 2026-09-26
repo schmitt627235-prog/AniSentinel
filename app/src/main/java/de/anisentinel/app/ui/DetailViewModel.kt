@@ -41,6 +41,7 @@ data class DetailUiState(
     ,val releases: List<de.anisentinel.app.data.local.EpisodeReleaseEntity> = emptyList()
     ,val historyImportRunning: Boolean = false
     ,val historyImportResult: String? = null
+    ,val appleTvImportResult: String? = null
     ,val adnHistoryDiagnostics: de.anisentinel.app.data.provider.AdnHistoryDiagnostics? = null
     ,val postponements: List<ReleasePostponementEntity> = emptyList()
     ,val justWatchMetadata: de.anisentinel.app.data.local.JustWatchCatalogTitleEntity? = null
@@ -62,6 +63,7 @@ class DetailViewModel(
     private var animeEntity: AnimeEntity? = null
     private var automaticCrunchyrollHistoryAttempted = false
     private var automaticAkibaPassImportAttempted = false
+    private var automaticAppleTvImportAttempted = false
     private var historicalSeasonMappingsReconciled = false
     private val _state = MutableStateFlow(
         DetailUiState(anime = anime, loading = anime == null)
@@ -77,6 +79,7 @@ class DetailViewModel(
                 _state.value = _state.value.copy(anime = anime, loading = false)
                 refreshJustWatchMetadata()
                 maybeImportAkibaPass()
+                maybeImportAppleTv()
             } else {
                 _state.value = _state.value.copy(loading = false, notFound = true)
                 return@launch
@@ -150,6 +153,7 @@ class DetailViewModel(
                     providerReferences = it
                 )
                 maybeImportAkibaPass()
+                maybeImportAppleTv()
             }
         }
         viewModelScope.launch {
@@ -227,6 +231,10 @@ class DetailViewModel(
         val confirmed = releases.filter {
             it.isHistoricalImport && !it.provider.isNullOrBlank() &&
                 !it.provider.equals("AKIBA PASS", true) && !it.provider.equals("Apple TV", true) &&
+                // Structured Crunchyroll imports already carry the exact catalogue and
+                // provider-season IDs. Re-inferring them from a release's canonical
+                // season can create a false mapping to a different Conan catalogue.
+                !it.sourceReleaseId.startsWith("crunchyroll-history:") &&
                 it.metadataSource != "ANIWORLD_CALENDAR" &&
                 (!it.providerUrl.isNullOrBlank() || !it.sourceUrl.isNullOrBlank())
         }.groupBy { release ->
@@ -494,6 +502,72 @@ class DetailViewModel(
                         "AKIBA_ERROR:${result.code}"
                 }
             )
+        }
+    }
+
+    private fun maybeImportAppleTv() {
+        if (automaticAppleTvImportAttempted || anime == null) return
+        val officialFallbackUrl = de.anisentinel.app.data.provider.AppleTvOfficialPageRegistry
+            .confirmedUrl(animeId, animeEntity?.titleGerman)
+        val confirmed = _state.value.providerReferences.any {
+            de.anisentinel.app.data.provider.AppleTvCatalogImporter.isAppleTvStoreProvider(it.provider) &&
+                it.source in setOf(
+                    "UNOFFICIAL_JUSTWATCH_DIAGNOSTIC",
+                    de.anisentinel.app.data.provider.AppleTvCatalogImporter.OFFICIAL_PUBLIC_SOURCE
+                ) &&
+                it.providerMarket.equals("DE", true) &&
+                de.anisentinel.app.data.provider.AppleTvPublicCatalogParser.isAppleShowUrl(it.seriesUrl.orEmpty())
+        }
+        if (!confirmed && officialFallbackUrl == null) return
+        automaticAppleTvImportAttempted = true
+        viewModelScope.launch {
+            val dao = container.database.aniSentinelDao()
+            val existing = dao.providerMappingsForAnimeProvider(animeId, "Apple TV")
+            val now = java.time.Instant.now().epochSecond
+            val malformedPreviousDuration = dao.episodeReleasesForAnime(animeId).any {
+                it.provider.equals("Apple TV", true) &&
+                    (it.providerEpisodeDuration?.length ?: 0) > 30
+            }
+            val partialAppleCatalog = dao.episodeReleasesForAnime(animeId).any {
+                it.provider.equals("Apple TV", true) && it.isHistoricalImport &&
+                    it.metadataSource == "APPLE_TV_PUBLIC_PAGE_PARTIAL"
+            }
+            if (!malformedPreviousDuration && !partialAppleCatalog && existing.isNotEmpty() &&
+                existing.all { now - it.lastConfirmedAt < 6 * 60 * 60 }) return@launch
+            val aliases = verifiedCatalogAliases()
+            val result = if (confirmed) container.appleTvCatalogImporter.importFromJustWatch(animeId, aliases)
+            else container.appleTvCatalogImporter.importFromOfficialPage(
+                animeId, requireNotNull(officialFallbackUrl), aliases
+            )
+            _state.value = _state.value.copy(appleTvImportResult = when (result) {
+                is de.anisentinel.app.data.provider.HistoricalImportResult.Success ->
+                    "APPLE_TV_PARTIAL:${result.inserted}"
+                is de.anisentinel.app.data.provider.HistoricalImportResult.Failed ->
+                    "APPLE_TV_ERROR:${result.code}"
+            })
+        }
+    }
+
+    fun importAppleTvOfficialPage(url: String) {
+        if (_state.value.historyImportRunning || !de.anisentinel.app.data.provider.AppleTvPublicCatalogParser.isAppleShowUrl(url)) {
+            _state.value = _state.value.copy(appleTvImportResult = "APPLE_TV_ERROR:APPLE_TV_SHOW_URL_INVALID")
+            return
+        }
+        viewModelScope.launch {
+            _state.value = _state.value.copy(historyImportRunning = true, appleTvImportResult = null)
+            try {
+                val result = container.appleTvCatalogImporter.importFromOfficialPage(
+                    animeId, url, verifiedCatalogAliases()
+                )
+                _state.value = _state.value.copy(appleTvImportResult = when (result) {
+                    is de.anisentinel.app.data.provider.HistoricalImportResult.Success ->
+                        "APPLE_TV_PARTIAL:${result.inserted}"
+                    is de.anisentinel.app.data.provider.HistoricalImportResult.Failed ->
+                        "APPLE_TV_ERROR:${result.code}"
+                })
+            } finally {
+                _state.value = _state.value.copy(historyImportRunning = false)
+            }
         }
     }
 

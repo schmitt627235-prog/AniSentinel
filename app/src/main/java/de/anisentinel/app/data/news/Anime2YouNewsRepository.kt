@@ -258,7 +258,7 @@ object Anime2YouTitleNewsCachePolicy {
 object Anime2YouTitleNormalizer {
     fun normalize(value: String): String = Normalizer.normalize(value, Normalizer.Form.NFKC)
         .lowercase(Locale.GERMAN)
-        .replace('×', 'x')
+        .replace('?', 'x')
         .replace(Regex("\\brussiya(?=-go\\b)"), "russia")
         .replace(Regex("<[^>]+>"), " ")
         .replace(Regex("[^\\p{L}\\p{N}]+"), " ")
@@ -311,7 +311,7 @@ object Anime2YouTitleVariants {
         addAll(values)
         values.forEach { title ->
             title.replace(
-                Regex("(?i)\\s+(?:(?:season|staffel)\\s*\\d+|\\d+(?:st|nd|rd|th)\\s+season|(?:second|third|fourth)\\s+season|第\\s*\\d+\\s*期)\\s*$"),
+                Regex("(?i)\\s+(?:(?:season|staffel)\\s*\\d+|\\d+(?:st|nd|rd|th)\\s+season|(?:second|third|fourth)\\s+season|?\\s*\\d+\\s*?)\\s*$"),
                 ""
             ).trim().takeIf { it.length >= 4 && it != title }?.let(::add)
         }
@@ -404,15 +404,15 @@ internal object Anime2YouArticleParser {
 }
 
 object Anime2YouReleaseNewsClassifier {
-    private val postponement = Regex("verschob|verzöger|verspät|pause|unterbrech|neuer termin|wiederaufnahme", RegexOption.IGNORE_CASE)
-    private val releaseDate = Regex("start(?:et|termin|datum)?|erscheint|ausstrahlung|sendestart|ab dem|premiere|veröffentlich", RegexOption.IGNORE_CASE)
+    private val postponement = Regex("verschob|verz?ger|versp?t|pause|unterbrech|neuer termin|wiederaufnahme", RegexOption.IGNORE_CASE)
+    private val releaseDate = Regex("start(?:et|termin|datum)?|erscheint|ausstrahlung|sendestart|ab dem|premiere|ver?ffentlich", RegexOption.IGNORE_CASE)
     private val streaming = Regex("stream|simulcast|crunchyroll|netflix|disney\\+|adn|aniverse|amazon(?: prime)? video", RegexOption.IGNORE_CASE)
     private val dach = Regex("deutschland|deutschsprach|dach|hierzulande|deutschen raum|deutsche lizenz|deutscher simulcast", RegexOption.IGNORE_CASE)
-    private val noDach = Regex("keine? (?:deutsche |dach[- ]?)?(?:streaming)?lizenz|kein simulcast (?:in|für) (?:deutschland|den deutschsprachigen raum)|nicht (?:in deutschland|im deutschsprachigen raum) verfügbar", RegexOption.IGNORE_CASE)
+    private val noDach = Regex("keine? (?:deutsche |dach[- ]?)?(?:streaming)?lizenz|kein simulcast (?:in|f?r) (?:deutschland|den deutschsprachigen raum)|nicht (?:in deutschland|im deutschsprachigen raum) verf?gbar", RegexOption.IGNORE_CASE)
     private val physical = Regex("dvd|blu[ -]?ray|disc|home video|heimvideo|komplettbox|steelbook|collector'?s edition|volume|releaseplan", RegexOption.IGNORE_CASE)
     private val irrelevantOnly = Regex("merchandise|figur|\\bcd\\b|soundtrack|gewinnspiel|ranking|verkaufszahl|interview|sprecher|cast|manga|game|spiel", RegexOption.IGNORE_CASE)
-    private val editorialOnly = Regex("autor(?:in)?|schöpfer|verspricht|warten.+lohnt|soll.+maßstäbe setzen|statement|kommentar", RegexOption.IGNORE_CASE)
-    private val cooperationOnly = Regex("kooperation|kollaboration|collaboration|crossover|wirbt für|werbekampagne", RegexOption.IGNORE_CASE)
+    private val editorialOnly = Regex("autor(?:in)?|sch?pfer|verspricht|warten.+lohnt|soll.+ma?st?be setzen|statement|kommentar", RegexOption.IGNORE_CASE)
+    private val cooperationOnly = Regex("kooperation|kollaboration|collaboration|crossover|wirbt f?r|werbekampagne", RegexOption.IGNORE_CASE)
     private val trailerTeaser = Regex("trailer|teaser", RegexOption.IGNORE_CASE)
 
     fun classify(title: String, articleText: String): Set<ReleaseNewsCategory> {
@@ -424,7 +424,7 @@ object Anime2YouReleaseNewsClassifier {
             (streaming.containsMatchIn(title) && Regex("zeigt|streamt|simulcast|anbieter|lizenz|lizenziert|weltweit|auf abruf|programm|katalog|exklusiv|bei\\s+(?:crunchyroll|netflix|disney\\+|adn|aniverse|amazon)", RegexOption.IGNORE_CASE).containsMatchIn(title)) ||
                 (dach.containsMatchIn(title) && Regex("lizenz|lizenziert|simulcast|stream", RegexOption.IGNORE_CASE).containsMatchIn(title)) ||
                 explicitlyNoDach
-        val hasDatedRelease = releaseDate.containsMatchIn(text) && Regex("\\b(?:19|20)\\d{2}\\b|\\b\\d{1,2}\\.\\s*(?:januar|februar|märz|april|mai|juni|juli|august|september|oktober|november|dezember)|frühling|sommer|herbst|winter", RegexOption.IGNORE_CASE).containsMatchIn(text)
+        val hasDatedRelease = releaseDate.containsMatchIn(text) && Regex("\\b(?:19|20)\\d{2}\\b|\\b\\d{1,2}\\.\\s*(?:januar|februar|m?rz|april|mai|juni|juli|august|september|oktober|november|dezember)|fr?hling|sommer|herbst|winter", RegexOption.IGNORE_CASE).containsMatchIn(text)
         val hasConcreteReleaseSignal = postponement.containsMatchIn(text) ||
             hasDatedRelease || hasTrailerOrTeaser || hasPhysicalRelease || hasProviderOrLicenseAnnouncement
         // Provider names are commonly mentioned incidentally in merchandise, cast and trailer
@@ -435,7 +435,7 @@ object Anime2YouReleaseNewsClassifier {
             !hasConcreteReleaseSignal) return emptySet()
         val categories = buildSet {
             if (postponement.containsMatchIn(text)) add(ReleaseNewsCategory.POSTPONEMENT)
-            if (releaseDate.containsMatchIn(text) && (Regex("\\b(?:19|20)\\d{2}\\b|\\b\\d{1,2}\\.\\s*(?:januar|februar|märz|april|mai|juni|juli|august|september|oktober|november|dezember)|frühling|sommer|herbst|winter", RegexOption.IGNORE_CASE).containsMatchIn(text))) add(ReleaseNewsCategory.RELEASE_DATE)
+            if (releaseDate.containsMatchIn(text) && (Regex("\\b(?:19|20)\\d{2}\\b|\\b\\d{1,2}\\.\\s*(?:januar|februar|m?rz|april|mai|juni|juli|august|september|oktober|november|dezember)|fr?hling|sommer|herbst|winter", RegexOption.IGNORE_CASE).containsMatchIn(text))) add(ReleaseNewsCategory.RELEASE_DATE)
             if (streaming.containsMatchIn(text)) add(ReleaseNewsCategory.STREAMING_PROVIDER)
             if (!explicitlyNoDach && dach.containsMatchIn(text) && streaming.containsMatchIn(text)) add(ReleaseNewsCategory.DACH_LICENSE)
             if (explicitlyNoDach) add(ReleaseNewsCategory.NO_DACH_STREAMING_LICENSE)
@@ -480,7 +480,7 @@ internal object Anime2YouSearchParser {
 }
 
 internal object Anime2YouPostponementMatcher {
-    private val shiftSignals = Regex("verschob|verzöger|verspät|später|neuer termin|pause|wiederaufnahme", RegexOption.IGNORE_CASE)
+    private val shiftSignals = Regex("verschob|verz?ger|versp?t|sp?ter|neuer termin|pause|wiederaufnahme", RegexOption.IGNORE_CASE)
     private val physicalSignals = Regex("dvd|blu[ -]?ray|disc|volume|komplettbox|heimvideo", RegexOption.IGNORE_CASE)
     private val episodeSignals = Regex("stream|simulcast|tv|episode|folge|staffel|ausstrahlung|wiederaufnahme", RegexOption.IGNORE_CASE)
 
@@ -626,14 +626,14 @@ internal object Anime2YouRssParser {
     }.getOrNull()
 
     internal fun classify(text: String): AnnouncementType = when {
-        Regex("verschob|verzöger|neuer termin statt").containsMatchIn(text) -> AnnouncementType.DELAY
+        Regex("verschob|verz?ger|neuer termin statt").containsMatchIn(text) -> AnnouncementType.DELAY
         Regex("produktionspause|pause|unterbrech").containsMatchIn(text) -> AnnouncementType.PRODUCTION_BREAK
         Regex("synchro|dub|deutsche sprachfassung|auf deutsch").containsMatchIn(text) -> AnnouncementType.DUB_CONFIRMED
-        Regex("simulcast|streaming|streamt|auf (?:prime video|netflix|crunchyroll|aniverse|adn)|verfügbar").containsMatchIn(text) -> AnnouncementType.SIMULCAST_CONFIRMED
+        Regex("simulcast|streaming|streamt|auf (?:prime video|netflix|crunchyroll|aniverse|adn)|verf?gbar").containsMatchIn(text) -> AnnouncementType.SIMULCAST_CONFIRMED
         Regex("starttermin|termin .*steht fest|startet am|ab dem ").containsMatchIn(text) -> AnnouncementType.NEW_DATE
         Regex("fortsetzung|weitere staffel").containsMatchIn(text) -> AnnouncementType.CONTINUATION_CONFIRMED
         Regex("staffel \\d+|neue staffel|zweite staffel|dritte staffel|vierte staffel").containsMatchIn(text) -> AnnouncementType.NEW_SEASON
-        Regex("erhält (?:eine )?anime|anime-adaption|anime angekündigt").containsMatchIn(text) -> AnnouncementType.NEW_ANIME
+        Regex("erh?lt (?:eine )?anime|anime-adaption|anime angek?ndigt").containsMatchIn(text) -> AnnouncementType.NEW_ANIME
         else -> AnnouncementType.OTHER
     }
 }
@@ -689,10 +689,10 @@ private fun AnnouncementCandidate.toEntity(fetchedAt: Instant): AnnouncementEnti
 }
 
 private fun normalizedSubject(title: String): String {
-    val quotedSubject = Regex("»([^«]+)«").find(title)?.groupValues?.getOrNull(1)
+    val quotedSubject = Regex("?([^?]+)?").find(title)?.groupValues?.getOrNull(1)
     return (quotedSubject ?: title).lowercase(Locale.GERMAN)
-    .replace(Regex("[^a-z0-9äöüß]+"), " ")
-    .replace(Regex("\\b(?:verschoben|starttermin|termin|trailer|visual|angekündigt|steht fest)\\b"), " ")
+    .replace(Regex("[^a-z0-9????]+"), " ")
+    .replace(Regex("\\b(?:verschoben|starttermin|termin|trailer|visual|angek?ndigt|steht fest)\\b"), " ")
     .replace(Regex("\\s+"), " ").trim()
 }
 

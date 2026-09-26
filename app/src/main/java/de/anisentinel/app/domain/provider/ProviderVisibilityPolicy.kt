@@ -1,7 +1,7 @@
 package de.anisentinel.app.domain.provider
 
 object ProviderVisibilityPolicy {
-    val supportedProviderIds = linkedSetOf("crunchyroll", "adn", "netflix", "disney_plus", "aniverse")
+    val supportedProviderIds = linkedSetOf("crunchyroll", "adn", "netflix", "disney_plus", "aniverse", "akiba_pass", "apple_tv")
 
     fun canonicalId(value: String): String? = when {
         value.contains("crunchyroll", true) -> "crunchyroll"
@@ -9,6 +9,8 @@ object ProviderVisibilityPolicy {
         value.contains("netflix", true) -> "netflix"
         value.contains("disney", true) -> "disney_plus"
         value.contains("aniverse", true) -> "aniverse"
+        value.contains("akiba pass", true) -> "akiba_pass"
+        (value.equals("Apple TV", true) || value.equals("Apple TV Store", true)) -> "apple_tv"
         else -> null
     }
 
@@ -18,6 +20,8 @@ object ProviderVisibilityPolicy {
         "netflix" -> "Netflix"
         "disney_plus" -> "Disney+"
         "aniverse" -> "aniverse"
+        "akiba_pass" -> "AKIBA PASS"
+        "apple_tv" -> "Apple TV"
         else -> id
     }
 

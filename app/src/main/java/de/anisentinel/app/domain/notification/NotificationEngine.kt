@@ -41,20 +41,20 @@ interface NotificationCopy {
 
 object GermanNotificationCopy : NotificationCopy {
     override val releaseDueTitle = "Releasezeit erreicht"
-    override fun releaseDueMessage(episode: Int) = "Folge $episode sollte jetzt erscheinen. AniSentinel prüft die Anbieter."
+    override fun releaseDueMessage(episode: Int) = "Folge $episode sollte jetzt erscheinen. AniSentinel pr?ft die Anbieter."
     override val reminderTitle = "Release steht bevor"
-    override fun reminderMessage(episode: Int) = "Folge $episode erscheint in Kürze."
-    override val availableTitle = "Neue Folge verfügbar"
-    override fun availableMessage(episode: Int) = "Folge $episode wurde als verfügbar erkannt."
-    override val delayedTitle = "Release verspätet"
-    override fun delayedMessage(episode: Int) = "Folge $episode ist noch nicht verfügbar."
+    override fun reminderMessage(episode: Int) = "Folge $episode erscheint in K?rze."
+    override val availableTitle = "Neue Folge verf?gbar"
+    override fun availableMessage(episode: Int) = "Folge $episode wurde als verf?gbar erkannt."
+    override val delayedTitle = "Release versp?tet"
+    override fun delayedMessage(episode: Int) = "Folge $episode ist noch nicht verf?gbar."
     override val postponedTitle = "Release offiziell verschoben"
     override fun postponedMessage(episode: Int) =
-        "Für Folge $episode liegt eine offizielle Meldung vor."
-    override val providerErrorTitle = "Provider vorübergehend nicht erreichbar"
-    override val providerErrorMessage = "Die Prüfung wird später erneut versucht."
+        "F?r Folge $episode liegt eine offizielle Meldung vor."
+    override val providerErrorTitle = "Provider vor?bergehend nicht erreichbar"
+    override val providerErrorMessage = "Die Pr?fung wird sp?ter erneut versucht."
     override val maintenanceTitle = "Provider im Wartungsmodus"
-    override fun maintenanceMessage(minutes: Long) = "Nächster Versuch in $minutes Minuten."
+    override fun maintenanceMessage(minutes: Long) = "N?chster Versuch in $minutes Minuten."
 }
 
 object EnglishNotificationCopy : NotificationCopy {
@@ -117,7 +117,7 @@ class NotificationEngine(
                     appendContext(event.animeTitle, event.season)
                     append(copy.availableMessage(event.episode))
                     append(" Anbieter: ")
-                    append(event.provider?.takeIf(String::isNotBlank) ?: "noch nicht eindeutig bestätigt")
+                    append(event.provider?.takeIf(String::isNotBlank) ?: "noch nicht eindeutig best?tigt")
                     append(".")
                     event.language?.let { append(" Sprachfassung: $it.") }
                     event.firstDetectedAt?.let {
@@ -168,7 +168,7 @@ class NotificationEngine(
                 stableId = "provider-error:${event.animeId}:${event.providerId}",
                 channel = NotificationChannel.SYSTEM,
                 title = event.animeTitle?.takeIf(String::isNotBlank) ?: copy.providerErrorTitle,
-                message = "Anbieterprüfung fehlgeschlagen."
+                message = "Anbieterpr?fung fehlgeschlagen."
             )
         } else null
         is NotificationEvent.ProviderMaintenance -> if (preferences.providerErrors) {
@@ -187,7 +187,7 @@ class NotificationEngine(
     }
 
     private fun StringBuilder.appendContext(title: String?, season: Int?) {
-        if (!title.isNullOrBlank()) append(title).append(" · ")
-        season?.let { append("S").append(it).append(" · ") }
+        if (!title.isNullOrBlank()) append(title).append(" ? ")
+        season?.let { append("S").append(it).append(" ? ") }
     }
 }

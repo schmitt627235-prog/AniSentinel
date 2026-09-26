@@ -104,24 +104,35 @@ class JustWatchCatalogRepository(
 
     private suspend fun persistSearchResults(titles: List<JustWatchCatalogTitle>, forcedAnimeId: String? = null) {
         val now = Instant.now().epochSecond
-        val existing = dao.allAnime().associateBy { normalize(it.titleGerman.ifBlank { it.titleEnglish.orEmpty() }) }
-        val anime = if (forcedAnimeId != null) emptyList() else titles.map { title ->
-            existing[normalize(title.title)] ?: AnimeEntity(
+        val existing = dao.allAnime()
+        fun canonicalMatch(title: JustWatchCatalogTitle): AnimeEntity? {
+            val key = normalize(title.title)
+            val matches = existing.filter { anime ->
+                listOfNotNull(anime.titleGerman, anime.titleEnglish, anime.titleRomaji, anime.titleNative)
+                    .any { normalize(it) == key } &&
+                    (title.releaseYear == null || anime.seasonYear == null || title.releaseYear == anime.seasonYear)
+            }
+            return matches.filterNot { it.id.startsWith("justwatch:") }.singleOrNull()
+                ?: matches.singleOrNull()
+        }
+        val identified = if (forcedAnimeId != null) emptyList() else titles.map { title ->
+            title to (canonicalMatch(title) ?: AnimeEntity(
                 id = "justwatch:${title.justWatchId}", anilistId = null, anisearchId = null,
                 titleGerman = title.title, titleEnglish = null, titleRomaji = null, titleNative = null,
                 description = "", coverUrl = title.coverUrl, bannerUrl = null, season = null,
                 seasonYear = title.releaseYear, totalEpisodes = null, updatedAt = now,
                 nextAiringAt = null, nextEpisode = null, sourceUpdatedAt = title.fetchedAt.epochSecond,
                 cachedAt = now
-            )
-        }.distinctBy { it.id }
-        val idByTitle = anime.associateBy { normalize(it.titleGerman) }
+            ))
+        }
+        val anime = identified.map { it.second }.distinctBy { it.id }
+        val idByTitle = identified.associate { normalize(it.first.title) to it.second.id }
         if (anime.isNotEmpty()) dao.upsertAnime(anime)
         dao.upsertJustWatchCatalogTitles(titles.map { title ->
-            title.toEntity(forcedAnimeId ?: idByTitle[normalize(title.title)]?.id)
+            title.toEntity(forcedAnimeId ?: idByTitle[normalize(title.title)])
         })
         titles.forEach { title ->
-            val animeId = forcedAnimeId ?: idByTitle[normalize(title.title)]?.id ?: return@forEach
+            val animeId = forcedAnimeId ?: idByTitle[normalize(title.title)] ?: return@forEach
             title.providerUrls.forEach { (provider, url) ->
                 dao.upsertProviderReference(ProviderReferenceEntity(
                     animeId, provider, url, "UNOFFICIAL_JUSTWATCH_DIAGNOSTIC",
@@ -198,7 +209,7 @@ object JustWatchUpcomingMatchPolicy {
 
     private fun installmentNumber(candidate: String): Int? = listOf(
             Regex("(?i)(?:season|staffel)\\s*(\\d+)"),
-            Regex("(?i)(\\d+)(?:st|nd|rd|th)\\s+season"), Regex("第\\s*(\\d+)\\s*期")
+            Regex("(?i)(\\d+)(?:st|nd|rd|th)\\s+season"), Regex("?\\s*(\\d+)\\s*?")
         ).firstNotNullOfOrNull { it.find(candidate)?.groupValues?.getOrNull(1)?.toIntOrNull() }
 }
 

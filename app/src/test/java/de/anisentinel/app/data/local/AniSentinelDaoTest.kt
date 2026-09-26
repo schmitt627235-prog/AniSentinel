@@ -330,7 +330,7 @@ class AniSentinelDaoTest {
         dao.upsertFavorite(favorite("atlas", true))
 
         dao.upsertAnime(
-            listOf(original.copy(titleGerman = "Atlas of Ash – Aktualisiert"))
+            listOf(original.copy(titleGerman = "Atlas of Ash ? Aktualisiert"))
         )
 
         val storedFavorite = dao.favorite("atlas")
@@ -342,7 +342,7 @@ class AniSentinelDaoTest {
             dao.observeFavorites().first().map { it.id }
         )
         assertEquals(
-            "Atlas of Ash – Aktualisiert",
+            "Atlas of Ash ? Aktualisiert",
             dao.observeAnime().first().single { it.id == "atlas" }.titleGerman
         )
     }

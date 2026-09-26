@@ -54,7 +54,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val now = java.time.Instant.now().epochSecond
         CatalogUiState(
             anime = cached.filter { anime ->
-                val providers = providersByAnime[anime.id].orEmpty().map { it.provider } + anime.provider.split('·')
+                val providers = providersByAnime[anime.id].orEmpty().map { it.provider } + anime.provider.split('?')
                 de.anisentinel.app.domain.provider.ProviderVisibilityPolicy.isAnimeVisible(providers, settings.disabledProviderIds)
             }.map { anime ->
                 val display = ReleaseDisplayResolver.nextFor(

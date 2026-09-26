@@ -201,13 +201,13 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
                             ?: row.anime.titleEnglish
                             ?: row.anime.titleRomaji
                             ?: row.anime.titleNative
-                            ?: "–",
+                            ?: "?",
                         row.release.episodeNumber, Instant.ofEpochSecond(at),
                         latestEpisodeAvailability?.providerName?.takeIf {
                             de.anisentinel.app.domain.provider.ProviderVisibilityPolicy.isProviderEnabled(it, settings.disabledProviderIds)
                         } ?: de.anisentinel.app.domain.provider.ProviderVisibilityPolicy
                                 .visibleProviders(row.providerReferences.map { it.provider }, settings.disabledProviderIds)
-                                .joinToString(" · ").takeIf { it.isNotBlank() },
+                                .joinToString(" ? ").takeIf { it.isNotBlank() },
                         row.release.metadataSource, row.release.sourceUrl, row.release.providerUrl,
                         ReleaseSourceType.fromMetadataSource(row.release.metadataSource),
                         row.availability.any { availability ->
@@ -228,7 +228,7 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
                         latestEpisodeAvailability?.firstAvailableAt?.let(Instant::ofEpochSecond),
                         latestEpisodeAvailability?.sourceAvailableAt?.let(Instant::ofEpochSecond),
                         latestCheck?.errorCode,
-                        fallback?.let { it.status + (it.errorCode?.let { code -> " · $code" } ?: "") }
+                        fallback?.let { it.status + (it.errorCode?.let { code -> " ? $code" } ?: "") }
                     ).copy(
                         isHistoricalImport = row.release.isHistoricalImport,
                         releaseTimePrecision = resolved.precision,
@@ -561,8 +561,8 @@ class CalendarViewModel(application: Application) : AndroidViewModel(application
             val crunchyrollInMonth = dao.historicalReleaseCount("Crunchyroll", targetStart, targetEnd)
             historySyncState.value = HistorySyncUiState(summary =
                 "${targetMonth.monthValue.toString().padStart(2, '0')}.${targetMonth.year}: " +
-                    "ADN $adnInMonth · Crunchyroll $crunchyrollInMonth · $sources Serien geprüft · " +
-                    "$inserted neu · $enriched ergänzt · $failed ohne importierbare Historie"
+                    "ADN $adnInMonth ? Crunchyroll $crunchyrollInMonth ? $sources Serien gepr?ft ? " +
+                    "$inserted neu ? $enriched erg?nzt ? $failed ohne importierbare Historie"
             )
         }
     }

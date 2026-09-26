@@ -92,14 +92,14 @@ class AnticipatedTitlesTest {
     @Test fun searchVariantsContainAllAniListTitlesAndSeasonAliases() {
         val value = title(1, "Re:Monster 2nd Season", "NOT_YET_RELEASED", 1).copy(
             englishTitle = "Re:Monster Season 2",
-            nativeTitle = "Re:Monster 第2期",
+            nativeTitle = "Re:Monster ?2?",
             identity = UpcomingAnimeIdentity("anilist:1", 1, null, null,
                 setOf("Re:Monster 2nd Season", "Re:Monster Dai 2 Ki"), null, 2)
         )
         val variants = AniSearchFutureMatcher.searchVariants(value)
         assertTrue("Re:Monster 2nd Season" in variants)
         assertTrue("Re:Monster Season 2" in variants)
-        assertTrue("Re:Monster 第2期" in variants)
+        assertTrue("Re:Monster ?2?" in variants)
         assertTrue("Re:Monster Dai 2 Ki" in variants)
     }
 
@@ -131,13 +131,13 @@ class AnticipatedTitlesTest {
         )
         assertTrue(AniSearchFutureMatcher.hasInstallmentConflict(value, setOf("Beispiel Staffel 2 Cour 1")))
         assertTrue(AniSearchFutureMatcher.hasInstallmentConflict(value, setOf("Beispiel Staffel 3 Cour 2")))
-        assertFalse(AniSearchFutureMatcher.hasInstallmentConflict(value, setOf("Vollständig übersetzter Titel")))
+        assertFalse(AniSearchFutureMatcher.hasInstallmentConflict(value, setOf("Vollst?ndig ?bersetzter Titel")))
     }
 
     @Test fun aniListJapanStartNeverBecomesDachAvailability() {
         val media = JSONObject().apply {
             put("id", 42); put("idMal", JSONObject.NULL)
-            put("title", JSONObject().put("romaji", "Generic Future").put("english", "Generic Future").put("native", "未来"))
+            put("title", JSONObject().put("romaji", "Generic Future").put("english", "Generic Future").put("native", "??"))
             put("synonyms", JSONArray())
             put("startDate", JSONObject().put("year", 2027).put("month", 1).put("day", 8))
             put("relations", JSONObject().put("edges", JSONArray()))
@@ -156,7 +156,7 @@ class AnticipatedTitlesTest {
 
     @Test fun dachUsesAvailabilityDateNotDetectionDate() {
         val confirmed = title(1,"A","NOT_YET_RELEASED",1).copy(dachLicenseStatus=DachLicenseStatus.CONFIRMED, dachProvider="Crunchyroll", dachAvailableFrom=LocalDate.of(2026,10,3), sourceObservedAt=1_795_000_000, firstDetectedAt=1_795_000_000)
-        assertEquals("DACH · ab 03.10.2026 · Anbieter: Crunchyroll · Bestätigt", AnticipatedDachFormatter.format(confirmed))
+        assertEquals("DACH ? ab 03.10.2026 ? Anbieter: Crunchyroll ? Best?tigt", AnticipatedDachFormatter.format(confirmed))
         assertEquals("DACH-Status derzeit nicht ermittelbar", AnticipatedDachFormatter.format(title(2,"B","NOT_YET_RELEASED",1)))
         assertEquals("Noch nicht in der DACH-Region lizenziert", AnticipatedDachFormatter.format(title(3,"C","NOT_YET_RELEASED",1).copy(dachLicenseStatus = DachLicenseStatus.NOT_LICENSED_YET)))
     }
@@ -167,7 +167,7 @@ class AnticipatedTitlesTest {
             AnticipatedDachEvidence("Crunchyroll", LocalDate.of(2026,10,3), "OFFICIAL", 1_795_000_000, 100)
         )
         assertEquals(DachLicenseStatus.CONFIRMED, updated.dachLicenseStatus)
-        assertEquals("DACH · ab 03.10.2026 · Anbieter: Crunchyroll · Bestätigt", AnticipatedDachFormatter.format(updated))
+        assertEquals("DACH ? ab 03.10.2026 ? Anbieter: Crunchyroll ? Best?tigt", AnticipatedDachFormatter.format(updated))
         assertFalse(AnticipatedDachFormatter.format(updated).contains("Noch nicht"))
     }
 

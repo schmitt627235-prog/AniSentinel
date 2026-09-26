@@ -52,7 +52,7 @@ class NotificationEngineTest {
         assertEquals("release-due:atlas:2:11:GER_SUB", result?.stableId)
         assertEquals(2, result?.targetSeason)
         assertEquals(11, result?.targetEpisode)
-        assertTrue(result?.message?.contains("AniSentinel prüft die Anbieter") == true)
+        assertTrue(result?.message?.contains("AniSentinel pr?ft die Anbieter") == true)
     }
 
     @Test
@@ -83,7 +83,7 @@ class NotificationEngineTest {
         val event = NotificationEvent.ProviderError("atlas", "fake-cr", true, "Atlas")
         val result = engine.create(event, NotificationPreferences())
         assertEquals("Atlas", result?.title)
-        assertTrue(result?.message?.contains("Anbieterprüfung fehlgeschlagen") == true)
+        assertTrue(result?.message?.contains("Anbieterpr?fung fehlgeschlagen") == true)
     }
 
     @Test

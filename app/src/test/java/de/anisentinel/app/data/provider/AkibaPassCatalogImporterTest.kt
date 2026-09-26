@@ -96,7 +96,7 @@ class AkibaPassCatalogImporterTest {
         languageText: String, description: String
     ): String = """
         <h1 class="collection-title">$title</h1>
-        <div class="collection-description">Ab 02.02.2023 verfügbar!</div>
+        <div class="collection-description">Ab 02.02.2023 verf?gbar!</div>
         <a href="https://www.akibapass.tv/checkout/$id?rent=1">Leihen</a>
         <section class="episode-container"><ul>
           <li class="js-collection-item item-type-video" data-item-id="$episodeId">

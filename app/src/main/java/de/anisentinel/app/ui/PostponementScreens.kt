@@ -118,7 +118,7 @@ fun PostponementCard(
             }
             val identity = listOfNotNull(
                 row.seasonNumber?.let { "S$it" }, row.episodeNumber?.let { stringResource(R.string.episode_number, it) }, language
-            ).joinToString(" · ")
+            ).joinToString(" ? ")
             if (identity.isNotBlank()) Text(identity)
             if (row.originalExpectedAt != null && row.newExpectedAt != null) Text(
                 stringResource(R.string.postponement_range, formatPostponementTime(row.originalExpectedAt), formatPostponementTime(row.newExpectedAt)),
@@ -139,5 +139,5 @@ private fun formatPostponementTime(epoch: Long): String {
     val value = Instant.ofEpochSecond(epoch).atZone(ZoneId.systemDefault())
     return if (value.toLocalTime() == java.time.LocalTime.MIDNIGHT) {
         value.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
-    } else value.format(DateTimeFormatter.ofPattern("dd.MM.yyyy · HH:mm"))
+    } else value.format(DateTimeFormatter.ofPattern("dd.MM.yyyy ? HH:mm"))
 }

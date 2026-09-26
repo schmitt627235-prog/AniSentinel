@@ -23,6 +23,21 @@ class CrunchyrollSeasonStructureTest {
             )
         )
     }
+
+    @Test fun currentConanCatalogMapsToSeason32WithoutChangingProviderSeason() {
+        assertEquals(32, ConfirmedCrunchyrollCatalogPolicy.canonicalSeasonNumber(
+            "aniworld:detektiv-conan", "G6JQVM3ER", 1
+        ))
+        assertEquals("Staffel 32 (Aktuell)", ConfirmedCrunchyrollCatalogPolicy.seasonLabel(
+            "aniworld:detektiv-conan", "G6JQVM3ER", 1, "Detective Conan"
+        ))
+        assertEquals(1, ConfirmedCrunchyrollCatalogPolicy.canonicalSeasonNumber(
+            "aniworld:detektiv-conan", "GW4HM7NV3", 1
+        ))
+        assertEquals(1, ConfirmedCrunchyrollCatalogPolicy.canonicalSeasonNumber(
+            "aniworld:other", "G6JQVM3ER", 1
+        ))
+    }
     private fun episode(number: Int, title: String) = CrunchyrollCatalogEpisode(
         seriesId = "series",
         seasonId = "season",

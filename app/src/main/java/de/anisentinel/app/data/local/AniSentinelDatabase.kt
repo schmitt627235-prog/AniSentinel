@@ -315,7 +315,7 @@ abstract class AniSentinelDatabase : RoomDatabase() {
         val MIGRATION_16_17 = object : Migration(16, 17) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("ALTER TABLE provider_references ADD COLUMN providerMarket TEXT")
-                database.execSQL("DELETE FROM provider_references WHERE instr(lower(provider), 'dvd') > 0 OR instr(lower(provider), 'blu-ray') > 0 OR instr(lower(provider), 'blu ray') > 0 OR instr(lower(provider), 'bücher') > 0 OR instr(lower(provider), 'buecher') > 0 OR instr(lower(provider), 'medimops') > 0 OR instr(lower(provider), 'thalia') > 0 OR instr(lower(provider), 'hugendubel') > 0 OR instr(lower(provider), 'jpc') > 0 OR instr(lower(provider), 'zavvi') > 0 OR instr(lower(provider), 'zoxs') > 0")
+                database.execSQL("DELETE FROM provider_references WHERE instr(lower(provider), 'dvd') > 0 OR instr(lower(provider), 'blu-ray') > 0 OR instr(lower(provider), 'blu ray') > 0 OR instr(lower(provider), 'b?cher') > 0 OR instr(lower(provider), 'buecher') > 0 OR instr(lower(provider), 'medimops') > 0 OR instr(lower(provider), 'thalia') > 0 OR instr(lower(provider), 'hugendubel') > 0 OR instr(lower(provider), 'jpc') > 0 OR instr(lower(provider), 'zavvi') > 0 OR instr(lower(provider), 'zoxs') > 0")
                 database.execSQL("UPDATE provider_references SET providerMarket = 'DE' WHERE source = 'UNOFFICIAL_JUSTWATCH_DIAGNOSTIC'")
             }
         }

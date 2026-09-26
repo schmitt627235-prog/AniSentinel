@@ -85,7 +85,7 @@ class AkibaPassPublicCatalogParserTest {
     @Test fun fruitsBasketPackageIsConfirmedOnlyWithCheckoutAndPastAvailabilityDate() {
         val html = """
             <h1 class="collection-title">Fruits Basket (DE) - Season 1.1</h1>
-            <div class="collection-description">Ab 02.02.2023 verfügbar! Sprache: Deutsch</div>
+            <div class="collection-description">Ab 02.02.2023 verf?gbar! Sprache: Deutsch</div>
             <a href="https://www.akibapass.tv/checkout/fruits-basket-de-season-1-1?rent=1">Leihen</a>
             <section class="episode-container"><ul>
               <li class="js-collection-item item-type-video" data-item-id="fruit-1">

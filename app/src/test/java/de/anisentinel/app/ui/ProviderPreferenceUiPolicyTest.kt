@@ -176,9 +176,37 @@ class ProviderPreferenceUiPolicyTest {
         assertEquals(2, options.map { it.key }.distinct().size)
     }
 
+    @Test fun automaticModeUnionsConfirmedProviderCatalogsWithoutDuplicateSeasonChips() {
+        val mappings = listOf(
+            mapping(1, "Crunchyroll", true, catalogId = "first"),
+            mapping(1, "Crunchyroll", true, catalogId = "second"),
+            mapping(1, "Apple TV", true, catalogId = "apple"),
+            mapping(2, "Apple TV", true, catalogId = "apple")
+        )
+        assertEquals(4, ProviderPreferenceUiPolicy.automaticUnionSeasons(mappings).size)
+        assertEquals(listOf(1, 2), ProviderPreferenceUiPolicy.catalogSeasonsForProvider("Apple TV", mappings).map { it.seasonNumber })
+        assertEquals(2, ProviderPreferenceUiPolicy.catalogSeasonsForProvider("Crunchyroll", mappings).size)
+        assertEquals("Apple TV", ProviderPreferenceUiPolicy.selectableReference("Apple TV Store"))
+        assertEquals(null, ProviderPreferenceUiPolicy.selectableReference("Apple TV+"))
+    }
+
     @Test fun conanEpisodeCollisionIsScopedByCatalogIdentity() {
         val oldCatalog = release(1, 1, "Crunchyroll", "GW4HM7NV3")
         val currentCatalog = release(1, 1, "Crunchyroll", "G6JQVM3ER")
+        val appleCatalog = release(1, 1, "Apple TV", "umc.cmc.o4e5fbtkmgjivlpghedf8a6x")
+
+        assertEquals(
+            setOf(oldCatalog, currentCatalog),
+            ProviderPreferenceUiPolicy.releasesForProviderSeason(
+                listOf(oldCatalog, currentCatalog, appleCatalog), 1, "Crunchyroll"
+            ).toSet()
+        )
+        assertEquals(
+            setOf(oldCatalog, currentCatalog, appleCatalog),
+            ProviderPreferenceUiPolicy.releasesForProviderSeason(
+                listOf(oldCatalog, currentCatalog, appleCatalog), 1, null
+            ).toSet()
+        )
 
         assertEquals(
             listOf(oldCatalog),
@@ -192,6 +220,36 @@ class ProviderPreferenceUiPolicyTest {
                 listOf(oldCatalog, currentCatalog), 1, "Crunchyroll", "G6JQVM3ER"
             )
         )
+    }
+
+    @Test fun conanThreeCatalogsKeepEpisodeIdentitySeparateUntilCanonicalMatchIsProven() {
+        val first = release(1, 2, "Crunchyroll", "GW4HM7NV3")
+            .copy(episodeTitle = "Kleiner Mann ganz gro?")
+        val second = release(1, 2, "Crunchyroll", "G6JQVM3ER")
+            .copy(episodeTitle = "Kleiner Mann ganz gro?", providerUrl = "https://crunchyroll.example/other")
+        val apple = release(1, 2, "Apple TV", "umc.cmc.o4e5fbtkmgjivlpghedf8a6x")
+            .copy(episodeTitle = "Kleiner Mann ganz gro?", providerUrl = "https://tv.apple.com/de/episode/confirmed")
+        val different = release(1, 2, "Apple TV", "other")
+            .copy(episodeTitle = "Anderer Episodentitel")
+        val merged = ProviderPreferenceUiPolicy.confirmedEpisodeCards(listOf(first, second, apple))
+        assertEquals(3, merged.size)
+        assertEquals(3, merged.flatMap { it.releases }.mapNotNull { it.providerUrl }.distinct().size)
+        val unsafe = ProviderPreferenceUiPolicy.confirmedEpisodeCards(listOf(first, different))
+        assertEquals(2, unsafe.size)
+    }
+
+    @Test fun canonicalSeason32KeepsOneCardForProviderLanguageVariants() {
+        val german = release(32, 1214, "Crunchyroll", "G6JQVM3ER").copy(
+            sourceReleaseId = "crunchyroll-history:anime:G6JQVM3ER:s1:e1214:ger_sub",
+            episodeTitle = "Die Wahrheit",
+            providerUrl = "https://www.crunchyroll.com/watch/G123/episode"
+        )
+        val english = german.copy(sourceReleaseId =
+            "crunchyroll-history:anime:G6JQVM3ER:s1:e1214:eng_sub")
+        val cards = ProviderPreferenceUiPolicy.confirmedEpisodeCards(listOf(german, english))
+        assertEquals(1, cards.size)
+        assertEquals(2, cards.single().releases.size)
+        assertEquals(32, cards.single().seasonNumber)
     }
 
     private fun mapping(
